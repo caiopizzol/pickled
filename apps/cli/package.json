@@ -1,13 +1,15 @@
 {
   "name": "@pickled/cli",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Stay fresh in AI 🥒",
   "module": "dist/index.js",
   "type": "module",
   "bin": {
     "pickled": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node --minify",
     "release": "semantic-release"
