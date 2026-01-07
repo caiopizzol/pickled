@@ -8,7 +8,7 @@ import {
   formatXML,
   generateTopics,
   printReport,
-} from "@pickled/core";
+} from "@pickled-dev/core";
 import chalk from "chalk";
 
 export interface CheckOptions {

@@ -1,4 +1,4 @@
-# @pickled/cli
+# @pickled-dev/cli
 
 > Stay fresh in AI 🥒
 
@@ -10,10 +10,10 @@ Pickled checks how often AI models actually recommend your tool when developers 
 
 ```bash
 # Global install
-bun add -g @pickled/cli
+bun add -g @pickled-dev/cli
 
 # Or run directly
-bunx @pickled/cli check github.com/org/repo
+bunx @pickled-dev/cli check github.com/org/repo
 ```
 
 You'll need an Anthropic API key:
