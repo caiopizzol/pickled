@@ -9,8 +9,8 @@ interface NavLink {
 const navLinks: NavLink[] = [
   { label: "Features", href: "#features" },
   { label: "How it works", href: "#how" },
-  { label: "Docs", href: "/docs" },
-  { label: "GitHub", href: "https://github.com/pickled" },
+  // { label: "Docs", href: "/docs" },
+  { label: "GitHub", href: "https://github.com/caiopizzol/pickled" },
 ];
 
 export function Nav() {

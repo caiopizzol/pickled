@@ -4,7 +4,7 @@ import "./Hero.css";
 
 export function Hero() {
   const handleCopy = () => {
-    navigator.clipboard.writeText("bun add -g pickled");
+    navigator.clipboard.writeText("bun add -g @pickled-dev/cli");
   };
 
   return (
@@ -29,7 +29,7 @@ export function Hero() {
           </div>
           <div className="hero-install">
             <span>$</span>
-            <code>bun add -g pickled</code>
+            <code>bun add -g @pickled-dev/cli</code>
             <button
               type="button"
               className="hero-install-copy"
@@ -44,7 +44,7 @@ export function Hero() {
         <div className="hero-terminal">
           <Terminal>
             <TerminalLine>
-              <T.Prompt>$</T.Prompt> <T.Cmd>pickled analyze zod</T.Cmd>
+              <T.Prompt>$</T.Prompt> <T.Cmd>pickled check zod</T.Cmd>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
