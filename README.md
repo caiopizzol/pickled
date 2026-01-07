@@ -1,4 +1,4 @@
-# Pickled
+# 🥒 pickled
 
 > Stay fresh in AI
 
