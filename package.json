@@ -1,0 +1,18 @@
+{
+  "name": "picked-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:cli": "bun run apps/cli/src/index.ts",
+    "dev:web": "bun run --cwd apps/web dev",
+    "test": "bun test",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.11"
+  }
+}

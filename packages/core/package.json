@@ -1,0 +1,14 @@
+{
+  "name": "@pickled/core",
+  "version": "0.1.0",
+  "description": "Core library for Pickled - Stay fresh in AI 🥒",
+  "module": "src/index.ts",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "chalk": "^5.6.2"
+  }
+}

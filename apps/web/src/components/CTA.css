@@ -1,0 +1,13 @@
+.cta {
+  text-align: center;
+}
+
+.cta h2 {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--space-4);
+}
+
+.cta p {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-8);
+}

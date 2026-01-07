@@ -1,0 +1,33 @@
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: var(--font-semibold);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.logo-sm {
+  font-size: var(--text-base);
+}
+
+.logo-sm .logo-icon {
+  font-size: var(--text-lg);
+}
+
+.logo-md {
+  font-size: var(--text-xl);
+}
+
+.logo-md .logo-icon {
+  font-size: var(--text-2xl);
+}
+
+.logo-lg {
+  font-size: var(--text-2xl);
+}
+
+.logo-lg .logo-icon {
+  font-size: var(--text-3xl);
+}

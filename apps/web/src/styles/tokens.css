@@ -1,0 +1,139 @@
+/*
+ * Pickled Design System Tokens
+ * Based on: v2 Minimal & Clean
+ *
+ * Typography: Space Grotesk (headings) + DM Sans (body)
+ * Palette: Neon Pickle (Electric greens)
+ * Logo: Simple Icon
+ */
+
+:root {
+  /* ===== COLOR TOKENS ===== */
+
+  /* Primary - Neon Pickle */
+  --color-primary: #00e676;
+  --color-primary-dark: #00c853;
+  --color-primary-light: #69f0ae;
+  --color-primary-dim: rgba(0, 230, 118, 0.15);
+
+  /* Accent */
+  --color-accent: #ffd740;
+  --color-accent-dark: #ffc400;
+
+  /* Semantic */
+  --color-success: #00e676;
+  --color-warning: #ffd740;
+  --color-error: #ff4081;
+  --color-info: #64b5f6;
+
+  /* Backgrounds */
+  --color-bg: #0a0a0f;
+  --color-bg-subtle: #0f0f16;
+  --color-bg-card: #141420;
+  --color-bg-elevated: #1a1a28;
+
+  /* Text */
+  --color-text: #ffffff;
+  --color-text-secondary: #8888a0;
+  --color-text-muted: #50506a;
+
+  /* Borders */
+  --color-border: #1f1f30;
+  --color-border-hover: #2a2a40;
+
+  /* ===== TYPOGRAPHY ===== */
+
+  --font-heading: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Font Sizes */
+  --text-xs: 0.75rem; /* 12px */
+  --text-sm: 0.875rem; /* 14px */
+  --text-base: 1rem; /* 16px */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.25rem; /* 20px */
+  --text-2xl: 1.5rem; /* 24px */
+  --text-3xl: 2rem; /* 32px */
+  --text-4xl: 2.5rem; /* 40px */
+  --text-5xl: 3rem; /* 48px */
+  --text-6xl: 4rem; /* 64px */
+
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* Line Heights */
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* Letter Spacing */
+  --tracking-tight: -0.03em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.05em;
+  --tracking-mono: 0.15em;
+
+  /* ===== SPACING ===== */
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* ===== BORDERS ===== */
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ===== SHADOWS ===== */
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(0, 230, 118, 0.2);
+  --shadow-glow-strong: 0 0 40px rgba(0, 230, 118, 0.3);
+
+  /* ===== TRANSITIONS ===== */
+
+  --transition-fast: 0.1s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* ===== Z-INDEX ===== */
+
+  --z-base: 0;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-fixed: 30;
+  --z-modal: 40;
+  --z-tooltip: 50;
+
+  /* ===== CONTAINER ===== */
+
+  --container-max: 1000px;
+  --container-padding: var(--space-6);
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+/*
+ * sm: 640px
+ * md: 768px
+ * lg: 1024px
+ * xl: 1280px
+ */
