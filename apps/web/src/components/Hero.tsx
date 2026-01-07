@@ -23,7 +23,12 @@ export function Hero() {
             <Button as="a" href="#get-started" variant="primary" size="lg">
               Get Started
             </Button>
-            <Button as="a" href="/docs" variant="secondary" size="lg">
+            <Button
+              as="a"
+              href="https://github.com/caiopizzol/pickled"
+              variant="secondary"
+              size="lg"
+            >
               View on GitHub
             </Button>
           </div>
