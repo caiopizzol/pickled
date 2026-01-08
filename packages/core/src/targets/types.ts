@@ -1,65 +1,44 @@
-import type { Target, TargetCategory, ToolInfo } from "../types.js";
+import type { TargetCategory } from "@pickled-dev/config";
 
-/**
- * Result from running a scenario against a target
- */
+export { DEFAULT_TARGET } from "@pickled-dev/config";
+
+export interface ResponseEntry {
+  type: "initial" | "intermediate" | "final";
+  text: string;
+}
+
 export interface TargetResult {
+  /** The final response (what the user sees as the answer) */
   response: string;
+  /** All responses captured during execution, for detailed reporting */
+  allResponses: ResponseEntry[];
   toolsUsed: string[];
-  sources: string[]; // URLs visited, files read, etc.
+  sources: string[];
   metadata: {
     model: string;
     category: TargetCategory;
     provider: string;
-    target: string; // Name of the target used
+    target: string;
   };
 }
 
-/**
- * Options for running a scenario
- */
 export interface RunOptions {
-  tool: ToolInfo;
+  tool: import("../types.js").ToolInfo;
   cwd: string;
   context?: ResolvedContext;
   onProgress?: (msg: string) => void;
 }
 
-/**
- * Resolved context with merged settings
- */
 export interface ResolvedContext {
   allowedTools?: string[];
   disallowedTools?: string[];
   mcpServers?: Record<string, unknown>;
 }
 
-/**
- * Abstract interface for target runners
- */
 export interface TargetRunner {
   readonly category: TargetCategory;
   readonly provider: string;
   readonly name: string;
 
-  /**
-   * Run a prompt against this target
-   */
   run(prompt: string, options: RunOptions): Promise<TargetResult>;
 }
-
-/**
- * Configuration for creating a target
- */
-export interface TargetConfig extends Target {
-  // All fields from Target, plus any target-specific overrides
-}
-
-/**
- * Default target configuration
- */
-export const DEFAULT_TARGET: Target = {
-  category: "cli",
-  provider: "claude-code",
-  model: "claude-sonnet-4-20250514",
-};

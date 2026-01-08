@@ -1,6 +1,6 @@
 import path from "node:path";
+import type { CheckConfig } from "@pickled-dev/config";
 import {
-  type CheckConfig,
   formatCheckJSON,
   loadConfig,
   printCheckReport,
@@ -20,13 +20,11 @@ export async function check(
   options: CheckOptions,
 ): Promise<void> {
   const { json, output, verbose } = options;
-  const log = (msg: string) => !json && console.log(chalk.dim(msg));
+  const log = (msg: string) => !json && console.log(msg);
 
   const resolvedPath = path.resolve(targetPath);
 
   // 1. Load config (required)
-  log("🥒 Loading pickled.yml...");
-
   let config: CheckConfig;
   try {
     config = await loadConfig(resolvedPath);
@@ -46,21 +44,21 @@ export async function check(
   };
 
   if (verbose) {
-    log(`   Tool: ${tool.name}`);
-    log(`   Scenarios: ${config.scenarios.length}`);
+    log(chalk.dim(`   Tool: ${tool.name}`));
+    log(chalk.dim(`   Scenarios: ${config.scenarios.length}`));
     for (const s of config.scenarios) {
-      log(`   - ${s.name}`);
+      log(chalk.dim(`   - ${s.name}`));
     }
   }
 
   // 2. Run check
-  log("🥒 Checking your freshness...");
-  console.log();
+  log(chalk.dim("🥒 Freshness Check"));
+  log("");
 
   const report = await runCheck(tool, config, {
     onProgress: (msg) => {
-      if (verbose || !json) {
-        console.log(chalk.dim(`   ${msg}`));
+      if (!json) {
+        log(chalk.dim(`   ${msg}`));
       }
     },
   });
@@ -68,7 +66,6 @@ export async function check(
   // 3. Output
   if (output) {
     await Bun.write(output, formatCheckJSON(report));
-    log(`\n🥒 Report saved to ${output}`);
   } else if (json) {
     console.log(formatCheckJSON(report));
   } else {
@@ -81,12 +78,11 @@ export async function check(
     : (config.threshold ?? 0);
 
   if (report.summary.score < threshold) {
+    console.error("");
     console.error(
-      chalk.red(
-        `\n🥒 Freshness score ${report.summary.score}% is below threshold ${threshold}%`,
-      ),
+      chalk.red(`Freshness score: ${report.summary.score}% 🥒🥒🥒░░`),
     );
-    console.error(chalk.dim("   Time to freshen up your docs!"));
+    console.error(chalk.dim("Starting to spoil... Some docs need attention."));
     process.exit(1);
   }
 }

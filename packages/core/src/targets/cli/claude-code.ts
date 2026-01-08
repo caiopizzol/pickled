@@ -1,7 +1,17 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import type { Target, TargetCategory, ToolInfo } from "../../types.js";
-import type { RunOptions, TargetResult, TargetRunner } from "../types.js";
+import type { Target, TargetCategory } from "@pickled-dev/config";
+import {
+  DEFAULT_ALLOWED_TOOLS,
+  DEFAULT_DISALLOWED_TOOLS,
+} from "@pickled-dev/config";
+import type { ToolInfo } from "../../types.js";
+import type {
+  ResponseEntry,
+  RunOptions,
+  TargetResult,
+  TargetRunner,
+} from "../types.js";
 
 /**
  * Claude Code target - uses the Claude Agent SDK to run prompts
@@ -23,40 +33,43 @@ export class ClaudeCodeTarget implements TargetRunner {
     const toolsUsed: string[] = [];
     const sources: string[] = [];
 
-    // Build system prompt
-    const systemPrompt = this.buildSystemPrompt(tool);
-
-    // Merge context settings with target config
-    const allowedTools = context?.allowedTools ??
-      this.config.allowedTools ?? ["Read", "Glob", "Grep", "Bash"];
-    const disallowedTools = context?.disallowedTools ??
-      this.config.disallowedTools ?? ["Edit", "Write", "NotebookEdit"];
+    const systemPrompt =
+      this.config.systemPrompt ?? this.buildSystemPrompt(tool);
 
     const agentOptions: ClaudeAgentOptions = {
       cwd,
-      model: this.config.model ?? "claude-sonnet-4-20250514",
+      model: this.config.model ?? "sonnet",
       systemPrompt,
-      allowedTools,
-      disallowedTools,
+      allowedTools:
+        context?.allowedTools ??
+        this.config.allowedTools ??
+        DEFAULT_ALLOWED_TOOLS,
+      disallowedTools:
+        context?.disallowedTools ??
+        this.config.disallowedTools ??
+        DEFAULT_DISALLOWED_TOOLS,
       permissionMode: this.config.permissionMode ?? "acceptEdits",
-      maxTurns: this.config.maxTurns ?? 5,
+      maxTurns: this.config.maxTurns ?? 10,
+      maxThinkingTokens: this.config.maxThinkingTokens,
+      maxBudgetUsd: this.config.maxBudgetUsd,
       mcpServers: (context?.mcpServers ??
         this.config.mcpServers) as ClaudeAgentOptions["mcpServers"],
       settingSources: [],
     };
 
-    let fullResponse = "";
+    const allResponses: ResponseEntry[] = [];
+    let lastAssistantText = "";
+    let finalResult = "";
 
     for await (const message of query({ prompt, options: agentOptions })) {
-      // Extract text content from assistant messages
       if (message.type === "assistant") {
         const content = message.message?.content;
         if (Array.isArray(content)) {
+          let messageText = "";
           for (const block of content) {
             if (block.type === "text") {
-              fullResponse += (block as { type: "text"; text: string }).text;
+              messageText += (block as { type: "text"; text: string }).text;
             }
-            // Track tool usage
             if (block.type === "tool_use") {
               const toolBlock = block as { type: "tool_use"; name: string };
               if (!toolsUsed.includes(toolBlock.name)) {
@@ -64,48 +77,39 @@ export class ClaudeCodeTarget implements TargetRunner {
               }
             }
           }
+          if (messageText) {
+            const entryType: ResponseEntry["type"] =
+              allResponses.length === 0 ? "initial" : "intermediate";
+            allResponses.push({ type: entryType, text: messageText });
+            lastAssistantText = messageText;
+          }
         }
       }
 
-      // Extract result
       if (message.type === "result") {
         const resultMsg = message as {
           type: "result";
           subtype: string;
           result?: string;
         };
-        if (resultMsg.subtype === "success" && resultMsg.result) {
-          fullResponse += resultMsg.result;
-        }
-      }
-
-      // Track tool results for sources
-      if (message.type === "tool_result") {
-        const toolResult = message as {
-          type: "tool_result";
-          tool_name?: string;
-          content?: unknown;
-        };
-        // Could extract file paths, URLs from tool results here
-        if (
-          toolResult.tool_name === "Read" &&
-          typeof toolResult.content === "string"
-        ) {
-          // Extract file path from Read tool results
-          const match = toolResult.content.match(/^Reading (.+)/);
-          if (match) {
-            sources.push(match[1]);
-          }
+        if (resultMsg.result) {
+          finalResult = resultMsg.result;
         }
       }
     }
 
+    // Mark last response as final
+    if (allResponses.length > 0) {
+      allResponses[allResponses.length - 1].type = "final";
+    }
+
     return {
-      response: fullResponse,
+      response: finalResult || lastAssistantText,
+      allResponses,
       toolsUsed,
       sources,
       metadata: {
-        model: this.config.model ?? "claude-sonnet-4-20250514",
+        model: this.config.model ?? "sonnet",
         category: this.category,
         provider: this.provider,
         target: this.name,

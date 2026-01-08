@@ -1,0 +1,13 @@
+{
+  "name": "@pickled-dev/config",
+  "version": "0.1.0",
+  "description": "Configuration types and loader for Pickled",
+  "module": "src/index.ts",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.8.2"
+  }
+}

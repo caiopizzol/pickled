@@ -1,9 +1,9 @@
+// Config
+export { loadConfig } from "@pickled-dev/config";
+
 // Check
 export type { CheckOptions } from "./check.js";
 export { runCheck } from "./check.js";
-
-// Config
-export { loadConfig } from "./config.js";
 
 // Reporter
 export { formatCheckJSON, printCheckReport } from "./reporter.js";
@@ -27,21 +27,8 @@ export {
 // Types
 export type {
   Answerable,
-  ApiProvider,
-  CheckConfig,
   CheckReport,
-  CliProvider,
-  Context,
-  DocSource,
-  DocSourceType,
-  DocsConfig,
-  IdeProvider,
-  MatrixConfig,
-  McpServerConfig,
-  Scenario,
   ScenarioResult,
-  Target,
-  TargetCategory,
   ToolInfo,
 } from "./types.js";
 

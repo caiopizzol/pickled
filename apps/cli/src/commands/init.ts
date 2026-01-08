@@ -1,7 +1,7 @@
 import path from "node:path";
 import chalk from "chalk";
 
-const TEMPLATE = `# 🥒 pickled.yml - Check your freshness!
+const TEMPLATE = `# 🥒 pickled.yml - Is AI getting your tool right?
 
 tool:
   name: "your-tool"
@@ -21,18 +21,20 @@ scenarios:
 # Optional: Fail CI if freshness score below threshold
 # threshold: 80
 
-# Advanced: Named targets for testing across different AI tools
+# Advanced: Named targets for testing with different configurations
+#
 # targets:
-#   claude-sonnet:
+#   quick:
 #     category: cli
 #     provider: claude-code
-#     model: claude-sonnet-4-20250514
+#     model: sonnet
+#     maxTurns: 3
 #
 # Then reference in scenarios:
 # scenarios:
-#   - name: "Test with Sonnet"
+#   - name: "Quick test"
 #     prompt: "How do I install?"
-#     target: claude-sonnet
+#     target: quick
 `;
 
 export async function init(targetPath: string): Promise<void> {

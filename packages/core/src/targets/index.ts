@@ -1,15 +1,15 @@
-import type { Target } from "../types.js";
+import type { Context, Target } from "@pickled-dev/config";
+import { DEFAULT_TARGET } from "@pickled-dev/config";
 import { ClaudeCodeTarget } from "./cli/claude-code.js";
-import type { TargetRunner } from "./types.js";
-import { DEFAULT_TARGET } from "./types.js";
+import type { ResolvedContext, TargetRunner } from "./types.js";
 
+export { DEFAULT_TARGET } from "@pickled-dev/config";
 export type {
   ResolvedContext,
   RunOptions,
   TargetResult,
   TargetRunner,
 } from "./types.js";
-export { DEFAULT_TARGET } from "./types.js";
 
 /**
  * Create a target runner from configuration
@@ -67,4 +67,26 @@ export function resolveTarget(
   // Target not found - use default with warning
   console.warn(`Target "${targetRef}" not found, using default`);
   return { name: "default", config: DEFAULT_TARGET };
+}
+
+/**
+ * Resolve a context from config - handles named references and defaults
+ */
+export function resolveContext(
+  contextRef: string | undefined,
+  contexts: Record<string, Context> | undefined,
+): { name: string; config: ResolvedContext } {
+  // No context specified - use empty (allows all default tools)
+  if (!contextRef) {
+    return { name: "default", config: {} };
+  }
+
+  // Look up named context
+  if (contexts?.[contextRef]) {
+    return { name: contextRef, config: contexts[contextRef] };
+  }
+
+  // Context not found - use empty with warning
+  console.warn(`Context "${contextRef}" not found, using default`);
+  return { name: "default", config: {} };
 }

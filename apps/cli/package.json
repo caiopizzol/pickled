@@ -20,6 +20,7 @@
     "chalk": "^5.6.2"
   },
   "devDependencies": {
+    "@pickled-dev/config": "workspace:*",
     "@pickled-dev/core": "workspace:*",
     "semantic-release": "^25.0.2",
     "@semantic-release/commit-analyzer": "^13.0.1",

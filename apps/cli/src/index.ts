@@ -6,7 +6,7 @@ import { init } from "./commands/init.js";
 
 program
   .name("pickled")
-  .description("Preserve your visibility in AI 🥒")
+  .description("Test your freshness with AI 🥒")
   .version(pkg.version);
 
 program

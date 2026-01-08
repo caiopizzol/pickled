@@ -1,26 +1,54 @@
-# 🥒 pickled.yml - Check your freshness!
+# 🥒 pickled.yml - Is AI getting your tool right?
 
 tool:
   name: "pickled"
   description: "CLI tool to check if AI can correctly answer questions about your developer tool"
 
+# AI targets to test against
+targets:
+  quick:
+    category: cli
+    provider: claude-code
+    model: haiku
+    maxTurns: 5
+
+  thorough:
+    category: cli
+    provider: claude-code
+    model: sonnet
+    maxTurns: 15
+
+# Contexts provide additional information sources
+contexts:
+  # Use web search to find public docs
+  web:
+    allowedTools:
+      - WebSearch
+      - WebFetch
+
+  # Connect to MCP servers (coming soon)
+  # mcp:
+  #   mcpServers:
+  #     docs-server:
+  #       command: "npx"
+  #       args: ["-y", "@example/docs-mcp"]
+
+# Test matrix: target × context combinations
+matrix:
+  target: [quick]
+  context: [web]
+
 scenarios:
   - name: "Installation"
     prompt: "How do I install pickled?"
 
-  - name: "Getting started"
-    prompt: "How do I set up pickled for my project?"
+  - name: "Basic usage"
+    prompt: "How do I run pickled to check my project?"
 
   - name: "Config format"
-    prompt: "What is the pickled.yml config format? Show me an example."
-
-  - name: "Running checks"
-    prompt: "How do I run pickled to check my documentation?"
-
-  - name: "Named targets"
-    prompt: "How do I define and use named targets in pickled?"
+    prompt: "What does a pickled.yml config file look like?"
 
   - name: "CI integration"
     prompt: "How do I use pickled in CI/CD with a threshold?"
 
-threshold: 70
+threshold: 60

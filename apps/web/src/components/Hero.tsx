@@ -51,31 +51,41 @@ export function Hero() {
             <TerminalLine>
               <T.Prompt>$</T.Prompt> <T.Cmd>pickled check</T.Cmd>
             </TerminalLine>
-            <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output>🥒 </T.Output>
-              <T.Highlight>Freshness Check</T.Highlight>
+              <T.Output>🥒 Freshness Check</T.Output>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output>Tool: </T.Output>
-              <T.Cmd>zod</T.Cmd>
+              <T.Output>&nbsp;&nbsp;&nbsp;"Installation"</T.Output>
             </TerminalLine>
-            <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output> </T.Output>
+              <T.Output>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[sonnet/web]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              </T.Output>
               <T.Success>✓</T.Success>
-              <T.Output> "Installation" - Well preserved (92%)</T.Output>
+              <T.Output> Well preserved (92%)</T.Output>
+            </TerminalLine>
+            <TerminalLine>&nbsp;</TerminalLine>
+            <TerminalLine>
+              <T.Output>&nbsp;&nbsp;&nbsp;"Basic parsing"</T.Output>
             </TerminalLine>
             <TerminalLine>
-              <T.Output> </T.Output>
+              <T.Output>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[sonnet/web]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              </T.Output>
               <T.Success>✓</T.Success>
-              <T.Output> "Basic parsing" - Fresh (85%)</T.Output>
+              <T.Output> Fresh (85%)</T.Output>
+            </TerminalLine>
+            <TerminalLine>&nbsp;</TerminalLine>
+            <TerminalLine>
+              <T.Output>&nbsp;&nbsp;&nbsp;"Error handling"</T.Output>
             </TerminalLine>
             <TerminalLine>
-              <T.Output> </T.Output>
+              <T.Output>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[sonnet/web]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              </T.Output>
               <T.Warning>⚠</T.Warning>
-              <T.Output> "Error handling" - Going stale (65%)</T.Output>
+              <T.Output> Going stale (65%)</T.Output>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>

@@ -73,6 +73,34 @@ function getResultStatus(result: ScenarioResult): {
 }
 
 /**
+ * Format result label for matrix output [target/context]
+ */
+function formatResultLabel(result: ScenarioResult): string {
+  const target = result.target?.target ?? "default";
+  const context = result.context?.name ?? "default";
+
+  // Skip label if both are default (non-matrix run)
+  if (target === "default" && context === "default") {
+    return "";
+  }
+
+  // Only show context if not default
+  if (context === "default") {
+    return chalk.dim(`[${target}]`);
+  }
+
+  return chalk.dim(`[${target}/${context}]`);
+}
+
+/**
+ * Check if report has matrix results (multiple results per scenario)
+ */
+function hasMatrixResults(results: ScenarioResult[]): boolean {
+  const scenarioNames = results.map((r) => r.scenario.name);
+  return new Set(scenarioNames).size !== scenarioNames.length;
+}
+
+/**
  * Print branded check report to console
  */
 export function printCheckReport(report: CheckReport): void {
@@ -92,35 +120,62 @@ export function printCheckReport(report: CheckReport): void {
 
   console.log();
 
-  for (const result of results) {
-    const { icon, status } = getResultStatus(result);
-
-    // Show target if available
-    const targetLabel = result.target
-      ? chalk.dim(`[${result.target.target}]`)
-      : "";
-
-    console.log(
-      `  ${targetLabel} ${icon} "${result.scenario.name}" - ${status}`,
-    );
-
-    // Show reason
-    if (result.reason && result.answerable !== "YES") {
-      console.log(chalk.dim(`      ${result.reason}`));
+  // Check if we have matrix results
+  if (hasMatrixResults(results)) {
+    // Group by scenario for matrix output
+    const byScenario = new Map<string, ScenarioResult[]>();
+    for (const result of results) {
+      const name = result.scenario.name;
+      if (!byScenario.has(name)) {
+        byScenario.set(name, []);
+      }
+      byScenario.get(name)?.push(result);
     }
 
-    // Show missing info
-    if (result.missing && result.missing.length > 0) {
-      console.log(chalk.dim(`      Missing: ${result.missing.join(", ")}`));
+    // Print grouped
+    for (const [scenarioName, scenarioResults] of byScenario) {
+      console.log(`  "${scenarioName}"`);
+
+      for (const result of scenarioResults) {
+        const label = formatResultLabel(result);
+        const { icon, status } = getResultStatus(result);
+        const labelPadded = label ? `${label.padEnd(20)} ` : "    ";
+
+        console.log(`    ${labelPadded}${icon} ${status}`);
+
+        // Show reason for non-YES results
+        if (result.reason && result.answerable !== "YES") {
+          console.log(chalk.dim(`                          ${result.reason}`));
+        }
+      }
+
+      console.log();
+    }
+  } else {
+    // Flat output for non-matrix runs (single target/context)
+    for (const result of results) {
+      const { icon, status } = getResultStatus(result);
+      const targetLabel = formatResultLabel(result);
+      const labelPart = targetLabel ? `${targetLabel} ` : "";
+
+      console.log(
+        `  ${labelPart}${icon} "${result.scenario.name}" - ${status}`,
+      );
+
+      // Show reason for non-YES results
+      if (result.reason && result.answerable !== "YES") {
+        console.log(chalk.dim(`      ${result.reason}`));
+      }
+
+      // Show missing info
+      if (result.missing && result.missing.length > 0) {
+        console.log(chalk.dim(`      Missing: ${result.missing.join(", ")}`));
+      }
     }
 
-    // Show tools used
-    if (result.toolsUsed && result.toolsUsed.length > 0) {
-      console.log(chalk.dim(`      Tools: ${result.toolsUsed.join(", ")}`));
-    }
+    console.log();
   }
 
-  console.log();
   console.log(LINE);
   console.log(
     `Freshness Score: ${summary.score}% ${getScorePickles(summary.score)}`,

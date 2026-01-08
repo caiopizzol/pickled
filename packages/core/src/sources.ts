@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { DocSource } from "./types.js";
+import type { DocSource } from "@pickled-dev/config";
 
 function isUrl(source: string): boolean {
   return source.startsWith("http://") || source.startsWith("https://");
