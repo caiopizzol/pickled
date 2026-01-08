@@ -1,117 +1,86 @@
 import {
-  type AnalysisReport,
-  analyzeCitations,
-  discoverCompetitors,
-  extractProduct,
-  fetchRepo,
-  formatJSON,
-  formatXML,
-  generateTopics,
-  printReport,
+  formatCheckJSON,
+  loadConfig,
+  printCheckReport,
+  runCheck,
 } from "@pickled-dev/core";
 import chalk from "chalk";
+import path from "node:path";
 
 export interface CheckOptions {
   json?: boolean;
   output?: string;
   verbose?: boolean;
-  competitors?: string;
+  threshold?: string;
 }
 
 export async function check(
-  repoUrl: string,
+  targetPath: string,
   options: CheckOptions,
 ): Promise<void> {
-  const { json, output, verbose, competitors: competitorsArg } = options;
-
+  const { json, output, verbose } = options;
   const log = (msg: string) => !json && console.log(chalk.dim(msg));
 
-  // 1. Fetch repo data
-  log("🥒 Opening the jar...");
-  const repoData = await fetchRepo(repoUrl);
-  if (verbose) log(`   Found: ${repoData.repoUrl}`);
+  const resolvedPath = path.resolve(targetPath);
 
-  // 2. Extract product info
-  log("🔍 Checking what's inside...");
-  const product = await extractProduct(repoData);
-  if (verbose) log(`   ${product.name}: ${product.description}`);
+  // 1. Load config (required)
+  log("🥒 Loading pickled.yml...");
 
-  // 3. Discover competitors
-  let competitors: string[];
-  if (competitorsArg) {
-    competitors = competitorsArg.split(",").map((c) => c.trim());
-    log(`🫙 Using provided shelf mates: ${competitors.join(", ")}`);
-  } else {
-    log("🫙 Seeing who else is on the shelf...");
-    competitors = await discoverCompetitors(product);
-    if (verbose) log(`   Found: ${competitors.join(", ")}`);
+  let config;
+  try {
+    config = await loadConfig(resolvedPath);
+  } catch (error) {
+    console.error(chalk.red(`🥒 ${error instanceof Error ? error.message : error}`));
+    console.error();
+    console.error(chalk.dim("Run `pickled init` to create a config file"));
+    process.exit(1);
   }
 
-  // 4. Generate topics
-  log("🏷️ Picking the right questions...");
-  const topics = await generateTopics(product, competitors);
+  const tool = {
+    name: config.tool.name,
+    description: config.tool.description,
+    keywords: config.tool.keywords,
+    path: resolvedPath,
+  };
+
   if (verbose) {
-    for (const t of topics)
-      log(`   - ${t.name} (${t.questions.length} questions)`);
-  }
-
-  // 5. Run citation analysis
-  log("📊 Checking your freshness...");
-  const results = await analyzeCitations(
-    product,
-    competitors,
-    topics,
-    (msg) => {
-      if (verbose) log(`   ${msg}`);
-    },
-  );
-
-  // 6. Calculate summary
-  const targetLower = product.name.toLowerCase();
-  let totalMentions = 0;
-  let totalQuestions = 0;
-  let leadingTopics = 0;
-  const opportunities: string[] = [];
-
-  for (const result of results) {
-    const targetStats = result.results[targetLower];
-    totalMentions += targetStats?.mentions || 0;
-    totalQuestions += targetStats?.total || 0;
-
-    if (result.leader === targetLower) {
-      leadingTopics++;
-    } else {
-      opportunities.push(result.topic);
+    log(`   Tool: ${tool.name}`);
+    log(`   Scenarios: ${config.scenarios.length}`);
+    for (const s of config.scenarios) {
+      log(`   - ${s.name}`);
     }
   }
 
-  const report: AnalysisReport = {
-    product,
-    competitors,
-    topics: results,
-    summary: {
-      overallVisibility:
-        totalQuestions > 0
-          ? Math.round((totalMentions / totalQuestions) * 100)
-          : 0,
-      totalMentions,
-      totalQuestions,
-      leadingTopics,
-      totalTopics: results.length,
-      opportunities,
-    },
-  };
+  // 2. Run check
+  log("📊 Checking your freshness...");
+  console.log();
 
-  // 7. Output
+  const report = await runCheck(tool, config.scenarios, {
+    ...config.runner,
+    onProgress: (msg) => {
+      if (verbose || !json) {
+        console.log(chalk.dim(`   ${msg}`));
+      }
+    },
+  });
+
+  // 3. Output
   if (output) {
-    const content = output.endsWith(".xml")
-      ? formatXML(report)
-      : formatJSON(report);
-    await Bun.write(output, content);
-    log(`\n🥒 Freshness report saved to ${output}`);
+    await Bun.write(output, formatCheckJSON(report));
+    log(`\n🥒 Report saved to ${output}`);
   } else if (json) {
-    console.log(formatJSON(report));
+    console.log(formatCheckJSON(report));
   } else {
-    printReport(report);
+    printCheckReport(report);
+  }
+
+  // 4. Check threshold
+  const threshold = options.threshold
+    ? parseInt(options.threshold, 10)
+    : (config.threshold ?? 0);
+
+  if (report.summary.freshness < threshold) {
+    console.error(chalk.red(`\n🥒 Freshness ${report.summary.freshness}% is below threshold ${threshold}%`));
+    process.exit(1);
   }
 }

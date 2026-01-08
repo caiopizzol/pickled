@@ -1,47 +1,61 @@
-export interface ProductInfo {
+export interface Scenario {
+  name: string;
+  prompt: string;
+}
+
+export interface ScenarioResult {
+  scenario: Scenario;
+  passed: boolean;
+  response: string;
+  error?: string;
+}
+
+export interface CheckReport {
+  tool: {
+    name: string;
+    description: string;
+    path: string;
+  };
+  scenarios: ScenarioResult[];
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    freshness: number;
+  };
+}
+
+export interface ToolInfo {
   name: string;
   description: string;
-  domain: string;
-  language: string;
-  url: string;
+  keywords: string[];
+  path: string;
 }
 
-export interface RepoData {
-  readme: string;
-  packageJson: Record<string, unknown> | null;
-  repoUrl: string;
-  owner: string;
-  repo: string;
+export interface McpServerConfig {
+  type: "stdio" | "sse" | "http";
+  command?: string;
+  args?: string[];
+  url?: string;
+  headers?: Record<string, string>;
 }
 
-export interface Topic {
-  name: string;
-  questions: string[];
+export interface RunnerConfig {
+  model?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  permissionMode?: "default" | "acceptEdits" | "bypassPermissions";
+  maxTurns?: number;
+  mcpServers?: Record<string, McpServerConfig>;
 }
 
-export interface ToolMentions {
-  mentions: number;
-  total: number;
-  percentage: number;
-  contexts: string[];
-}
-
-export interface TopicResult {
-  topic: string;
-  results: Record<string, ToolMentions>;
-  leader: string;
-}
-
-export interface AnalysisReport {
-  product: ProductInfo;
-  competitors: string[];
-  topics: TopicResult[];
-  summary: {
-    overallVisibility: number;
-    totalMentions: number;
-    totalQuestions: number;
-    leadingTopics: number;
-    totalTopics: number;
-    opportunities: string[];
+export interface CheckConfig {
+  tool: {
+    name: string;
+    description: string;
+    keywords: string[];
   };
+  scenarios: Scenario[];
+  runner?: RunnerConfig;
+  threshold?: number;
 }

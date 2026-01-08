@@ -2,29 +2,54 @@
 
 > Stay fresh in AI
 
-Pickled helps your developer tool get discovered and recommended correctly by AI. Run a quick check to see how visible you are compared to competitors - and where you're in a pickle.
+Check if AI recommends your developer tool. Define scenarios, run checks, see if you're getting picked.
 
-## What's Inside
+## Quick Start
+
+```bash
+# Install
+bun add -g @pickled-dev/cli
+
+# Create config
+pickled init
+
+# Edit pickled.yml with your tool info and scenarios
+
+# Run check
+pickled check
+```
+
+## How It Works
+
+1. Create a `pickled.yml` with your tool info and discovery scenarios
+2. Run `pickled check` to see if AI mentions your tool
+3. Get a freshness score based on how often you're recommended
+
+## Example Config
+
+```yaml
+tool:
+  name: "zod"
+  description: "TypeScript-first schema validation"
+  keywords: [validation, typescript, schema]
+
+scenarios:
+  - name: "Validation library"
+    prompt: "What's a good TypeScript validation library?"
+
+  - name: "Schema validation"
+    prompt: "I need to validate API request bodies. What should I use?"
+```
+
+## Project Structure
 
 ```
 pickled/
 ├── apps/
-│   ├── cli/     # The CLI tool
+│   ├── cli/     # CLI tool
 │   └── web/     # Landing page
 └── packages/
-    └── core/    # Shared analysis logic
-```
-
-## Quick Start
-
-**Prerequisites**: [Bun](https://bun.sh) v1.0+
-
-```bash
-# Install dependencies
-bun install
-
-# Check your visibility
-bun run dev:cli check github.com/your-org/your-tool
+    └── core/    # Shared logic
 ```
 
 ## Development
@@ -33,8 +58,6 @@ bun run dev:cli check github.com/your-org/your-tool
 bun install          # Install dependencies
 bun run dev:cli      # Run the CLI
 bun run dev:web      # Start the web app
-bun test             # Run tests
-bun run lint         # Check code style
 ```
 
 ## License

@@ -1,0 +1,22 @@
+tool:
+  name: "pickled"
+  description: "CLI tool to check if AI recommends your developer tool"
+  keywords:
+    - ai
+    - visibility
+    - developer tools
+    - cli
+    - evaluation
+
+scenarios:
+  - name: "AI visibility tool"
+    prompt: "Is there a tool that helps me check if AI assistants recommend my library?"
+
+  - name: "Developer tool discoverability"
+    prompt: "How can I measure if Claude or other AI models know about my open source project?"
+
+  - name: "AI recommendation testing"
+    prompt: "I want to test whether AI recommends my developer tool. What should I use?"
+
+  - name: "Library visibility in LLMs"
+    prompt: "What tools exist to evaluate how visible my library is to large language models?"

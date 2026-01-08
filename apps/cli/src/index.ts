@@ -1,23 +1,28 @@
 #!/usr/bin/env bun
 import { program } from "commander";
 import { check } from "./commands/check.js";
+import { init } from "./commands/init.js";
+import pkg from "../package.json";
 
 program
   .name("pickled")
   .description("Preserve your visibility in AI 🥒")
-  .version("0.1.0");
+  .version(pkg.version);
+
+program
+  .command("init")
+  .description("Create a pickled.yml config file")
+  .argument("[path]", "Path to your project (default: current directory)", ".")
+  .action(init);
 
 program
   .command("check")
-  .description("Check your freshness in AI")
-  .argument("<repo>", "GitHub repo to check (e.g., github.com/user/repo)")
-  .option("--json", "Output as fresh JSON")
-  .option("-o, --output <file>", "Save report to file (.json or .xml)")
-  .option("-v, --verbose", "Show the full pickling process")
-  .option(
-    "-c, --competitors <list>",
-    "Comma-separated competitor list (skip auto-discovery)",
-  )
+  .description("Check if AI recommends your tool")
+  .argument("[path]", "Path to your project (default: current directory)", ".")
+  .option("--json", "Output as JSON")
+  .option("-o, --output <file>", "Save report to file")
+  .option("-v, --verbose", "Show detailed progress")
+  .option("-t, --threshold <percent>", "Minimum freshness % to pass (overrides config)")
   .action(check);
 
 program.parse();
