@@ -1,6 +1,6 @@
 {
   "name": "@pickled-dev/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Stay fresh in AI 🥒",
   "module": "dist/index.js",
   "type": "module",
