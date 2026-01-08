@@ -1,105 +1,147 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
-import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
-import type { CheckReport, Scenario, ScenarioResult, ToolInfo } from "./types.js";
-import { validateScenario } from "./validator.js";
+import { fetchDocs, getCodebaseSource } from "./sources.js";
+import { createTarget, resolveTarget } from "./targets/index.js";
+import type {
+  CheckConfig,
+  CheckReport,
+  DocSource,
+  Scenario,
+  ScenarioResult,
+  ToolInfo,
+} from "./types.js";
+import { parseValidation } from "./validator.js";
 
 export interface CheckOptions {
-  model?: string;
-  allowedTools?: string[];
-  disallowedTools?: string[];
-  permissionMode?: "default" | "acceptEdits" | "bypassPermissions";
-  maxTurns?: number;
-  mcpServers?: Record<string, unknown>;
   onProgress?: (msg: string) => void;
 }
 
+/**
+ * Run check with config format (scenarios + targets)
+ */
 export async function runCheck(
   tool: ToolInfo,
-  scenarios: Scenario[],
+  config: CheckConfig,
   options: CheckOptions = {},
 ): Promise<CheckReport> {
-  const { onProgress, ...runnerOptions } = options;
+  const { onProgress } = options;
   const results: ScenarioResult[] = [];
 
-  for (const scenario of scenarios) {
+  if (config.scenarios.length === 0) {
+    throw new Error("No scenarios defined in config");
+  }
+
+  // Load docs if specified
+  let docs: DocSource | undefined;
+  if (config.docs?.source) {
+    onProgress?.("Loading documentation...");
+    try {
+      docs = await fetchDocs(config.docs.source);
+      onProgress?.(`  Loaded: ${docs.name}`);
+    } catch (error) {
+      onProgress?.(
+        `  Warning: ${error instanceof Error ? error.message : error}`,
+      );
+      docs = getCodebaseSource(tool.path);
+    }
+  }
+
+  onProgress?.("");
+
+  for (const scenario of config.scenarios) {
     onProgress?.(`Running: ${scenario.name}`);
 
     try {
-      const response = await runScenario(scenario, tool, runnerOptions);
-      const passed = validateScenario(response, tool.name);
+      const result = await runScenario(scenario, tool, config, { onProgress });
+      results.push(result);
 
-      results.push({ scenario, passed, response });
-      onProgress?.(passed ? `  ✓ Passed` : `  ✗ Failed`);
+      const icon =
+        result.answerable === "YES"
+          ? "✓"
+          : result.answerable === "PARTIAL"
+            ? "⚠"
+            : "✗";
+      onProgress?.(`  ${icon} ${result.answerable} (${result.confidence}%)`);
     } catch (error) {
-      results.push({
+      const errorResult: ScenarioResult = {
         scenario,
-        passed: false,
+        answerable: "NO",
+        confidence: 0,
         response: "",
+        reason: "Error during validation",
         error: error instanceof Error ? error.message : String(error),
-      });
+      };
+      results.push(errorResult);
       onProgress?.(`  ✗ Error: ${error}`);
     }
   }
 
-  return buildReport(tool, results);
+  return buildReport(tool, docs, results);
 }
 
+/**
+ * Run a single scenario against its target
+ */
 async function runScenario(
   scenario: Scenario,
   tool: ToolInfo,
-  runnerOptions: Omit<CheckOptions, "onProgress">,
-): Promise<string> {
-  const systemPrompt = `You are an AI assistant helping a developer.
-The developer is working on "${tool.name}": ${tool.description}
-Keywords: ${tool.keywords.join(", ")}
+  config: CheckConfig,
+  options: { onProgress?: (msg: string) => void },
+): Promise<ScenarioResult> {
+  // Resolve target (named reference or default)
+  const { name: targetName, config: targetConfig } = resolveTarget(
+    scenario.target,
+    config.targets,
+  );
 
-Answer naturally. If ${tool.name} is relevant to the question, mention it.`;
+  // Create target runner
+  const target = createTarget(targetName, targetConfig);
 
-  let fullResponse = "";
-
-  // Create env without ANTHROPIC_API_KEY to ensure OAuth is used
-  // This prevents inheriting API keys from parent Claude Code sessions
-  const cleanEnv = { ...process.env };
-  delete cleanEnv.ANTHROPIC_API_KEY;
-
-  const options: ClaudeAgentOptions = {
+  // Run scenario
+  const result = await target.run(scenario.prompt, {
+    tool,
     cwd: tool.path,
-    model: runnerOptions.model ?? "claude-sonnet-4-20250514",
-    systemPrompt,
-    allowedTools: runnerOptions.allowedTools ?? ["Read", "Glob", "Grep", "Bash"],
-    disallowedTools: runnerOptions.disallowedTools ?? ["Edit", "Write", "NotebookEdit"],
-    permissionMode: runnerOptions.permissionMode ?? "acceptEdits",
-    maxTurns: runnerOptions.maxTurns ?? 5,
-    mcpServers: runnerOptions.mcpServers,
-    settingSources: [],
+    onProgress: options.onProgress,
+  });
+
+  // Parse validation from response
+  const validation = parseValidation(result.response);
+
+  return {
+    scenario,
+    answerable: validation.answerable,
+    confidence: validation.confidence,
+    response: result.response,
+    reason: validation.reason,
+    missing: validation.missing,
+    target: result.metadata,
+    toolsUsed: result.toolsUsed,
+    sources: result.sources,
   };
-
-  for await (const message of query({ prompt: scenario.prompt, options })) {
-    if (message.type === "assistant") {
-      const content = message.message?.content;
-      if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block.type === "text") {
-            fullResponse += (block as { type: "text"; text: string }).text;
-          }
-        }
-      }
-    }
-
-    if (message.type === "result") {
-      const resultMsg = message as { type: "result"; subtype: string; result?: string };
-      if (resultMsg.subtype === "success" && resultMsg.result) {
-        fullResponse += resultMsg.result;
-      }
-    }
-  }
-
-  return fullResponse;
 }
 
-function buildReport(tool: ToolInfo, results: ScenarioResult[]): CheckReport {
+/**
+ * Build the final report
+ */
+function buildReport(
+  tool: ToolInfo,
+  docs: DocSource | undefined,
+  results: ScenarioResult[],
+): CheckReport {
   const total = results.length;
-  const passed = results.filter((r) => r.passed).length;
+  const answered = results.filter(
+    (r) => r.answerable === "YES" || r.answerable === "PARTIAL",
+  ).length;
+
+  // Calculate score based on confidence-weighted results
+  const score =
+    total > 0
+      ? Math.round(
+          results.reduce((sum, r) => {
+            if (r.answerable === "YES") return sum + r.confidence;
+            if (r.answerable === "PARTIAL") return sum + r.confidence * 0.5;
+            return sum;
+          }, 0) / total,
+        )
+      : 0;
 
   return {
     tool: {
@@ -107,12 +149,18 @@ function buildReport(tool: ToolInfo, results: ScenarioResult[]): CheckReport {
       description: tool.description,
       path: tool.path,
     },
+    docs: docs
+      ? {
+          source: docs.name,
+          type: docs.type,
+        }
+      : undefined,
     scenarios: results,
     summary: {
       total,
-      passed,
-      failed: total - passed,
-      freshness: total > 0 ? Math.round((passed / total) * 100) : 0,
+      answered,
+      unanswered: total - answered,
+      score,
     },
   };
 }

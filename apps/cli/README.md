@@ -2,7 +2,7 @@
 
 > Stay fresh in AI 🥒
 
-Check if AI recommends your developer tool. Point it at your project, define some discovery scenarios, and see if you're getting picked.
+Test how well AI responds to questions about your developer tool. Define scenarios, run checks, and see your freshness score.
 
 ## Installation
 
@@ -24,21 +24,21 @@ Creates a `pickled.yml` file:
 tool:
   name: "your-tool"
   description: "What your tool does"
-  keywords:
-    - keyword1
-    - keyword2
 
 scenarios:
-  - name: "General discovery"
-    prompt: "What's a good library for [your use case]?"
+  - name: "Installation"
+    prompt: "How do I install this tool?"
 
-  - name: "Specific feature"
-    prompt: "I need a tool that can [specific feature]. What should I use?"
+  - name: "Getting started"
+    prompt: "How do I set up this tool for my project?"
+
+  - name: "Basic usage"
+    prompt: "Show me a basic example of using this tool"
 ```
 
 ### 2. Edit your config
 
-Update `pickled.yml` with your actual tool info and scenarios that developers might ask.
+Update `pickled.yml` with your actual tool info and scenarios developers might ask about.
 
 ### 3. Run check
 
@@ -54,51 +54,73 @@ Create a starter `pickled.yml` config file.
 
 ### `pickled check [path]`
 
-Run discovery scenarios and report results.
+Run freshness checks and report results.
 
 | Option                | Description            |
 | --------------------- | ---------------------- |
 | `--json`              | Output as JSON         |
 | `-o, --output <file>` | Save report to file    |
 | `-v, --verbose`       | Show detailed progress |
+| `-t, --threshold <n>` | Min score % to pass    |
 
 ## Example Output
 
 ```
-🥒 pickled check results
+🥒 Freshness Check
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Tool: zod
-Path: /path/to/zod
 
-  ✓ "Validation library" - passed
-  ✓ "Schema validation" - passed
-  ✗ "Form validation" - tool not mentioned
+  [default] ✓ "Installation" - Well preserved (92%)
+  [default] ✓ "Basic parsing" - Fresh (85%)
+  [default] ⚠ "Error handling" - Going stale (65%)
+      Missing: safeParse details
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Freshness: 2/3 (67%) 🥒🥒🥒░░
+Freshness Score: 81% 🥒🥒🥒🥒░
 
-🥒 Not bad, but room to get fresher.
+🥒 Looking fresh! Your docs are doing well.
 ```
+
+## Freshness Scores
+
+| Score | Status | Meaning |
+|-------|--------|---------|
+| 90%+ | Well preserved | AI nails it |
+| 70-89% | Fresh | Good, minor gaps |
+| 50-69% | Going stale | Needs attention |
+| <50% | Gone sour | Major documentation gaps |
 
 ## Config Reference
 
 ```yaml
 tool:
-  name: "tool-name" # Required: your tool's name
-  description: "description" # Required: what it does
-  keywords: # Required: relevant keywords
-    - keyword1
-    - keyword2
+  name: "tool-name"       # Required: your tool's name
+  description: "desc"     # Required: what it does
 
-scenarios: # Required: discovery scenarios
+scenarios:                # Required: scenarios to check
   - name: "Scenario name" # Display name
     prompt: "The question" # What to ask AI
+    target: target-name   # Optional: specific target
 
-runner: # Optional: customize AI runner
-  model: claude-sonnet-4-20250514
-  maxTurns: 3
+targets:                  # Optional: named targets
+  claude-sonnet:
+    category: cli
+    provider: claude-code
+    model: claude-sonnet-4-20250514
+
+threshold: 80             # Optional: min score % to pass
 ```
+
+## CI/CD Integration
+
+```yaml
+# GitHub Actions
+- name: Check AI freshness
+  run: pickled check --threshold 80
+```
+
+Fail the build if AI can't answer questions about your tool correctly.
 
 ## Local Development
 

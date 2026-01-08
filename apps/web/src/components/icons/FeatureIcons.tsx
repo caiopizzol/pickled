@@ -9,6 +9,7 @@ export function FreshnessScoreIcon({ className }: IconProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-hidden="true"
     >
       {/* Hand-drawn style bar chart with ascending bars */}
       <path
@@ -50,6 +51,7 @@ export function JarIcon({ className }: IconProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-hidden="true"
     >
       {/* Jar lid */}
       <path
@@ -91,6 +93,7 @@ export function CodeCheckIcon({ className }: IconProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-hidden="true"
     >
       {/* Left angle bracket with hand-drawn feel */}
       <path
@@ -134,6 +137,7 @@ export function ShelfLifeIcon({ className }: IconProps) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
+      aria-hidden="true"
     >
       {/* Stack of documents with slightly offset, hand-drawn lines */}
       <path

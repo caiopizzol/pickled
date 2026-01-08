@@ -1,22 +1,26 @@
+# 🥒 pickled.yml - Check your freshness!
+
 tool:
   name: "pickled"
-  description: "CLI tool to check if AI recommends your developer tool"
-  keywords:
-    - ai
-    - visibility
-    - developer tools
-    - cli
-    - evaluation
+  description: "CLI tool to check if AI can correctly answer questions about your developer tool"
 
 scenarios:
-  - name: "AI visibility tool"
-    prompt: "Is there a tool that helps me check if AI assistants recommend my library?"
+  - name: "Installation"
+    prompt: "How do I install pickled?"
 
-  - name: "Developer tool discoverability"
-    prompt: "How can I measure if Claude or other AI models know about my open source project?"
+  - name: "Getting started"
+    prompt: "How do I set up pickled for my project?"
 
-  - name: "AI recommendation testing"
-    prompt: "I want to test whether AI recommends my developer tool. What should I use?"
+  - name: "Config format"
+    prompt: "What is the pickled.yml config format? Show me an example."
 
-  - name: "Library visibility in LLMs"
-    prompt: "What tools exist to evaluate how visible my library is to large language models?"
+  - name: "Running checks"
+    prompt: "How do I run pickled to check my documentation?"
+
+  - name: "Named targets"
+    prompt: "How do I define and use named targets in pickled?"
+
+  - name: "CI integration"
+    prompt: "How do I use pickled in CI/CD with a threshold?"
+
+threshold: 70

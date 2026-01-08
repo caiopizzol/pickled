@@ -9,21 +9,21 @@ interface Step {
 const steps: Step[] = [
   {
     number: 1,
-    title: "Point to your repo",
+    title: "Define scenarios",
     description:
-      "Provide your GitHub URL. We extract info and discover competitors automatically.",
+      "Create a pickled.yml with questions developers might ask about your tool.",
   },
   {
     number: 2,
-    title: "Check freshness",
+    title: "Run check",
     description:
-      "We query AI models with real questions and track which tools get recommended.",
+      "Pickled tests AI responses and validates if answers are correct and complete.",
   },
   {
     number: 3,
-    title: "Stay fresh",
+    title: "Get your score",
     description:
-      "Get actionable tips to improve visibility. Update docs, add examples, extend shelf life.",
+      "See your freshness score and identify where your documentation needs work.",
   },
 ];
 

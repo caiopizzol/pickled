@@ -2,7 +2,7 @@
 
 > Stay fresh in AI
 
-Check if AI recommends your developer tool. Define scenarios, run checks, see if you're getting picked.
+Test how well AI responds to questions about your developer tool. Define scenarios, run checks, and see your freshness score.
 
 ## Quick Start
 
@@ -21,9 +21,9 @@ pickled check
 
 ## How It Works
 
-1. Create a `pickled.yml` with your tool info and discovery scenarios
-2. Run `pickled check` to see if AI mentions your tool
-3. Get a freshness score based on how often you're recommended
+1. Create a `pickled.yml` with your tool info and scenarios (questions developers might ask)
+2. Run `pickled check` to test if AI can answer correctly
+3. Get a freshness score based on AI response quality
 
 ## Example Config
 
@@ -31,15 +31,28 @@ pickled check
 tool:
   name: "zod"
   description: "TypeScript-first schema validation"
-  keywords: [validation, typescript, schema]
 
 scenarios:
-  - name: "Validation library"
-    prompt: "What's a good TypeScript validation library?"
+  - name: "Installation"
+    prompt: "How do I install zod?"
 
-  - name: "Schema validation"
-    prompt: "I need to validate API request bodies. What should I use?"
+  - name: "Basic parsing"
+    prompt: "How do I parse and validate a string with zod?"
+
+  - name: "Error handling"
+    prompt: "How do I get error messages from failed validation?"
+
+threshold: 80 # Fail CI if score < 80%
 ```
+
+## Freshness Scores
+
+| Score  | Status         | Meaning                  |
+| ------ | -------------- | ------------------------ |
+| 90%+   | Well preserved | AI nails it              |
+| 70-89% | Fresh          | Good, minor gaps         |
+| 50-69% | Going stale    | Needs attention          |
+| <50%   | Gone sour      | Major documentation gaps |
 
 ## Project Structure
 

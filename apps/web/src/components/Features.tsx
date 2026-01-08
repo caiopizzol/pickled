@@ -1,8 +1,8 @@
 import "./Features.css";
 import {
+  CodeCheckIcon,
   FreshnessScoreIcon,
   JarIcon,
-  CodeCheckIcon,
   ShelfLifeIcon,
 } from "./icons/FeatureIcons";
 
@@ -17,25 +17,25 @@ const features: Feature[] = [
     icon: <FreshnessScoreIcon />,
     title: "Freshness Score",
     description:
-      "Track AI recommendations across topics. Know where you're preserved and where you're going stale.",
+      "Get a score based on how well AI can answer questions about your tool. Track your freshness over time.",
   },
   {
     icon: <JarIcon />,
-    title: "The Jar",
+    title: "Scenario Testing",
     description:
-      "See competitors on the shelf. Compare freshness and identify opportunities.",
+      "Define scenarios developers might ask about. Test AI responses against real-world questions.",
   },
   {
     icon: <CodeCheckIcon />,
-    title: "Code Check",
+    title: "CI/CD Ready",
     description:
-      "Verify AI generates correct code for your API. Catch issues before users do.",
+      "Set thresholds and fail builds if AI can't answer correctly. Stay fresh automatically.",
   },
   {
     icon: <ShelfLifeIcon />,
-    title: "Shelf Life",
+    title: "Multi-Target",
     description:
-      "Analyze documentation coverage. Find gaps that hurt AI comprehension.",
+      "Test across different AI tools and models. Coming soon: Gemini CLI, Cursor, and more.",
   },
 ];
 
@@ -44,9 +44,7 @@ export function Features() {
     <section className="features section" id="features">
       <div className="container">
         <div className="section-label">Features</div>
-        <h2 className="section-title">
-          Everything you need to preserve visibility
-        </h2>
+        <h2 className="section-title">Everything you need to stay fresh</h2>
         <div className="features-grid">
           {features.map((feature) => (
             <div key={feature.title} className="feature-card card">

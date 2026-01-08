@@ -7,9 +7,8 @@ interface FooterLink {
 }
 
 const footerLinks: FooterLink[] = [
-  { label: "Docs", href: "/docs" },
+  { label: "Docs", href: "https://github.com/caiopizzol/pickled#quick-start" },
   { label: "GitHub", href: "https://github.com/caiopizzol/pickled" },
-  { label: "Twitter", href: "https://twitter.com/pickled" },
 ];
 
 export function Footer() {

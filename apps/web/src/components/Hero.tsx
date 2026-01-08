@@ -12,12 +12,12 @@ export function Hero() {
       <div className="container hero-content">
         <div className="hero-text">
           <h1>
-            <span className="text-gradient">Preserve</span> your visibility in
-            AI
+            Is AI getting your <span className="text-gradient">tool</span>{" "}
+            right?
           </h1>
           <p className="hero-tagline">
-            Track how often AI recommends your developer tool. Get actionable
-            insights to stay fresh in the age of AI-assisted discovery.
+            Test how well AI responds to questions about your developer tool.
+            Define scenarios, run checks, and see your freshness score.
           </p>
           <div className="hero-cta">
             <Button as="a" href="#get-started" variant="primary" size="lg">
@@ -49,40 +49,39 @@ export function Hero() {
         <div className="hero-terminal">
           <Terminal>
             <TerminalLine>
-              <T.Prompt>$</T.Prompt> <T.Cmd>pickled check zod</T.Cmd>
+              <T.Prompt>$</T.Prompt> <T.Cmd>pickled check</T.Cmd>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
               <T.Output>🥒 </T.Output>
-              <T.Highlight>PICKLED</T.Highlight>
-              <T.Output> v1.0.0</T.Output>
+              <T.Highlight>Freshness Check</T.Highlight>
             </TerminalLine>
+            <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output> Checking your freshness...</T.Output>
+              <T.Output>Tool: </T.Output>
+              <T.Cmd>zod</T.Cmd>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
               <T.Output> </T.Output>
-              <T.Success>████████░░</T.Success>
-              <T.Output> 80% TypeScript validation</T.Output>
+              <T.Success>✓</T.Success>
+              <T.Output> "Installation" - Well preserved (92%)</T.Output>
             </TerminalLine>
             <TerminalLine>
               <T.Output> </T.Output>
-              <T.Success>Perfectly preserved! 🥒</T.Success>
+              <T.Success>✓</T.Success>
+              <T.Output> "Basic parsing" - Fresh (85%)</T.Output>
+            </TerminalLine>
+            <TerminalLine>
+              <T.Output> </T.Output>
+              <T.Warning>⚠</T.Warning>
+              <T.Output> "Error handling" - Going stale (65%)</T.Output>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output> </T.Output>
-              <T.Warning>███░░░░░░░</T.Warning>
-              <T.Output> 30% Form validation</T.Output>
-            </TerminalLine>
-            <TerminalLine>
-              <T.Output> </T.Output>
-              <T.Warning>Going stale. yup is fresher here.</T.Warning>
-            </TerminalLine>
-            <TerminalLine>&nbsp;</TerminalLine>
-            <TerminalLine>
-              <T.Success>🥒 Stay fresh out there!</T.Success>
+              <T.Output>Freshness Score: 81% </T.Output>
+              <T.Success>🥒🥒🥒🥒</T.Success>
+              <T.Output>░</T.Output>
             </TerminalLine>
           </Terminal>
         </div>
