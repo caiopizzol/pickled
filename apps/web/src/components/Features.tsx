@@ -1,32 +1,38 @@
 import "./Features.css";
+import {
+  FreshnessScoreIcon,
+  JarIcon,
+  CodeCheckIcon,
+  ShelfLifeIcon,
+} from "./icons/FeatureIcons";
 
 interface Feature {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
 }
 
 const features: Feature[] = [
   {
-    icon: "📊",
+    icon: <FreshnessScoreIcon />,
     title: "Freshness Score",
     description:
       "Track AI recommendations across topics. Know where you're preserved and where you're going stale.",
   },
   {
-    icon: "🫙",
+    icon: <JarIcon />,
     title: "The Jar",
     description:
       "See competitors on the shelf. Compare freshness and identify opportunities.",
   },
   {
-    icon: "🔍",
+    icon: <CodeCheckIcon />,
     title: "Code Check",
     description:
       "Verify AI generates correct code for your API. Catch issues before users do.",
   },
   {
-    icon: "📚",
+    icon: <ShelfLifeIcon />,
     title: "Shelf Life",
     description:
       "Analyze documentation coverage. Find gaps that hurt AI comprehension.",
