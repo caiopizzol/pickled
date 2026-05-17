@@ -28,7 +28,7 @@ pickled check       # run scenarios against an agent
    - **PARTIAL** — required IDs cited but some missing, or unknown IDs present.
    - **NO** — no citations, or every citation is an invented ID.
 
-Citation grounding is necessary but not sufficient: a stale source produces a confidently grounded answer that's still wrong. Catching that is the job of trap scenarios (coming in M2).
+Citation grounding is necessary but not sufficient: a stale source produces a confidently grounded answer that's still wrong. **Traps** catch that — a per-scenario list of deterministic stale-pattern detectors (literal substring or regex). Any trap firing forces the result to NO with confidence 0, regardless of how well the answer was grounded.
 
 ## Example config
 
@@ -54,6 +54,10 @@ scenarios:
   - name: Error handling
     prompt: How do I get error messages from failed validation?
     requiredSources: [readme, llms]
+    traps:
+      - id: old_v2_api
+        match: "ZodError.format()"
+        reason: "Recommends pre-v3 API removed in current versions"
 
 # Optional: fail CI if overall score below threshold
 threshold: 80
@@ -73,7 +77,7 @@ pickled audit --fail-on warning   # exit non-zero on any finding
 
 ### `pickled check [path]`
 
-Runs each scenario against the configured agent target, scores citations, prints a per-scenario report.
+Runs each scenario against the configured agent target, scores citations and traps, prints a per-scenario report.
 
 ```bash
 pickled check               # human-readable
@@ -91,7 +95,7 @@ pickled/
 │   └── web/     # Landing page (placeholder)
 └── packages/
     ├── config/  # Schema types + loader
-    └── core/    # Audit, sources, scorers, targets, check
+    └── core/    # audit, sources, scorers (citation, traps), targets, check
 ```
 
 ## Development
@@ -104,7 +108,7 @@ bun run lint
 
 ## Status
 
-Early. M0 (audit) and M1 (citation-based check) shipped. M2 will add trap scenarios for catching stale-but-grounded answers. M3 adds a Codex target. M4 makes context ablation a default.
+Early. Shipped: M0 (audit), M1 (citation-based check), M2a (trap scenarios for stale-but-grounded answers). Next: M3 adds a Codex target so the matrix produces cross-agent scores. M4 makes context ablation a default of every run.
 
 ## License
 
