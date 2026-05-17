@@ -1,4 +1,4 @@
-import type { TargetCategory } from "@pickled-dev/config";
+import type { ResolvedDocSource, TargetCategory } from "@pickled-dev/config";
 
 export { DEFAULT_TARGET } from "@pickled-dev/config";
 
@@ -26,6 +26,10 @@ export interface RunOptions {
   tool: import("../types.js").ToolInfo;
   cwd: string;
   context?: ResolvedContext;
+  /** Documentation sources to inject into the target prompt. */
+  docs: ResolvedDocSource[];
+  /** Source IDs the scenario requires the answer to cite. */
+  requiredSources: string[];
   onProgress?: (msg: string) => void;
 }
 

@@ -12,23 +12,20 @@ function getScorePickles(score: number): string {
   return "🥒".repeat(filled) + "░".repeat(empty);
 }
 
-/**
- * Get branded status based on score (from BRAND.md)
- */
 function getStatus(score: number): {
   label: string;
   color: typeof chalk.green;
 } {
   if (score >= 90) {
-    return { label: "Well preserved", color: chalk.green };
+    return { label: "Well grounded", color: chalk.green };
   }
   if (score >= 70) {
-    return { label: "Fresh", color: chalk.green };
+    return { label: "Grounded", color: chalk.green };
   }
   if (score >= 50) {
-    return { label: "Going stale", color: chalk.yellow };
+    return { label: "Partially grounded", color: chalk.yellow };
   }
-  return { label: "Gone sour", color: chalk.red };
+  return { label: "Ungrounded", color: chalk.red };
 }
 
 /**
@@ -43,6 +40,14 @@ function getResultStatus(result: ScenarioResult): {
     return {
       icon: chalk.red("✗"),
       status: `error: ${result.error.slice(0, 40)}`,
+      color: chalk.red,
+    };
+  }
+
+  if (result.traps.fired.length > 0) {
+    return {
+      icon: chalk.red("✗"),
+      status: `Trap fired (${result.confidence}%)`,
       color: chalk.red,
     };
   }
@@ -67,7 +72,7 @@ function getResultStatus(result: ScenarioResult): {
 
   return {
     icon: chalk.red("✗"),
-    status: `Gone sour (${result.confidence}%)`,
+    status: `Ungrounded (${result.confidence}%)`,
     color: chalk.red,
   };
 }
@@ -108,14 +113,15 @@ export function printCheckReport(report: CheckReport): void {
   const results = scenarios;
 
   console.log();
-  console.log(chalk.bold("🥒 Freshness Check"));
+  console.log(chalk.bold("🥒 Pickled Check"));
   console.log(LINE);
   console.log();
   console.log(`Tool: ${chalk.cyan(tool.name)}`);
 
-  // Show docs source if available
-  if (report.docs) {
-    console.log(`Docs: ${chalk.dim(report.docs.source)}`);
+  if (report.docs.length > 0) {
+    console.log(
+      `Sources: ${chalk.dim(report.docs.map((d) => d.id).join(", "))}`,
+    );
   }
 
   console.log();
@@ -167,9 +173,24 @@ export function printCheckReport(report: CheckReport): void {
         console.log(chalk.dim(`      ${result.reason}`));
       }
 
-      // Show missing info
-      if (result.missing && result.missing.length > 0) {
-        console.log(chalk.dim(`      Missing: ${result.missing.join(", ")}`));
+      for (const hit of result.traps.fired) {
+        console.log(chalk.red(`      ↳ trap "${hit.id}": ${hit.reason}`));
+        console.log(chalk.dim(`        "${hit.snippet}"`));
+      }
+
+      if (result.citations.missing.length > 0) {
+        console.log(
+          chalk.dim(
+            `      Missing citations: ${result.citations.missing.join(", ")}`,
+          ),
+        );
+      }
+      if (result.citations.unknown.length > 0) {
+        console.log(
+          chalk.dim(
+            `      Unknown citations: ${result.citations.unknown.join(", ")}`,
+          ),
+        );
       }
     }
 
@@ -178,28 +199,57 @@ export function printCheckReport(report: CheckReport): void {
 
   console.log(LINE);
   console.log(
-    `Freshness Score: ${summary.score}% ${getScorePickles(summary.score)}`,
+    `Legibility Score: ${summary.score}% ${getScorePickles(summary.score)}`,
   );
   console.log();
 
-  // Final message based on score
   const { color } = getStatus(summary.score);
+  const trapCount = scenarios.reduce((sum, result) => {
+    return sum + result.traps.fired.length;
+  }, 0);
   if (summary.score >= 90) {
-    console.log(color("🥒 Perfectly preserved! Your docs are in great shape."));
+    console.log(color("🥒 Solid grounding. Agents can answer from your docs."));
   } else if (summary.score >= 70) {
-    console.log(color("🥒 Looking fresh! Your docs are doing well."));
+    console.log(color("🥒 Mostly grounded with a few gaps."));
   } else if (summary.score >= 50) {
-    console.log(color("🥒 Starting to spoil... Some docs need attention."));
+    console.log(
+      color("🥒 Partial grounding. Several scenarios need attention."),
+    );
   } else {
-    console.log(color("🥒 Something went sour. Time to freshen up your docs."));
+    const message =
+      trapCount > 0
+        ? `🥒 ${trapCount} trap(s) fired. Review stale or deprecated guidance.`
+        : "🥒 Weak grounding. Most scenarios are missing required citations.";
+    console.log(color(message));
   }
 
   console.log();
 }
 
+export interface FormatJSONOptions {
+  /** Include full source content + transcripts. Default omits both. */
+  verbose?: boolean;
+}
+
 /**
- * Format report as JSON
+ * Format report as JSON. By default omits source content and per-message
+ * transcripts to keep output small; pass `verbose: true` for the full payload.
  */
-export function formatCheckJSON(report: CheckReport): string {
-  return JSON.stringify(report, null, 2);
+export function formatCheckJSON(
+  report: CheckReport,
+  options: FormatJSONOptions = {},
+): string {
+  if (options.verbose) {
+    return JSON.stringify(report, null, 2);
+  }
+  const slim: CheckReport = {
+    ...report,
+    docs: report.docs.map((d) => ({ ...d, content: "" })),
+    scenarios: report.scenarios.map((s) => {
+      const { allResponses, ...rest } = s;
+      void allResponses;
+      return rest;
+    }),
+  };
+  return JSON.stringify(slim, null, 2);
 }

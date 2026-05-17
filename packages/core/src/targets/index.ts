@@ -47,46 +47,32 @@ function createCliTarget(name: string, config: Target): TargetRunner {
   }
 }
 
-/**
- * Resolve a target from config - handles named references and defaults
- */
+const DEFAULT_SENTINEL = "default";
+
 export function resolveTarget(
   targetRef: string | undefined,
   targets: Record<string, Target> | undefined,
 ): { name: string; config: Target } {
-  // No target specified - use default
-  if (!targetRef) {
-    return { name: "default", config: DEFAULT_TARGET };
+  if (!targetRef || targetRef === DEFAULT_SENTINEL) {
+    return { name: DEFAULT_SENTINEL, config: DEFAULT_TARGET };
   }
-
-  // Look up named target
   if (targets?.[targetRef]) {
     return { name: targetRef, config: targets[targetRef] };
   }
-
-  // Target not found - use default with warning
   console.warn(`Target "${targetRef}" not found, using default`);
-  return { name: "default", config: DEFAULT_TARGET };
+  return { name: DEFAULT_SENTINEL, config: DEFAULT_TARGET };
 }
 
-/**
- * Resolve a context from config - handles named references and defaults
- */
 export function resolveContext(
   contextRef: string | undefined,
   contexts: Record<string, Context> | undefined,
 ): { name: string; config: ResolvedContext } {
-  // No context specified - use empty (allows all default tools)
-  if (!contextRef) {
-    return { name: "default", config: {} };
+  if (!contextRef || contextRef === DEFAULT_SENTINEL) {
+    return { name: DEFAULT_SENTINEL, config: {} };
   }
-
-  // Look up named context
   if (contexts?.[contextRef]) {
     return { name: contextRef, config: contexts[contextRef] };
   }
-
-  // Context not found - use empty with warning
   console.warn(`Context "${contextRef}" not found, using default`);
-  return { name: "default", config: {} };
+  return { name: DEFAULT_SENTINEL, config: {} };
 }

@@ -76,13 +76,6 @@ export interface Target {
    */
   maxBudgetUsd?: number;
 
-  /**
-   * System prompt configuration.
-   * Can be a string or preset object.
-   * @see SDK Options.systemPrompt
-   */
-  systemPrompt?: string;
-
   // === API-specific options (future) ===
 
   /** Temperature for API calls */
@@ -109,12 +102,39 @@ export interface Context {
   mcpServers?: Record<string, McpServerConfig>;
 }
 
+/**
+ * A trap declares a plausible-wrong answer the agent might confidently produce.
+ * Firing any trap forces the result to NO regardless of citation score.
+ *
+ * Exactly one of `match` (literal substring, case-sensitive) or `pattern`
+ * (regex source) must be set. `flags` is only valid with `pattern`.
+ */
+export interface Trap {
+  id: string;
+  reason: string;
+  match?: string;
+  pattern?: string;
+  flags?: string;
+}
+
 // Scenario - a test case
 export interface Scenario {
   name: string;
   prompt: string;
   target?: string; // Reference to named target
   context?: string; // Reference to named context
+
+  /**
+   * Source IDs (from docs.sources) the answer must cite. Use [] to allow
+   * any registered source as a valid citation without requiring a specific one.
+   */
+  requiredSources: string[];
+
+  /**
+   * Optional traps. Each is a deterministic stale-answer detector; firing
+   * any trap forces the scenario to NO with confidence 0.
+   */
+  traps?: Trap[];
 }
 
 export type DocSourceType = "url" | "file" | "mcp" | "codebase";
@@ -126,6 +146,13 @@ export interface DocSource {
 }
 
 export interface DocsConfig {
+  /** Named sources, keyed by ID, value is file path or URL. */
+  sources: Record<string, string>;
+}
+
+/** A loaded source with its registry ID and original location. */
+export interface ResolvedDocSource extends DocSource {
+  id: string;
   source: string;
 }
 

@@ -1,6 +1,10 @@
 import type { Options as ClaudeAgentOptions } from "@anthropic-ai/claude-agent-sdk";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import type { Target, TargetCategory } from "@pickled-dev/config";
+import type {
+  ResolvedDocSource,
+  Target,
+  TargetCategory,
+} from "@pickled-dev/config";
 import {
   DEFAULT_ALLOWED_TOOLS,
   DEFAULT_DISALLOWED_TOOLS,
@@ -13,9 +17,6 @@ import type {
   TargetRunner,
 } from "../types.js";
 
-/**
- * Claude Code target - uses the Claude Agent SDK to run prompts
- */
 export class ClaudeCodeTarget implements TargetRunner {
   readonly category: TargetCategory = "cli";
   readonly provider = "claude-code";
@@ -29,12 +30,11 @@ export class ClaudeCodeTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, cwd, context } = options;
+    const { tool, cwd, context, docs, requiredSources } = options;
     const toolsUsed: string[] = [];
     const sources: string[] = [];
 
-    const systemPrompt =
-      this.config.systemPrompt ?? this.buildSystemPrompt(tool);
+    const systemPrompt = this.buildCitationPrompt(tool, docs, requiredSources);
 
     const agentOptions: ClaudeAgentOptions = {
       cwd,
@@ -98,9 +98,8 @@ export class ClaudeCodeTarget implements TargetRunner {
       }
     }
 
-    // Mark last response as final
     if (allResponses.length > 0) {
-      allResponses[allResponses.length - 1].type = "final";
+      allResponses[allResponses.length - 1]!.type = "final";
     }
 
     return {
@@ -117,26 +116,45 @@ export class ClaudeCodeTarget implements TargetRunner {
     };
   }
 
-  private buildSystemPrompt(tool: ToolInfo): string {
-    return `You are helping a developer understand how to use "${tool.name}": ${tool.description}
+  private buildCitationPrompt(
+    tool: ToolInfo,
+    docs: ResolvedDocSource[],
+    requiredSources: string[],
+  ): string {
+    const inventory =
+      docs.length > 0
+        ? docs.map((d) => `- ${d.id}: ${d.name} (${d.source})`).join("\n")
+        : "(no sources provided)";
 
-Your task is to answer questions about this tool accurately based on the available documentation.
+    const sourcesBlock = docs
+      .map((d) => `<source id="${d.id}">\n${d.content.trimEnd()}\n</source>`)
+      .join("\n\n");
 
-You have access to read the codebase to find documentation, examples, and implementation details.
-Look for README files, doc comments, examples directories, and source code.
+    const requiredLine =
+      requiredSources.length > 0
+        ? `The scenario REQUIRES citations from: ${requiredSources.join(", ")}.`
+        : "No specific source is required, but every claim must cite a registered source.";
 
-After answering, provide a structured assessment in JSON format:
-\`\`\`json
-{
-  "answerable": "YES" | "PARTIAL" | "NO",
-  "confidence": 0-100,
-  "reason": "Brief explanation of your assessment",
-  "missing": ["List of missing documentation if applicable"] or null
-}
-\`\`\`
+    return `You are answering a question about the tool "${tool.name}": ${tool.description}.
 
-- YES: The documentation fully answers the question
-- PARTIAL: Some information is available but incomplete
-- NO: Cannot find relevant documentation`;
+Answer using ONLY information from the provided sources below. Do not draw on general knowledge.
+
+Available sources:
+${inventory}
+
+${sourcesBlock}
+
+${requiredLine}
+
+End your response with a "## Sources" section that lists every source you actually used. Use this exact format:
+
+## Sources
+- [source-id] short note on what this source contributed
+- [other-id] short note
+
+Rules:
+- Only cite IDs that appear in the inventory above. Do not invent IDs.
+- If you cannot answer from the provided sources, say so explicitly and write an empty "## Sources" section (just the heading, no bullets).
+- The "## Sources" heading must be the last heading in your response.`;
   }
 }

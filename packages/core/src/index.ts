@@ -1,6 +1,24 @@
 // Config
 export { loadConfig } from "@pickled-dev/config";
 
+// Audit
+export type {
+  AuditConfig,
+  AuditFinding,
+  DocFile,
+  DocPair,
+  PairClass,
+  ScanResult,
+} from "./audit/index.js";
+export {
+  DEFAULT_AUDIT_CONFIG,
+  DEFAULT_IGNORE_PATTERNS,
+  renderAuditJSON,
+  renderAuditMarkdown,
+  resolveAuditConfig,
+  scan,
+} from "./audit/index.js";
+
 // Check
 export type { CheckOptions } from "./check.js";
 export { runCheck } from "./check.js";
@@ -8,8 +26,23 @@ export { runCheck } from "./check.js";
 // Reporter
 export { formatCheckJSON, printCheckReport } from "./reporter.js";
 
+// Scorers
+export type {
+  Answerable,
+  Citation,
+  CitationScore,
+  ScoreInput,
+  TrapDetails,
+  TrapHit,
+} from "./scorers/index.js";
+export {
+  parseCitations,
+  scoreCitations,
+  scoreTraps,
+} from "./scorers/index.js";
+
 // Sources
-export { fetchDocs, getCodebaseSource } from "./sources.js";
+export { fetchAllSources, fetchSource } from "./sources.js";
 
 // Targets
 export type {
@@ -26,12 +59,8 @@ export {
 
 // Types
 export type {
-  Answerable,
   CheckReport,
+  CitationDetails,
   ScenarioResult,
   ToolInfo,
 } from "./types.js";
-
-// Validator
-export type { ValidationResult } from "./validator.js";
-export { parseValidation } from "./validator.js";

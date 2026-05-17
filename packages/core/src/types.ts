@@ -1,11 +1,19 @@
 import type {
-  DocSourceType,
+  ResolvedDocSource,
   Scenario,
   TargetCategory,
 } from "@pickled-dev/config";
+import type { Answerable, TrapDetails } from "./scorers/index.js";
 import type { ResponseEntry } from "./targets/types.js";
 
-export type Answerable = "YES" | "PARTIAL" | "NO";
+export type { Answerable, TrapDetails };
+
+export interface CitationDetails {
+  cited: string[];
+  required: string[];
+  missing: string[];
+  unknown: string[];
+}
 
 export interface ScenarioResult {
   scenario: Scenario;
@@ -13,7 +21,8 @@ export interface ScenarioResult {
   confidence: number;
   response: string;
   reason: string;
-  missing?: string[];
+  citations: CitationDetails;
+  traps: TrapDetails;
   error?: string;
   target?: {
     target: string;
@@ -35,10 +44,7 @@ export interface CheckReport {
     description: string;
     path: string;
   };
-  docs?: {
-    source: string;
-    type: DocSourceType;
-  };
+  docs: ResolvedDocSource[];
   scenarios: ScenarioResult[];
   summary: {
     total: number;

@@ -52,7 +52,7 @@ export async function check(
   }
 
   // 2. Run check
-  log(chalk.dim("🥒 Freshness Check"));
+  log(chalk.dim("🥒 Pickled Check"));
   log("");
 
   const report = await runCheck(tool, config, {
@@ -65,9 +65,9 @@ export async function check(
 
   // 3. Output
   if (output) {
-    await Bun.write(output, formatCheckJSON(report));
+    await Bun.write(output, formatCheckJSON(report, { verbose }));
   } else if (json) {
-    console.log(formatCheckJSON(report));
+    await writeStdout(`${formatCheckJSON(report, { verbose })}\n`);
   } else {
     printCheckReport(report);
   }
@@ -80,9 +80,24 @@ export async function check(
   if (report.summary.score < threshold) {
     console.error("");
     console.error(
-      chalk.red(`Freshness score: ${report.summary.score}% 🥒🥒🥒░░`),
+      chalk.red(
+        `Legibility score: ${report.summary.score}% (threshold: ${threshold}%)`,
+      ),
     );
-    console.error(chalk.dim("Starting to spoil... Some docs need attention."));
+    console.error(
+      chalk.dim(
+        "Below threshold. Review trap, citation, and grounding details.",
+      ),
+    );
     process.exit(1);
   }
+}
+
+function writeStdout(text: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(text, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
 }

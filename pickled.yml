@@ -1,10 +1,13 @@
-# 🥒 pickled.yml - Is AI getting your tool right?
+# 🥒 pickled.yml - agent legibility check for pickled itself
 
 tool:
   name: "pickled"
-  description: "CLI tool to check if AI can correctly answer questions about your developer tool"
+  description: "Agent legibility checker for developer tools"
 
-# AI targets to test against
+docs:
+  sources:
+    readme: ./README.md
+
 targets:
   quick:
     category: cli
@@ -18,37 +21,28 @@ targets:
     model: sonnet
     maxTurns: 15
 
-# Contexts provide additional information sources
-contexts:
-  # Use web search to find public docs
-  web:
-    allowedTools:
-      - WebSearch
-      - WebFetch
-
-  # Connect to MCP servers (coming soon)
-  # mcp:
-  #   mcpServers:
-  #     docs-server:
-  #       command: "npx"
-  #       args: ["-y", "@example/docs-mcp"]
-
-# Test matrix: target × context combinations
 matrix:
   target: [quick]
-  context: [web]
 
 scenarios:
   - name: "Installation"
     prompt: "How do I install pickled?"
+    requiredSources: [readme]
 
   - name: "Basic usage"
     prompt: "How do I run pickled to check my project?"
+    requiredSources: [readme]
 
   - name: "Config format"
     prompt: "What does a pickled.yml config file look like?"
-
-  - name: "CI integration"
-    prompt: "How do I use pickled in CI/CD with a threshold?"
+    requiredSources: [readme]
+    traps:
+      - id: old_schema
+        match: "docs.source:"
+        reason: "Recommends removed singular docs.source schema"
+      - id: old_freshness_brand
+        pattern: '\bfreshness\s+score\b'
+        flags: i
+        reason: "Uses removed 'freshness score' branding"
 
 threshold: 60

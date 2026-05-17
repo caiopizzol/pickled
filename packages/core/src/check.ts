@@ -1,55 +1,50 @@
-import type { CheckConfig, DocSource, Scenario } from "@pickled-dev/config";
-import { fetchDocs, getCodebaseSource } from "./sources.js";
+import type {
+  CheckConfig,
+  ResolvedDocSource,
+  Scenario,
+} from "@pickled-dev/config";
+import { scoreCitations, scoreTraps } from "./scorers/index.js";
+import { fetchAllSources } from "./sources.js";
 import {
   createTarget,
   resolveContext,
   resolveTarget,
+  type TargetRunner,
 } from "./targets/index.js";
 import type { CheckReport, ScenarioResult, ToolInfo } from "./types.js";
-import { parseValidation } from "./validator.js";
 
-/**
- * Expanded scenario with resolved target and context
- */
 interface ExpandedScenario {
   scenario: Scenario;
   targetName: string;
   contextName: string;
 }
 
-/**
- * Expand scenarios into matrix of target × context combinations
- */
 function expandMatrix(config: CheckConfig): ExpandedScenario[] {
   const expanded: ExpandedScenario[] = [];
-
-  // Get matrix dimensions (or defaults)
   const matrixTargets = config.matrix?.target ?? ["default"];
   const matrixContexts = config.matrix?.context ?? ["default"];
 
   for (const scenario of config.scenarios) {
-    // Per-scenario overrides take precedence over matrix
     const targets = scenario.target ? [scenario.target] : matrixTargets;
     const contexts = scenario.context ? [scenario.context] : matrixContexts;
-
-    // Cartesian product: target × context
     for (const targetName of targets) {
       for (const contextName of contexts) {
         expanded.push({ scenario, targetName, contextName });
       }
     }
   }
-
   return expanded;
 }
 
 export interface CheckOptions {
   onProgress?: (msg: string) => void;
+  /** Optional override of the target factory, mainly for tests. */
+  targetFactory?: (
+    name: string,
+    target: Parameters<typeof createTarget>[1],
+  ) => TargetRunner;
 }
 
-/**
- * Run check with config format (scenarios + targets)
- */
 export async function runCheck(
   tool: ToolInfo,
   config: CheckConfig,
@@ -62,35 +57,26 @@ export async function runCheck(
     throw new Error("No scenarios defined in config");
   }
 
-  // Load docs if specified
-  let docs: DocSource | undefined;
-  if (config.docs?.source) {
-    onProgress?.("Loading documentation...");
-    try {
-      docs = await fetchDocs(config.docs.source);
-      onProgress?.(`  Loaded: ${docs.name}`);
-    } catch (error) {
-      onProgress?.(
-        `  Warning: ${error instanceof Error ? error.message : error}`,
-      );
-      docs = getCodebaseSource(tool.path);
+  const sourcesMap = config.docs?.sources ?? {};
+  let docs: ResolvedDocSource[] = [];
+  if (Object.keys(sourcesMap).length > 0) {
+    onProgress?.("Loading sources...");
+    docs = await fetchAllSources(sourcesMap, tool.path);
+    for (const d of docs) {
+      onProgress?.(`  [${d.id}] ${d.name}`);
     }
+    onProgress?.("");
   }
 
-  onProgress?.("");
-
-  // Expand matrix: scenarios × targets × contexts
+  const registeredIds = docs.map((d) => d.id);
   const expanded = expandMatrix(config);
-
-  // Track current scenario for grouping output
   let currentScenario = "";
 
   for (const { scenario, targetName, contextName } of expanded) {
     const label = formatRunLabel(targetName, contextName);
 
-    // Print scenario name only when it changes
     if (scenario.name !== currentScenario) {
-      if (currentScenario) onProgress?.(""); // blank line between scenarios
+      if (currentScenario) onProgress?.("");
       onProgress?.(`"${scenario.name}"`);
       currentScenario = scenario.name;
     }
@@ -102,11 +88,12 @@ export async function runCheck(
         contextName,
         tool,
         config,
-        { onProgress },
+        docs,
+        registeredIds,
+        options,
       );
       results.push(result);
 
-      // Format: [target/context] padded + icon + status
       const labelPadded = label ? label.padEnd(18) : "";
       const { icon, status } = formatResultStatus(result);
       onProgress?.(
@@ -118,7 +105,17 @@ export async function runCheck(
         answerable: "NO",
         confidence: 0,
         response: "",
-        reason: "Error during validation",
+        reason: "Error during run",
+        citations: {
+          cited: [],
+          required: scenario.requiredSources,
+          missing: scenario.requiredSources,
+          unknown: [],
+        },
+        traps: {
+          fired: [],
+          avoided: (scenario.traps ?? []).map((t) => t.id),
+        },
         error: error instanceof Error ? error.message : String(error),
         target: {
           target: targetName,
@@ -129,96 +126,95 @@ export async function runCheck(
         context: { name: contextName },
       };
       results.push(errorResult);
-
       const labelPadded = label ? label.padEnd(18) : "";
       onProgress?.(`  ${labelPadded} ✗ Error`);
     }
   }
 
   onProgress?.("");
-
   return buildReport(tool, docs, results);
 }
 
-/**
- * Format label for run progress output
- */
 function formatRunLabel(targetName: string, contextName: string): string {
-  if (targetName === "default" && contextName === "default") {
-    return "";
-  }
-  if (contextName === "default") {
-    return `[${targetName}]`;
-  }
+  if (targetName === "default" && contextName === "default") return "";
+  if (contextName === "default") return `[${targetName}]`;
   return `[${targetName}/${contextName}]`;
 }
 
-/**
- * Format result status with icon and label
- */
 function formatResultStatus(result: ScenarioResult): {
   icon: string;
   status: string;
 } {
-  if (result.error) {
-    return { icon: "✗", status: "Error" };
+  if (result.error) return { icon: "✗", status: "Error" };
+  if (result.traps.fired.length > 0) {
+    return { icon: "✗", status: "Trap fired" };
   }
-
-  const confidence = result.confidence;
-
   if (result.answerable === "YES") {
-    if (confidence >= 90) {
-      return { icon: "✓", status: "Well preserved" };
-    }
-    return { icon: "✓", status: "Fresh" };
+    return result.confidence >= 90
+      ? { icon: "✓", status: "Well grounded" }
+      : { icon: "✓", status: "Grounded" };
   }
-
   if (result.answerable === "PARTIAL") {
-    return { icon: "⚠", status: "Going stale" };
+    return { icon: "⚠", status: "Partially grounded" };
   }
-
-  return { icon: "✗", status: "Gone sour" };
+  return { icon: "✗", status: "Ungrounded" };
 }
 
-/**
- * Run a single scenario against its target with context
- */
 async function runScenario(
   scenario: Scenario,
   targetName: string,
   contextName: string,
   tool: ToolInfo,
   config: CheckConfig,
-  options: { onProgress?: (msg: string) => void },
+  docs: ResolvedDocSource[],
+  registeredIds: string[],
+  options: CheckOptions,
 ): Promise<ScenarioResult> {
-  // Resolve target and context
   const { config: targetConfig } = resolveTarget(targetName, config.targets);
   const { config: contextConfig } = resolveContext(
     contextName,
     config.contexts,
   );
 
-  // Create target runner
-  const target = createTarget(targetName, targetConfig);
+  const target = options.targetFactory
+    ? options.targetFactory(targetName, targetConfig)
+    : createTarget(targetName, targetConfig);
 
-  // Run scenario with context
   const result = await target.run(scenario.prompt, {
     tool,
     cwd: tool.path,
     context: contextConfig,
+    docs,
+    requiredSources: scenario.requiredSources,
     onProgress: options.onProgress,
   });
 
-  // Parse validation from response
-  const validation = parseValidation(result.response);
+  const citationScore = scoreCitations({
+    response: result.response,
+    requiredSources: scenario.requiredSources,
+    registeredIds,
+  });
+
+  const trapDetails = scoreTraps({
+    response: result.response,
+    traps: scenario.traps ?? [],
+  });
+
+  const trapFired = trapDetails.fired.length > 0;
+  const answerable = trapFired ? "NO" : citationScore.answerable;
+  const confidence = trapFired ? 0 : citationScore.confidence;
+  const reason = trapFired
+    ? `Trap fired: ${trapDetails.fired.map((t) => `"${t.id}" (${t.reason})`).join("; ")}`
+    : citationScore.reason;
 
   return {
     scenario,
-    answerable: validation.answerable,
-    confidence: validation.confidence,
+    answerable,
+    confidence,
     response: result.response,
-    reason: validation.reason,
-    missing: validation.missing,
+    reason,
+    citations: citationScore.citations,
+    traps: trapDetails,
     target: result.metadata,
     context: { name: contextName },
     toolsUsed: result.toolsUsed,
@@ -227,12 +223,9 @@ async function runScenario(
   };
 }
 
-/**
- * Build the final report
- */
 function buildReport(
   tool: ToolInfo,
-  docs: DocSource | undefined,
+  docs: ResolvedDocSource[],
   results: ScenarioResult[],
 ): CheckReport {
   const total = results.length;
@@ -240,7 +233,6 @@ function buildReport(
     (r) => r.answerable === "YES" || r.answerable === "PARTIAL",
   ).length;
 
-  // Calculate score based on confidence-weighted results
   const score =
     total > 0
       ? Math.round(
@@ -253,17 +245,8 @@ function buildReport(
       : 0;
 
   return {
-    tool: {
-      name: tool.name,
-      description: tool.description,
-      path: tool.path,
-    },
-    docs: docs
-      ? {
-          source: docs.name,
-          type: docs.type,
-        }
-      : undefined,
+    tool: { name: tool.name, description: tool.description, path: tool.path },
+    docs,
     scenarios: results,
     summary: {
       total,

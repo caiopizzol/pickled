@@ -19,7 +19,9 @@ export type {
   IdeProvider,
   MatrixConfig,
   McpServerConfig,
+  ResolvedDocSource,
   Scenario,
   Target,
   TargetCategory,
+  Trap,
 } from "./types.js";

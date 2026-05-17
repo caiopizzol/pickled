@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
-import { program } from "commander";
+import { Option, program } from "commander";
 import pkg from "../package.json";
+import { audit } from "./commands/audit.js";
 import { check } from "./commands/check.js";
 import { init } from "./commands/init.js";
 
 program
   .name("pickled")
-  .description("Test your freshness with AI 🥒")
+  .description("Agent legibility checker for developer tools 🥒")
   .version(pkg.version);
 
 program
@@ -14,6 +15,21 @@ program
   .description("Create a pickled.yml config file")
   .argument("[path]", "Path to your project (default: current directory)", ".")
   .action(init);
+
+program
+  .command("audit")
+  .description(
+    "Static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.",
+  )
+  .argument("[path]", "Path to your project (default: current directory)", ".")
+  .option("--json", "Output as JSON")
+  .option("-o, --output <file>", "Save report to file")
+  .addOption(
+    new Option("--fail-on <level>", "Exit non-zero on this severity or higher")
+      .choices(["error", "warning"])
+      .default("error"),
+  )
+  .action(audit);
 
 program
   .command("check")
@@ -28,4 +44,4 @@ program
   )
   .action(check);
 
-program.parse();
+await program.parseAsync();

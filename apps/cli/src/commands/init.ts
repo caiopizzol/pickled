@@ -1,40 +1,28 @@
 import path from "node:path";
 import chalk from "chalk";
 
-const TEMPLATE = `# 🥒 pickled.yml - Is AI getting your tool right?
+const TEMPLATE = `# 🥒 pickled.yml — Agent legibility check for your developer tool
 
 tool:
   name: "your-tool"
   description: "A short description of what your tool does"
 
-# Scenarios: Questions to test AI's knowledge of your tool
+docs:
+  sources:
+    readme: ./README.md
+    # llms: https://your-site.example/llms.txt
+
 scenarios:
   - name: "Getting started"
     prompt: "How do I install and set up this tool?"
+    requiredSources: [readme]
 
   - name: "Basic usage"
     prompt: "Show me a basic example of using this tool"
+    requiredSources: [readme]
 
-  - name: "Error handling"
-    prompt: "How do I handle errors?"
-
-# Optional: Fail CI if freshness score below threshold
+# Optional: Fail CI if score below threshold
 # threshold: 80
-
-# Advanced: Named targets for testing with different configurations
-#
-# targets:
-#   quick:
-#     category: cli
-#     provider: claude-code
-#     model: sonnet
-#     maxTurns: 3
-#
-# Then reference in scenarios:
-# scenarios:
-#   - name: "Quick test"
-#     prompt: "How do I install?"
-#     target: quick
 `;
 
 export async function init(targetPath: string): Promise<void> {
@@ -52,9 +40,8 @@ export async function init(targetPath: string): Promise<void> {
   console.log();
   console.log(chalk.dim("Next steps:"));
   console.log(
-    chalk.dim("  1. Edit pickled.yml with your tool info and scenarios"),
+    chalk.dim("  1. Edit pickled.yml: list your sources and scenarios"),
   );
   console.log(chalk.dim("  2. Run: pickled check"));
   console.log();
-  console.log(chalk.dim("Stay fresh! 🥒"));
 }
