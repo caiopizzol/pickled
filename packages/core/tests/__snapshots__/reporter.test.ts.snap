@@ -1,0 +1,104 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`formatCheckReport golden fixtures well grounded, no threshold (omits run passes/fails) 1`] = `
+"pickled check
+───────────────────────────────────────────────────────
+Tool: t
+Sources: [readme]
+Scenarios: 1
+
+Scenario: s
+  ✓ Well grounded (100%)
+  cited: [readme]
+
+───────────────────────────────────────────────────────
+Overall: 100 / 100
+Citations hold. No declared traps fired."
+`;
+
+exports[`formatCheckReport golden fixtures threshold pass: well grounded with threshold 80 1`] = `
+"pickled check
+───────────────────────────────────────────────────────
+Tool: t
+Sources: [readme]
+Scenarios: 1
+
+Scenario: s
+  ✓ Well grounded (100%)
+  cited: [readme]
+
+───────────────────────────────────────────────────────
+Overall: 100 / 100 · threshold 80 · run passes
+Citations hold. No declared traps fired."
+`;
+
+exports[`formatCheckReport golden fixtures partially grounded scenario 1`] = `
+"pickled check
+───────────────────────────────────────────────────────
+Tool: t
+Sources: [readme]
+Scenarios: 1
+
+Scenario: s
+  ⚠ Partially grounded (65%)
+  reason: All required sources cited: readme
+  cited: [readme]
+
+───────────────────────────────────────────────────────
+Overall: 33 / 100
+Citations hold. No declared traps fired."
+`;
+
+exports[`formatCheckReport golden fixtures trap fired with threshold (run fails) 1`] = `
+"pickled check
+───────────────────────────────────────────────────────
+Tool: t
+Sources: [readme]
+Scenarios: 1
+
+Scenario: Error handling
+  ✗ Trap fired (0%)
+  trap: old_v2_api
+  reason: Deprecated in Zod 4; use z.treeifyError()
+  match: "ZodError.format()"
+  cited: [readme], [llms]
+
+───────────────────────────────────────────────────────
+Overall: 0 / 100 · threshold 80 · run fails
+Review fired traps before trusting this surface."
+`;
+
+exports[`formatCheckReport golden fixtures ungrounded scenario (NO, no trap, missing citation) 1`] = `
+"pickled check
+───────────────────────────────────────────────────────
+Tool: t
+Sources: [readme]
+Scenarios: 1
+
+Scenario: s
+  ✗ Ungrounded (0%)
+  reason: No required sources cited
+  missing: [readme]
+
+───────────────────────────────────────────────────────
+Overall: 0 / 100
+Review missing and unknown citations."
+`;
+
+exports[`formatCheckReport golden fixtures matrix targets: same scenario run against two targets 1`] = `
+"pickled check
+───────────────────────────────────────────────────────
+Tool: t
+Sources: [readme]
+Scenarios: 2
+
+Scenario: Installation
+  [quick] ✓ Well grounded (100%)
+    cited: [readme]
+  [thorough] ✓ Well grounded (100%)
+    cited: [readme]
+
+───────────────────────────────────────────────────────
+Overall: 100 / 100
+Citations hold. No declared traps fired."
+`;

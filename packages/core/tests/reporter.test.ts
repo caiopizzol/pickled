@@ -162,3 +162,103 @@ describe("formatCheckReport", () => {
     expect(text).not.toContain("threshold");
   });
 });
+
+// AIDEV-NOTE: Golden output fixtures for formatCheckReport. ANSI is stripped
+// before comparison so cosmetic color changes do not break the assertions;
+// structural changes (label, ordering, threshold line presence) do. Update
+// with `bun test -u` when intentional, but eyeball the diff first.
+
+function stripAnsi(text: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape
+  return text.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+describe("formatCheckReport golden fixtures", () => {
+  test("well grounded, no threshold (omits run passes/fails)", () => {
+    expect(stripAnsi(formatCheckReport(makeReport()))).toMatchSnapshot();
+  });
+
+  test("threshold pass: well grounded with threshold 80", () => {
+    expect(
+      stripAnsi(formatCheckReport(makeReport(), { threshold: 80 })),
+    ).toMatchSnapshot();
+  });
+
+  test("partially grounded scenario", () => {
+    const base = makeReport();
+    const first = base.scenarios[0];
+    if (!first) throw new Error("makeReport should produce a scenario");
+    const report: CheckReport = {
+      ...base,
+      scenarios: [{ ...first, answerable: "PARTIAL", confidence: 65 }],
+      summary: { ...base.summary, score: 33 },
+    };
+    expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
+  });
+
+  test("trap fired with threshold (run fails)", () => {
+    expect(
+      stripAnsi(formatCheckReport(makeTrapReport(), { threshold: 80 })),
+    ).toMatchSnapshot();
+  });
+
+  test("ungrounded scenario (NO, no trap, missing citation)", () => {
+    const base = makeReport();
+    const first = base.scenarios[0];
+    if (!first) throw new Error("makeReport should produce a scenario");
+    const report: CheckReport = {
+      ...base,
+      scenarios: [
+        {
+          ...first,
+          answerable: "NO",
+          confidence: 0,
+          reason: "No required sources cited",
+          citations: {
+            cited: [],
+            required: ["readme"],
+            missing: ["readme"],
+            unknown: [],
+          },
+        },
+      ],
+      summary: { ...base.summary, score: 0, answered: 0, unanswered: 1 },
+    };
+    expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
+  });
+
+  test("matrix targets: same scenario run against two targets", () => {
+    const base = makeReport();
+    const first = base.scenarios[0];
+    if (!first) throw new Error("makeReport should produce a scenario");
+    const matrixScenario = {
+      ...first,
+      scenario: { ...first.scenario, name: "Installation" },
+    };
+    const report: CheckReport = {
+      ...base,
+      scenarios: [
+        {
+          ...matrixScenario,
+          target: {
+            target: "quick",
+            category: "cli",
+            provider: "claude-code",
+            model: "haiku",
+          },
+        },
+        {
+          ...matrixScenario,
+          target: {
+            target: "thorough",
+            category: "cli",
+            provider: "claude-code",
+            model: "sonnet",
+          },
+        },
+      ],
+      summary: { total: 2, answered: 2, unanswered: 0, score: 100 },
+    };
+    expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
+  });
+});
