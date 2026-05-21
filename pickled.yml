@@ -7,6 +7,10 @@ tool:
 docs:
   sources:
     readme: ./README.md
+    brand: ./brand.md
+    agents: ./AGENTS.md
+    comment_policy: ./comment-policy.md
+    cli_readme: ./apps/cli/README.md
 
 targets:
   quick:

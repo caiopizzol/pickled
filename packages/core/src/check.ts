@@ -187,6 +187,9 @@ async function runScenario(
     traps: scenario.traps ?? [],
   });
 
+  // AIDEV-NOTE: Trap firing forces answerable=NO and confidence=0, regardless
+  // of citation grounding. See brand.md §Interface Feedback → Verdict layers.
+  // A grounded answer can still be wrong; the trap is the deterministic veto.
   const trapFired = trapDetails.fired.length > 0;
   const answerable = trapFired ? "NO" : citationScore.answerable;
   const confidence = trapFired ? 0 : citationScore.confidence;

@@ -383,7 +383,7 @@ An open-source CLI that tests what AI agents understand about your product. Toda
 2. Use words a developer would say out loud. No "leverage", "unlock", "empower", "seamless", "holistic".
 3. Show, don't sell. A code block beats a paragraph.
 4. Second person when teaching. First person plural ("we") only when stating identity.
-5. The pickle metaphor is a wink, not a theme. One mention per page in body copy, max. Global chrome is exempt: the logo (🥒 in nav and footer) and the footer sign-off ("Stay fresh.") are quiet structural repeats and do not count against the body-copy limit. Saturation is the failure mode the rule prevents, not presence.
+5. The pickle metaphor is a wink, not a theme. One mention per page in body copy, max. Global chrome is exempt: the logo (🥒 in nav and footer), the footer sign-off ("Stay fresh."), and file-title marks at the top of `README.md` and `pickled.yml` are quiet structural repeats and do not count against the body-copy limit. Saturation is the failure mode the rule prevents, not presence.
 6. "AI" is fine. "AI-powered" is forbidden.
 7. Numbers are concrete. Never "up to X%" or "as much as X".
 8. If a sentence could appear on a Salesforce page, rewrite it.

@@ -145,6 +145,9 @@ function formatOverall(
   const color = getOverallColor(score);
   const base = `Overall: ${color(`${score}`)} / 100`;
 
+  // AIDEV-NOTE: Without a configured threshold, render Overall and stop. Do
+  // not emit run-pass/fail language. See brand.md §Interface Feedback →
+  // Verdict layers: run verdict only exists when a threshold is configured.
   if (threshold === undefined || threshold <= 0) {
     return base;
   }
