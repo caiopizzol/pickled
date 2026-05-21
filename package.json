@@ -10,7 +10,8 @@
     "dev:web": "bun run --cwd apps/web dev",
     "test": "bun test",
     "lint": "biome check .",
-    "format": "biome check --write ."
+    "format": "biome check --write .",
+    "verify": "bun test && bun run lint && bun run --cwd apps/cli build && bun run --cwd apps/web build && ./apps/cli/dist/index.js --help && ./apps/cli/dist/index.js audit . --fail-on error"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11"
