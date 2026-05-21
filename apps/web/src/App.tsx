@@ -1,4 +1,4 @@
-import { CTA, Features, Footer, Hero, Nav, Steps } from "./components";
+import { CTA, Example, Footer, Hero, Nav } from "./components";
 
 function App() {
   return (
@@ -6,8 +6,7 @@ function App() {
       <Nav />
       <main>
         <Hero />
-        <Features />
-        <Steps />
+        <Example />
         <CTA />
       </main>
       <Footer />

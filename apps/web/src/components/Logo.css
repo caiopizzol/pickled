@@ -1,33 +1,58 @@
 .logo {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   font-family: var(--font-heading);
-  font-weight: var(--font-semibold);
+  font-weight: var(--font-bold);
+  letter-spacing: -0.01em;
   color: var(--color-text);
   text-decoration: none;
+}
+
+.logo:hover {
+  color: var(--color-text);
+}
+
+.logo-mark {
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+  position: relative;
+}
+
+.logo-mark::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 2px;
+  background: var(--color-bg);
 }
 
 .logo-sm {
   font-size: var(--text-base);
 }
-
-.logo-sm .logo-icon {
-  font-size: var(--text-lg);
+.logo-sm .logo-mark {
+  width: 18px;
+  height: 18px;
+}
+.logo-sm .logo-mark::after {
+  inset: 3px;
 }
 
 .logo-md {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
 }
-
-.logo-md .logo-icon {
-  font-size: var(--text-2xl);
+.logo-md .logo-mark {
+  width: 22px;
+  height: 22px;
 }
 
 .logo-lg {
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
 }
-
-.logo-lg .logo-icon {
-  font-size: var(--text-3xl);
+.logo-lg .logo-mark {
+  width: 28px;
+  height: 28px;
+}
+.logo-lg .logo-mark::after {
+  inset: 5px;
 }

@@ -3,15 +3,17 @@ import "./Terminal.css";
 
 interface TerminalProps {
   children: ReactNode;
+  label?: string;
 }
 
-export function Terminal({ children }: TerminalProps) {
+export function Terminal({ children, label }: TerminalProps) {
   return (
     <div className="terminal">
       <div className="terminal-header">
         <span className="terminal-dot"></span>
         <span className="terminal-dot"></span>
         <span className="terminal-dot"></span>
+        {label ? <span className="terminal-label">{label}</span> : null}
       </div>
       <div className="terminal-body">{children}</div>
     </div>
@@ -26,7 +28,6 @@ export function TerminalLine({ children }: TerminalLineProps) {
   return <div className="terminal-line">{children}</div>;
 }
 
-// Helper components for syntax highlighting
 export const T = {
   Prompt: ({ children }: { children: ReactNode }) => (
     <span className="prompt">{children}</span>
@@ -36,6 +37,12 @@ export const T = {
   ),
   Output: ({ children }: { children: ReactNode }) => (
     <span className="output">{children}</span>
+  ),
+  Dim: ({ children }: { children: ReactNode }) => (
+    <span className="dim">{children}</span>
+  ),
+  Muted: ({ children }: { children: ReactNode }) => (
+    <span className="muted">{children}</span>
   ),
   Success: ({ children }: { children: ReactNode }) => (
     <span className="success">{children}</span>

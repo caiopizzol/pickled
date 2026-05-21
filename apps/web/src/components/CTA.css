@@ -1,13 +1,74 @@
 .cta {
+  padding: var(--space-20) 0 var(--space-16);
   text-align: center;
 }
 
 .cta h2 {
-  font-size: var(--text-3xl);
+  font-family: var(--font-heading);
+  font-weight: var(--font-bold);
+  font-size: var(--text-5xl);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   margin-bottom: var(--space-4);
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.cta p {
+.cta-lede {
   color: var(--color-text-secondary);
-  margin-bottom: var(--space-8);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-6);
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cta-install {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  margin-bottom: var(--space-5);
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.cta-install .prompt {
+  color: var(--color-primary);
+}
+
+.cta-install code {
+  color: var(--color-text);
+}
+
+.cta-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.cta-pickler {
+  margin-top: var(--space-8);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 880px) {
+  .cta {
+    padding: var(--space-12) 0;
+  }
+  .cta h2 {
+    font-size: var(--text-3xl);
+  }
 }

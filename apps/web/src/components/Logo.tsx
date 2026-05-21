@@ -7,7 +7,7 @@ interface LogoProps {
 export function Logo({ size = "md" }: LogoProps) {
   return (
     <a href="/" className={`logo logo-${size}`}>
-      <span className="logo-icon">🥒</span>
+      <span className="logo-mark" aria-hidden="true"></span>
       <span className="logo-text">pickled</span>
     </a>
   );

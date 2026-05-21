@@ -1,0 +1,111 @@
+.example {
+  padding: var(--space-20) 0;
+}
+
+.example-head {
+  max-width: 720px;
+  margin-bottom: var(--space-10);
+}
+
+.example-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  color: var(--color-primary);
+  margin-bottom: var(--space-3);
+}
+
+.example-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-4xl);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-bottom: var(--space-3);
+}
+
+.example-lede {
+  color: var(--color-text-secondary);
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+.example-lede .inline {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-bg-elevated);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary-light);
+}
+
+.example-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+.example-grid > * {
+  min-width: 0;
+}
+
+.example-code {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre;
+  overflow-x: auto;
+  margin: 0;
+  max-width: 100%;
+}
+
+.example-grid .terminal {
+  height: 100%;
+}
+
+.example-receipt-note {
+  margin-top: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  max-width: 720px;
+}
+
+.example-foot {
+  margin-top: var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.example-note {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  max-width: 520px;
+}
+
+@media (max-width: 880px) {
+  .example {
+    padding: var(--space-12) 0;
+  }
+  .example-title {
+    font-size: var(--text-3xl);
+  }
+  .example-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+  .example-foot {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

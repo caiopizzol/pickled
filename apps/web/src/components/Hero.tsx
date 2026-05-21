@@ -3,25 +3,26 @@ import { T, Terminal, TerminalLine } from "./Terminal";
 import "./Hero.css";
 
 export function Hero() {
-  const handleCopy = () => {
-    navigator.clipboard.writeText("bun add -g @pickled-dev/cli");
-  };
-
   return (
     <section className="hero">
-      <div className="container hero-content">
+      <div className="container hero-grid">
         <div className="hero-text">
           <h1>
-            Is AI getting your <span className="text-gradient">tool</span>{" "}
-            right?
+            Test what agents <span className="text-gradient">actually</span>{" "}
+            understand.
           </h1>
-          <p className="hero-tagline">
-            Test how well AI responds to questions about your developer tool.
-            Define scenarios, run checks, and see your freshness score.
+          <p className="hero-lede">
+            <span className="hero-lede-hook">
+              For products developers and agents read.
+            </span>{" "}
+            An open-source CLI that runs scenarios against real agent targets,
+            requires every answer to cite a registered source, and matches
+            declared traps against the response. Scoring is deterministic by
+            contract. No LLM grades another LLM.
           </p>
-          <div className="hero-cta">
-            <Button as="a" href="#get-started" variant="primary" size="lg">
-              Get Started
+          <div className="hero-actions">
+            <Button as="a" href="#start" variant="primary" size="lg">
+              Run the check
             </Button>
             <Button
               as="a"
@@ -33,65 +34,44 @@ export function Hero() {
             </Button>
           </div>
           <div className="hero-install">
-            <span>$</span>
+            <span className="prompt">$</span>
             <code>bun add -g @pickled-dev/cli</code>
-            <button
-              type="button"
-              className="hero-install-copy"
-              title="Copy to clipboard"
-              onClick={handleCopy}
-            >
-              📋
-            </button>
           </div>
         </div>
 
         <div className="hero-terminal">
-          <Terminal>
+          <Terminal label="pickled check">
             <TerminalLine>
-              <T.Prompt>$</T.Prompt> <T.Cmd>pickled check</T.Cmd>
-            </TerminalLine>
-            <TerminalLine>
-              <T.Output>🥒 Freshness Check</T.Output>
+              <T.Prompt>$</T.Prompt> pickled check --target claude-code
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output>&nbsp;&nbsp;&nbsp;"Installation"</T.Output>
+              <T.Dim>Scenario: How do I install pickled?</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              <T.Output>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[sonnet/web]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-              </T.Output>
-              <T.Success>✓</T.Success>
-              <T.Output> Well preserved (92%)</T.Output>
+              &nbsp;&nbsp;<T.Success>✓ Well grounded</T.Success>{" "}
+              <T.Muted>(92%)</T.Muted> <T.Dim>cited: [readme]</T.Dim>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output>&nbsp;&nbsp;&nbsp;"Basic parsing"</T.Output>
+              <T.Dim>Scenario: Basic usage</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              <T.Output>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[sonnet/web]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-              </T.Output>
-              <T.Success>✓</T.Success>
-              <T.Output> Fresh (85%)</T.Output>
+              &nbsp;&nbsp;<T.Warning>⚠ Partially grounded</T.Warning>{" "}
+              <T.Muted>(65%)</T.Muted> <T.Dim>missing: [llms.txt]</T.Dim>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output>&nbsp;&nbsp;&nbsp;"Error handling"</T.Output>
+              <T.Dim>Scenario: Config format</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              <T.Output>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[sonnet/web]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-              </T.Output>
-              <T.Warning>⚠</T.Warning>
-              <T.Output> Going stale (65%)</T.Output>
+              &nbsp;&nbsp;<T.Error>✗ Trap fired</T.Error>{" "}
+              <T.Muted>(0%)</T.Muted> <T.Dim>old_config_schema</T.Dim>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Output>Freshness Score: 81% </T.Output>
-              <T.Success>🥒🥒🥒🥒</T.Success>
-              <T.Output>░</T.Output>
+              <T.Dim>Overall:</T.Dim> <T.Warning>42</T.Warning>{" "}
+              <T.Muted>/ 100 · threshold 80 · run fails</T.Muted>
             </TerminalLine>
           </Terminal>
         </div>

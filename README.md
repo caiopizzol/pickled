@@ -1,8 +1,8 @@
 # 🥒 pickled
 
-> Agent legibility checker for developer tools
+> Test what agents actually understand.
 
-Pickled measures whether AI agents can correctly answer questions about your tool, grounded in your documentation. Every answer must cite a registered source. Citations are extracted and checked deterministically — no self-grading.
+Pickled measures whether AI agents can correctly answer questions about your product, grounded in the sources you declare. Every answer must cite a registered source. Citations are extracted and checked deterministically. No LLM grades another LLM.
 
 ## Install
 
@@ -24,11 +24,11 @@ pickled check       # run scenarios against an agent
 2. Each scenario declares which source IDs the answer must cite via `requiredSources`.
 3. The agent is given the sources inline and asked to end its response with a `## Sources` section listing the IDs it actually used: `- [readme] short note`.
 4. Pickled parses the section, then scores:
-   - **YES** — all required IDs cited, no unknown IDs invented.
-   - **PARTIAL** — required IDs cited but some missing, or unknown IDs present.
-   - **NO** — no citations, or every citation is an invented ID.
+   - **YES**: all required IDs cited, no unknown IDs invented.
+   - **PARTIAL**: required IDs cited but some missing, or unknown IDs present.
+   - **NO**: no citations, or every citation is an invented ID.
 
-Citation grounding is necessary but not sufficient: a stale source produces a confidently grounded answer that's still wrong. **Traps** catch that — a per-scenario list of deterministic stale-pattern detectors (literal substring or regex). Any trap firing forces the result to NO with confidence 0, regardless of how well the answer was grounded.
+Citation grounding is necessary but not sufficient: a stale source produces a confidently grounded answer that's still wrong. **Traps** catch that: a per-scenario list of deterministic stale-pattern detectors (literal substring or regex). Any trap firing forces the result to NO with confidence 0, regardless of how well the answer was grounded.
 
 ## Example config
 
@@ -57,7 +57,7 @@ scenarios:
     traps:
       - id: old_v2_api
         match: "ZodError.format()"
-        reason: "Recommends pre-v3 API removed in current versions"
+        reason: "Deprecated in Zod 4; use z.treeifyError()"
 
 # Optional: fail CI if overall score below threshold
 threshold: 80
@@ -86,6 +86,35 @@ pickled check --verbose     # include full source content + transcripts in JSON
 pickled check -t 80         # override threshold
 ```
 
+## Targets
+
+Configure one or more agents under `targets:` and use `matrix.target` to run scenarios across them:
+
+```yaml
+targets:
+  claude:
+    category: cli
+    provider: claude-code
+    model: sonnet
+  codex:
+    category: cli
+    provider: codex-cli
+    model: gpt-5.5
+
+matrix:
+  target: [claude, codex]
+```
+
+**`claude-code`** uses the Claude Agent SDK. Requires `claude` installed and authenticated (or `ANTHROPIC_API_KEY` set). Supports `model`, `maxTurns`, `maxThinkingTokens`, `maxBudgetUsd`, `permissionMode`.
+
+**`codex-cli`** shells out to `codex --ask-for-approval never exec` with `--sandbox read-only --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check`. Requires `codex` installed and authenticated. `model` is **required** (Codex's default model can change). `maxTurns` is **rejected** at config load (Codex CLI does not support a turn cap).
+
+Caveats for `codex-cli`:
+
+- Model names depend on your auth mode. ChatGPT-account installs use names like `gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`. Check what your local Codex supports with `codex` and pick model from the menu.
+- Codex exits 0 even when the API rejects a request (wrong model name, rate limit). Pickled will score that as ungrounded. Check Codex auth/model before treating low codex-cli scores as a docs problem.
+- `--ignore-user-config` and `--ignore-rules` isolate `$CODEX_HOME/config.toml` and execpolicy `.rules`. They do **not** isolate `AGENTS.md` or project-level context the agent picks up from `cwd`.
+
 ## Project structure
 
 ```
@@ -108,7 +137,7 @@ bun run lint
 
 ## Status
 
-Early. Shipped: M0 (audit), M1 (citation-based check), M2a (trap scenarios for stale-but-grounded answers). Next: M3 adds a Codex target so the matrix produces cross-agent scores. M4 makes context ablation a default of every run.
+Early. Shipped: M0 (audit), M1 (citation-based check), M2a (trap scenarios), M3 (Codex CLI target alongside Claude Code, with cross-target matrix). Next: M4 makes context ablation a default of every run.
 
 ## License
 
