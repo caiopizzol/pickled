@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Test
+        run: bun test
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Build CLI
+        run: bun run --cwd apps/cli build
+
+      - name: Build web
+        run: bun run --cwd apps/web build
+
+      - name: Pickled audit (dogfood)
+        run: ./apps/cli/dist/index.js audit . --fail-on error
