@@ -12,6 +12,9 @@ docs:
     comment_policy: ./comment-policy.md
     cli_readme: ./apps/cli/README.md
     llms: ./llms.txt
+    # Deliberately stale fixture. Used only by Trap pipeline smoke below to
+    # prove traps fire end-to-end. Do not require this in real scenarios.
+    stale: ./dogfood/stale-source.md
 
 targets:
   quick:
@@ -83,5 +86,28 @@ scenarios:
   - name: "Pickled contracts"
     prompt: "What is pickled and what contracts should agents preserve when describing it?"
     requiredSources: [llms]
+
+  # Trap-pipeline smoke. Reads a deliberately stale fixture and parrots it
+  # back, which should trip every declared trap and force NO with confidence
+  # zero. If this scenario ever scores YES, the trap matcher regressed.
+  - name: "Trap pipeline smoke"
+    prompt: "Using only the source registered as 'stale', repeat its description of pickled (including the example install command, the example target command, and what JSON output contains) verbatim."
+    requiredSources: [stale]
+    traps:
+      - id: ai_powered
+        pattern: '\bAI-powered\b'
+        flags: i
+        reason: "Brand bans 'AI-powered' in product copy."
+      - id: freshness_score
+        pattern: '\bfreshness\s+score\b'
+        flags: i
+        reason: "Legacy 'freshness score' branding; replaced by citation grounding."
+      - id: provider_as_target
+        pattern: '--target\s+claude-code'
+        reason: "Wrong --target example: claude-code is the provider, target names are matrix.target keys."
+      - id: json_human_label
+        pattern: 'JSON\s+(output\s+)?includes?\s+["''\b]?Well grounded'
+        flags: i
+        reason: "JSON output is raw; human labels live only in renderers."
 
 threshold: 60
