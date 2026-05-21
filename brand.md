@@ -355,6 +355,37 @@ Overall: 0 / 100 · threshold 80 · run fails
 Review fired traps before trusting this surface.
 ```
 
+### Release Notes
+
+Release notes are a public interface surface. They are subject to the same grammar as CLI output: short, specific, no marketing voice. The AI notes plugin reads this file; if its output drifts from these rules, fix the prompt or the commit messages, not the published notes.
+
+**Section names.** Use only `What's New`, `Fixes`, `Improvements`, and `Breaking Changes`. Do not invent grouping headers like `Under the Hood`, `Other`, `Miscellaneous`, or `Behind the Scenes`. If a change does not fit one of the four, ask whether it belongs in the notes at all.
+
+**Bullet shape.** One sentence per change. Lead with what changed for the user, not the implementation. Bold the feature name. Use a hyphen, never an em dash, to join the name and the description.
+
+**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `scenario verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `trap` (not `regression check` or `assertion`).
+
+**Honesty constraints.** No absolutes. A smoke test `catches regressions in trap behavior`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
+
+**Skip.** Version bumps, CI tweaks that affect no user behavior, and code that exists only in proposals or drafts. The plugin's system prompt already says this; reinforce it here so the model has two signals pointing the same way.
+
+**Good release-notes copy.**
+
+```markdown
+### What's New
+
+- **llms.txt as public agent surface** - Agents can read pickled's contracts, targets, verdict layers, JSON contract, and source requirements at `/llms.txt`.
+- **Brand and spec scenarios** - Five new dogfood scenarios covering Verdict layers, JSON contract, Target semantics, Agent context contract, and Comment policy.
+- **Trap pipeline smoke test** - A deliberately stale fixture and matching scenario catch regressions in the trap matcher end to end.
+
+### Improvements
+
+- **Dogfood stability** - Anchored JSON contract and Basic usage scenarios to their canonical sources to remove citation flake.
+- **llms.txt drift guard** - CI verifies the public llms.txt stays in sync with the repo root.
+- **Scoped API keys** - Split Anthropic key by workflow (release vs agent-dogfood) for cleaner rotation and audit.
+- **Claude Agent SDK 0.3** - Upgraded from 0.2. No call-site changes.
+```
+
 ### Social Bios
 
 **LinkedIn.**
