@@ -43,8 +43,8 @@ scenarios:
     requiredSources: [readme]
 
   - name: "Basic usage"
-    prompt: "How do I run pickled to check my project?"
-    requiredSources: [readme]
+    prompt: "According to the CLI README, how do I run pickled to check my project?"
+    requiredSources: [cli_readme]
 
   - name: "Config format"
     prompt: "What does a pickled.yml config file look like?"
