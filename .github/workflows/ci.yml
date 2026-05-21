@@ -18,7 +18,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Test
         run: bun test
@@ -31,6 +31,9 @@ jobs:
 
       - name: Build web
         run: bun run --cwd apps/web build
+
+      - name: CLI smoke (built artifact)
+        run: ./apps/cli/dist/index.js --help
 
       - name: Pickled audit (dogfood)
         run: ./apps/cli/dist/index.js audit . --fail-on error
