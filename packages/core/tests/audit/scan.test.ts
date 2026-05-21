@@ -50,6 +50,22 @@ describe("audit scan", () => {
     expect(findings.some((f) => f.message.includes("test:fake"))).toBe(true);
   });
 
+  test("does not flag bun built-in subcommands like bun build", async () => {
+    const result = await scan({ targetRepo: FIXTURE });
+    const findings = result.findings.filter(
+      (f) => f.category === "unresolved-command",
+    );
+    expect(findings.some((f) => f.message.includes("bun build"))).toBe(false);
+  });
+
+  test("still flags non-bun PMs that lack a build built-in", async () => {
+    const result = await scan({ targetRepo: FIXTURE });
+    const findings = result.findings.filter(
+      (f) => f.category === "unresolved-command",
+    );
+    expect(findings.some((f) => f.message.includes("npm build"))).toBe(true);
+  });
+
   test("renders markdown without throwing on empty target", async () => {
     const result = await scan({ targetRepo: import.meta.dir });
     const md = renderAuditMarkdown(result);

@@ -223,6 +223,15 @@ const BUILTIN_SCRIPTS = new Set([
   "x",
 ]);
 
+// AIDEV-NOTE: Per-PM built-in subcommands that are real commands, not run
+// scripts. `bun build` is a Bun-specific subcommand (npm/yarn/pnpm do not
+// have `build` as a built-in; for those it would be a real false positive).
+// Keep this map narrow: add a name only when the PM ships it as a built-in
+// subcommand and the false-positive shows up in docs.
+const PM_BUILTINS: Record<string, Set<string>> = {
+  bun: new Set(["build", "test", "link", "unlink", "upgrade"]),
+};
+
 function findUnresolvedCommands(
   content: string,
   target: string,
@@ -256,7 +265,8 @@ function findUnresolvedCommands(
         !scripts.has(script) &&
         !knownSet.has(`${pm} ${script}`) &&
         !knownSet.has(`${pm} run ${script}`) &&
-        !BUILTIN_SCRIPTS.has(script)
+        !BUILTIN_SCRIPTS.has(script) &&
+        !PM_BUILTINS[pm]?.has(script)
       ) {
         refs.add(`${pm} ${script}`);
       }
