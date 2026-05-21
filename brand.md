@@ -357,7 +357,7 @@ Review fired traps before trusting this surface.
 
 ### Release Notes
 
-Release notes are a public interface surface. They are subject to the same grammar as CLI output: short, specific, no marketing voice. The AI notes plugin reads this file; if its output drifts from these rules, fix the prompt or the commit messages, not the published notes.
+Release notes are a public interface surface. They are subject to the same grammar as CLI output: short, specific, no marketing voice. The AI notes plugin reads this file. When its output drifts, prefer fixing the prompt or the commit messages so the next release renders correctly on its own. A one-off hand-edit on a high-stakes release is fine; just don't let it substitute for fixing the generator.
 
 **Section names.** Use only `What's New`, `Fixes`, `Improvements`, and `Breaking Changes`. Do not invent grouping headers like `Under the Hood`, `Other`, `Miscellaneous`, or `Behind the Scenes`. If a change does not fit one of the four, ask whether it belongs in the notes at all.
 
