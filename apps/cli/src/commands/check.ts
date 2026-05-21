@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { CheckConfig } from "@pickled-dev/config";
+import { overrideTarget } from "@pickled-dev/config";
 import {
   formatCheckJSON,
   loadConfig,
@@ -36,25 +37,27 @@ export async function check(
     process.exit(1);
   }
 
-  // Apply --target override before runCheck. Validate against configured
-  // targets plus the "default" sentinel; an unknown name should fail cleanly
-  // here rather than silently resolving to DEFAULT_TARGET deep in resolveTarget.
+  // Apply --target override before runCheck. The helper validates the name
+  // and drops scenarios whose explicit target does not match (their author
+  // declared a different target; silently rerouting would violate intent).
   if (options.target) {
-    const validNames = new Set([
-      ...Object.keys(config.targets ?? {}),
-      "default",
-    ]);
-    if (!validNames.has(options.target)) {
-      console.error(chalk.red(`Unknown target: "${options.target}"`));
+    const before = config.scenarios.length;
+    try {
+      config = overrideTarget(config, options.target);
+    } catch (error) {
       console.error(
-        chalk.dim(`Available targets: ${[...validNames].join(", ")}`),
+        chalk.red(error instanceof Error ? error.message : String(error)),
       );
       process.exit(1);
     }
-    config = {
-      ...config,
-      matrix: { ...config.matrix, target: [options.target] },
-    };
+    const dropped = before - config.scenarios.length;
+    if (dropped > 0 && !json) {
+      log(
+        chalk.dim(
+          `Skipping ${dropped} scenario(s) with explicit target != "${options.target}"`,
+        ),
+      );
+    }
   }
 
   const tool = {
