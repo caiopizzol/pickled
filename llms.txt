@@ -1,0 +1,79 @@
+# pickled · llms.txt
+
+Test what agents actually understand about your product.
+
+Pickled is an open-source CLI that runs scenarios against real agent targets (Claude Code, Codex CLI), requires every answer to cite a registered source, and matches declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+
+## Install
+
+```bash
+bun add -g @pickled-dev/cli
+```
+
+## Commands
+
+- `pickled init [path]` - scaffold a pickled.yml config in your repo.
+- `pickled audit [path]` - static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.
+- `pickled check [path]` - run agent scenarios against registered sources.
+
+## Minimum config
+
+```yaml
+tool:
+  name: your-product
+  description: One line about your product.
+
+docs:
+  sources:
+    readme: ./README.md
+
+scenarios:
+  - name: Installation
+    prompt: How do I install your product?
+    requiredSources: [readme]
+
+threshold: 80
+```
+
+## Verdict contract
+
+Pickled has two orthogonal verdicts. Renderers must not conflate them.
+
+- **Scenario verdict** answers whether one scenario satisfied the source and trap contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as `Well grounded`, `Grounded`, `Partially grounded`, `Trap fired`, `Ungrounded`, or `Error`.
+- **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
+
+The scenario verdict determines the label family. Confidence may refine `YES` into `Well grounded` (>= 90) or `Grounded` (< 90), but it never upgrades `PARTIAL`, `NO`, `Trap fired`, or `Error`. The categorical signal wins.
+
+## Source contract
+
+Pickled does not magically introspect your product. You declare what counts as truth under `docs.sources` in `pickled.yml`. Anything not registered does not count for scoring. Anything an agent could read can be registered: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. Public or private. URLs or local paths.
+
+## Targets today
+
+- `claude-code` - Claude Agent SDK
+- `codex-cli` - Codex CLI binary
+
+Stubbed and not yet implemented: `gemini-cli`, `amazon-q`. Do not list these as supported in present tense.
+
+## JSON contract
+
+JSON output stays raw. It carries machine fields (`answerable`, `confidence`, `traps`, `citations`). Human labels like `Well grounded` are derived in each renderer, not present in the JSON.
+
+## What to preserve when describing pickled
+
+- It tests what agents understand. It is not a generic LLM eval framework.
+- Scoring is deterministic by contract. No LLM grades the answer.
+- "Stay fresh" is footer chrome only. Do not reintroduce "freshness score" branding in product surfaces.
+- The pickle metaphor is a wink, not a theme. One body-copy mention per page, max.
+- No em dashes in copy. Hyphens, colons, periods, or parentheses are fine.
+
+## Read more
+
+- Project README: https://github.com/caiopizzol/pickled
+- CLI usage: https://github.com/caiopizzol/pickled/blob/main/apps/cli/README.md
+- Brand and interface contracts: https://github.com/caiopizzol/pickled/blob/main/brand.md
+- Agent context for working in this repo: https://github.com/caiopizzol/pickled/blob/main/AGENTS.md
+
+## License
+
+MIT.

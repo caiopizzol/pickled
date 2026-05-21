@@ -11,6 +11,7 @@ docs:
     agents: ./AGENTS.md
     comment_policy: ./comment-policy.md
     cli_readme: ./apps/cli/README.md
+    llms: ./llms.txt
 
 targets:
   quick:
@@ -78,5 +79,9 @@ scenarios:
   - name: "Comment policy"
     prompt: "When should an AIDEV-NOTE comment be added to pickled's source code?"
     requiredSources: [comment_policy]
+
+  - name: "Pickled contracts"
+    prompt: "What is pickled and what contracts should agents preserve when describing it?"
+    requiredSources: [llms]
 
 threshold: 60
