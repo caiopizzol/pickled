@@ -12,12 +12,13 @@
   ],
   "scripts": {
     "dev": "bun run ./src/index.ts",
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun --minify",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun --minify --external @anthropic-ai/claude-agent-sdk",
     "release": "semantic-release"
   },
   "dependencies": {
     "commander": "^14.0.2",
-    "chalk": "^5.6.2"
+    "chalk": "^5.6.2",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.1"
   },
   "devDependencies": {
     "@pickled-dev/config": "workspace:*",
