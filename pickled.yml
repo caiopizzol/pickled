@@ -68,7 +68,7 @@ scenarios:
     requiredSources: [brand]
 
   - name: "JSON contract"
-    prompt: "According to pickled's brand spec, does the JSON output include human-facing labels like 'Well grounded'? Cite the relevant contract."
+    prompt: "In brand.md's Interface Feedback section, what is pickled's JSON output contract? Does it include human-facing labels like 'Well grounded'?"
     requiredSources: [brand]
 
   - name: "Target semantics"
