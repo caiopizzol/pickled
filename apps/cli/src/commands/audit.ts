@@ -1,18 +1,36 @@
 import path from "node:path";
-import { renderAuditJSON, renderAuditMarkdown, scan } from "@pickled-dev/core";
+import {
+  renderAuditJSON,
+  renderAuditMarkdown,
+  renderAuditTerminal,
+  scan,
+} from "@pickled-dev/core";
 import chalk from "chalk";
 
 export interface AuditOptions {
+  format?: string;
   json?: boolean;
   output?: string;
   failOn?: string;
+}
+
+type Format = "terminal" | "markdown" | "json";
+
+function resolveFormat(options: AuditOptions): Format {
+  // --json is a shorthand for --format json. --format wins if both are passed.
+  if (options.format && options.format !== "terminal") {
+    return options.format as Format;
+  }
+  if (options.json) return "json";
+  return (options.format as Format) ?? "terminal";
 }
 
 export async function audit(
   targetPath: string,
   options: AuditOptions,
 ): Promise<void> {
-  const { json, output } = options;
+  const { output } = options;
+  const format = resolveFormat(options);
   const resolvedPath = path.resolve(targetPath);
 
   let result: Awaited<ReturnType<typeof scan>>;
@@ -23,7 +41,14 @@ export async function audit(
     process.exit(1);
   }
 
-  const rendered = json ? renderAuditJSON(result) : renderAuditMarkdown(result);
+  let rendered: string;
+  if (format === "json") {
+    rendered = renderAuditJSON(result);
+  } else if (format === "markdown") {
+    rendered = renderAuditMarkdown(result);
+  } else {
+    rendered = renderAuditTerminal(result);
+  }
 
   if (output) {
     await Bun.write(output, rendered);
@@ -36,7 +61,9 @@ export async function audit(
     (f) => f.severity === "warning",
   ).length;
 
-  if (!json && !output) {
+  // Plain JSON output stays machine-clean; everything else gets a colored
+  // summary line.
+  if (format !== "json" && !output) {
     console.log();
     if (errors === 0 && warnings === 0) {
       console.log(chalk.green("Audit clean. No issues found."));

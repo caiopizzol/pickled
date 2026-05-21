@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { renderAuditMarkdown, scan } from "../../src/audit/index.js";
+import {
+  renderAuditMarkdown,
+  renderAuditTerminal,
+  scan,
+} from "../../src/audit/index.js";
 
 const FIXTURE = join(import.meta.dir, "fixture");
 
@@ -70,6 +74,28 @@ describe("audit scan", () => {
     const result = await scan({ targetRepo: import.meta.dir });
     const md = renderAuditMarkdown(result);
     expect(md).toContain("Agent-context audit");
+  });
+
+  test("terminal renderer produces plain text without markdown table chrome", async () => {
+    const result = await scan({ targetRepo: FIXTURE });
+    const out = renderAuditTerminal(result);
+    expect(out).toContain("pickled audit");
+    expect(out).toContain("Inventory");
+    expect(out).toContain("Broken references");
+    // No markdown table syntax in default terminal output
+    expect(out).not.toMatch(/^\|/m);
+    expect(out).not.toMatch(/^\|---/m);
+    // No markdown headers
+    expect(out).not.toMatch(/^#+ /m);
+  });
+
+  test("terminal and markdown renderers carry the same findings", async () => {
+    const result = await scan({ targetRepo: FIXTURE });
+    const terminal = renderAuditTerminal(result);
+    const markdown = renderAuditMarkdown(result);
+    // Both should mention the broken path reference fixture
+    expect(terminal).toContain("does/not/exist.ts");
+    expect(markdown).toContain("does/not/exist.ts");
   });
 
   test("errors are severity=error, budget warnings are severity=warning", async () => {

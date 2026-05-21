@@ -22,7 +22,12 @@ program
     "Static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.",
   )
   .argument("[path]", "Path to your project (default: current directory)", ".")
-  .option("--json", "Output as JSON")
+  .addOption(
+    new Option("--format <name>", "Output format")
+      .choices(["terminal", "markdown", "json"])
+      .default("terminal"),
+  )
+  .option("--json", "Shorthand for --format json")
   .option("-o, --output <file>", "Save report to file")
   .addOption(
     new Option("--fail-on <level>", "Exit non-zero on this severity or higher")

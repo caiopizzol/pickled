@@ -15,6 +15,7 @@ export {
   DEFAULT_IGNORE_PATTERNS,
   renderAuditJSON,
   renderAuditMarkdown,
+  renderAuditTerminal,
   resolveAuditConfig,
   scan,
 } from "./audit/index.js";

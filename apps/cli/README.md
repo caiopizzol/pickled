@@ -57,6 +57,15 @@ Create a starter `pickled.yml` config file.
 
 Static scan of agent-context files. No LLM calls.
 
+| Option                | Description                                          |
+| --------------------- | ---------------------------------------------------- |
+| `--format <name>`     | `terminal` (default), `markdown`, or `json`          |
+| `--json`              | Shorthand for `--format json`                        |
+| `-o, --output <file>` | Save report to file                                  |
+| `--fail-on <level>`   | Exit non-zero on `error` (default) or `warning`      |
+
+Default `terminal` format is plain text suited to CI logs. Use `--format markdown` for GitHub step summaries; `--format json` for machine consumers.
+
 ### `pickled check [path]`
 
 Run agent scenarios against registered sources.

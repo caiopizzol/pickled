@@ -1,4 +1,8 @@
-export { renderAuditJSON, renderAuditMarkdown } from "./report.js";
+export {
+  renderAuditJSON,
+  renderAuditMarkdown,
+  renderAuditTerminal,
+} from "./report.js";
 export { scan } from "./scan.js";
 export type {
   AuditConfig,
