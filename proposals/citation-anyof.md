@@ -8,7 +8,9 @@
 
 `pickled.yml` currently treats `requiredSources` as an AND-list. Every listed source must be cited or the scenario goes PARTIAL/NO. That contract is clean and deterministic, but it cannot express "any authoritative source in this set is acceptable."
 
-Concretely, pickled's own dogfood surfaced two cases where the same answer is intentionally documented across multiple agent surfaces (README + apps/cli/README.md for CLI usage; brand.md + llms.txt for the JSON contract). Citation scoring flipped ~30-50% based on which surface the agent happened to read first. The flake was not a model failure; it was a config-vs-architecture mismatch.
+Concretely, pickled's own dogfood surfaced cases where the same answer is intentionally documented across multiple user-facing surfaces (README + apps/cli/README.md both cover install and usage). Citation scoring flipped ~30-50% based on which surface the agent happened to read first. The flake was not a model failure; it was a config-vs-architecture mismatch.
+
+(Note: for spec/contract questions where one source is the canonical authority - brand.md for verdict and JSON contracts, comment-policy.md for comments - the right fix is anchoring the scenario prompt to that source, not widening the citation contract with `anyOf`. See Brand guidance below.)
 
 We fixed the dogfood by anchoring each scenario's prompt to one canonical source. That works, but it narrows the test: real users ask unanchored questions. The product needs a citation contract that matches "any of these authoritative sources is acceptable evidence" without inviting weak-test gaming.
 
@@ -68,6 +70,9 @@ requiredSources:
 **New: one canonical contract source + any user-facing surface:**
 
 ```yaml
+# Example: scenario asks about pickled's CI integration. The CI contract
+# lives in brand.md (must cite); the usage example lives in README or
+# CLI README (either is acceptable).
 requiredSources:
   all: [brand]
   anyOf:
@@ -77,6 +82,8 @@ requiredSources:
 **New: any of two equivalent surfaces, no other required source:**
 
 ```yaml
+# Example: "how do I install pickled?" is intentionally documented in
+# both README and apps/cli/README.md. Either is a valid answer source.
 requiredSources:
   anyOf:
     - [readme, cli_readme]
@@ -121,8 +128,9 @@ The flat `required` and `missing` fields could be derived for backward compatibi
 
 `anyOf` can become a way to make weak tests pass. Use it deliberately:
 
-- **Use `anyOf` when** the same answer is intentionally documented across multiple authoritative surfaces (e.g., README + CLI README both cover install; brand.md + llms.txt both state the JSON contract).
+- **Use `anyOf` when** the same answer is intentionally documented across multiple user-facing surfaces (e.g., README + CLI README both cover install and usage).
 - **Use `all` when** the scenario requires distinct facts from distinct sources (e.g., a scenario testing the full router pattern might require both `agents` and the brand source it points at).
+- **Do NOT use `anyOf` for canonical spec questions.** Brand and interface contracts live in a single authoritative document (brand.md). Even if those facts are echoed in `llms.txt` or `AGENTS.md` for self-containment, the scoring contract should still demand the canonical source via `all`. Use prompt anchoring ("According to brand.md...") to make that demand natural.
 - **Do not use `anyOf` to suppress flake on under-anchored prompts.** If a scenario flakes because the prompt is too vague, fix the prompt; don't widen the citation contract.
 
 ## Explicitly out of scope
@@ -141,9 +149,9 @@ The flat `required` and `missing` fields could be derived for backward compatibi
 6. Tests: cover bare-list, `all`-only, `anyOf`-only, combined, and the edge cases (empty groups, single-source groups, source absent from `docs.sources`).
 7. Brand.md update: fold the brand guidance into the Source contract section.
 
-## Open questions for review
+## Decisions
 
-1. Field name: `anyOf` (JSON-Schema-style) vs `anyOfGroups` (more literal). Lean `anyOf` if we document precisely.
-2. JSON shape: structured `contract` field as proposed, or extend the existing flat `required` / `missing` to be group-aware (less invasive, more cryptic).
-3. Reporter output: render passing groups? Or only render anyOf groups when something fails? Latter is quieter; former is more informative.
-4. Order of operations: should `anyOf` ship before or after the next CLI release tag? Probably after stabilization; this changes the JSON contract for downstream parsers.
+1. **Field name: `anyOf`.** `anyOfGroups` is more literal but leaks implementation wording into user config. The "AND across groups, OR within each group" semantics are documented above; that's clearer than a longer field name.
+2. **JSON shape: structured `contract` field.** Do not stretch flat `required` / `missing` to encode group semantics; that becomes cryptic fast. Keep flat fields only for backward compatibility if a downstream consumer needs them, but `contract` is the source of truth.
+3. **Reporter output: failed groups only by default.** Passing `anyOf` groups are audit detail, not normal CLI output. The default report stays concise (`missing: one of [readme, cli_readme]`). A future `--verbose` mode can render satisfied groups.
+4. **Order of operations: ship after the next CLI release tag.** This changes the JSON contract for downstream parsers; pair it with a CLI version bump and call it out in release notes.
