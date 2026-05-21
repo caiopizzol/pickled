@@ -54,4 +54,29 @@ scenarios:
         flags: i
         reason: "Uses removed 'freshness score' branding"
 
+  # Brand/spec dogfood. Each scenario requires a different registered source
+  # so the run measures more than just README coverage. No traps in v1: we
+  # want the baseline to reveal failure modes before pre-committing fragile
+  # pattern matchers.
+
+  - name: "Verdict layers"
+    prompt: "What is the difference between pickled's scenario verdict and run verdict?"
+    requiredSources: [brand]
+
+  - name: "JSON contract"
+    prompt: "Does pickled's JSON output include human-facing labels like 'Well grounded'?"
+    requiredSources: [brand]
+
+  - name: "Target semantics"
+    prompt: "How do I run pickled check against only one configured target?"
+    requiredSources: [cli_readme]
+
+  - name: "Agent context contract"
+    prompt: "I'm a coding agent working on the pickled codebase for the first time. Where should I look first for brand voice, comment rules, and load-bearing invariants?"
+    requiredSources: [agents]
+
+  - name: "Comment policy"
+    prompt: "When should an AIDEV-NOTE comment be added to pickled's source code?"
+    requiredSources: [comment_policy]
+
 threshold: 60
