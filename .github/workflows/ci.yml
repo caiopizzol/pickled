@@ -35,6 +35,13 @@ jobs:
       - name: CLI smoke (built artifact)
         run: ./apps/cli/dist/index.js --help
 
+      # llms.txt has two physical copies: root (canonical, registered in
+      # pickled.yml as a dogfood source) and apps/web/public/llms.txt (deploy
+      # surface). They must stay in sync or pickled can pass against local
+      # state while pickled.dev says something else.
+      - name: Verify llms.txt sync
+        run: diff llms.txt apps/web/public/llms.txt
+
       - name: Pickled audit (dogfood)
         run: ./apps/cli/dist/index.js audit . --fail-on error
 
