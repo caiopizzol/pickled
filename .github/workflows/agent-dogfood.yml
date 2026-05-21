@@ -23,6 +23,11 @@ jobs:
       - name: Build CLI
         run: bun run --cwd apps/cli build
 
+      # The Claude Agent SDK auto-discovers the claude binary. Install it
+      # globally so packages/core/src/targets/cli/claude-code.ts can find it.
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
       # The check step is intentionally non-blocking. A low score is signal,
       # not infra failure. The receipt (pickled-report.json) is uploaded
       # regardless so a failing run still leaves an artifact to inspect.
