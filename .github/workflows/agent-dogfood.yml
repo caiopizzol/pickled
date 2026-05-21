@@ -30,7 +30,7 @@ jobs:
         id: check
         continue-on-error: true
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
         run: |
           ./apps/cli/dist/index.js check . \
             --target quick \
