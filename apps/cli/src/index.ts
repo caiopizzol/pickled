@@ -42,6 +42,10 @@ program
     "-t, --threshold <percent>",
     "Minimum score % to pass (overrides config)",
   )
+  .option(
+    "--target <name>",
+    "Run only the named target (overrides matrix.target)",
+  )
   .action(check);
 
 await program.parseAsync();

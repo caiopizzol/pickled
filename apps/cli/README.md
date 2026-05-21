@@ -61,12 +61,13 @@ Static scan of agent-context files. No LLM calls.
 
 Run agent scenarios against registered sources.
 
-| Option                | Description                         |
-| --------------------- | ----------------------------------- |
-| `--json`              | Output as JSON                      |
-| `-o, --output <file>` | Save JSON report to file            |
-| `-v, --verbose`       | Show progress while scenarios run   |
-| `-t, --threshold <n>` | Minimum score percent needed to pass |
+| Option                | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `--json`              | Output as JSON                                   |
+| `-o, --output <file>` | Save JSON report to file                         |
+| `-v, --verbose`       | Show progress while scenarios run                |
+| `-t, --threshold <n>` | Minimum score percent needed to pass             |
+| `--target <name>`     | Run only the named target (overrides matrix)     |
 
 ## Example Output
 

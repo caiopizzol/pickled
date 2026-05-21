@@ -13,6 +13,7 @@ export interface CheckOptions {
   output?: string;
   verbose?: boolean;
   threshold?: string;
+  target?: string;
 }
 
 export async function check(
@@ -33,6 +34,27 @@ export async function check(
     console.error();
     console.error(chalk.dim("Run `pickled init` to create a config file"));
     process.exit(1);
+  }
+
+  // Apply --target override before runCheck. Validate against configured
+  // targets plus the "default" sentinel; an unknown name should fail cleanly
+  // here rather than silently resolving to DEFAULT_TARGET deep in resolveTarget.
+  if (options.target) {
+    const validNames = new Set([
+      ...Object.keys(config.targets ?? {}),
+      "default",
+    ]);
+    if (!validNames.has(options.target)) {
+      console.error(chalk.red(`Unknown target: "${options.target}"`));
+      console.error(
+        chalk.dim(`Available targets: ${[...validNames].join(", ")}`),
+      );
+      process.exit(1);
+    }
+    config = {
+      ...config,
+      matrix: { ...config.matrix, target: [options.target] },
+    };
   }
 
   const tool = {
