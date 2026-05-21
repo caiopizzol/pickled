@@ -43,4 +43,8 @@ jobs:
         with:
           name: pickled-report
           path: pickled-report.json
-          if-no-files-found: warn
+          # error, not warn: a missing receipt means the run failed before
+          # producing one (auth/config/runtime broke). A low-score receipt
+          # still exists and uploads cleanly; that's signal, not infra
+          # failure. Distinguish the two.
+          if-no-files-found: error
