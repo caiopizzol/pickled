@@ -21,8 +21,13 @@ targets:
     model: sonnet
     maxTurns: 15
 
+  codex:
+    category: cli
+    provider: codex-cli
+    model: gpt-5.5
+
 matrix:
-  target: [quick]
+  target: [quick, codex]
 
 scenarios:
   - name: "Installation"

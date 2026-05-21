@@ -46,6 +46,18 @@ function validate(config: CheckConfig): void {
           `pickled.yml: target "${name}" sets 'systemPrompt', which bypasses the citation contract. Remove it; custom prompts are not supported in citation mode.`,
         );
       }
+      if (target.provider === "codex-cli") {
+        if (!target.model) {
+          throw new Error(
+            `pickled.yml: target "${name}" (codex-cli) requires an explicit 'model' field. Codex's default model can change without notice; pin it for reproducible evals.`,
+          );
+        }
+        if (target.maxTurns !== undefined) {
+          throw new Error(
+            `pickled.yml: target "${name}" (codex-cli) sets 'maxTurns', but the codex CLI does not support a turn cap. Remove the field.`,
+          );
+        }
+      }
     }
   }
 

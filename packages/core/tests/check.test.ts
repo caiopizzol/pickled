@@ -246,4 +246,51 @@ describe("runCheck (mocked target)", () => {
       expect(report.scenarios[0]!.confidence).toBeLessThan(100);
     });
   });
+
+  test("preserves configured target metadata on target errors", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        docs: { sources: { readme: "./README.md" } },
+        targets: {
+          codex: {
+            category: "cli",
+            provider: "codex-cli",
+            model: "gpt-5.5",
+          },
+        },
+        matrix: { target: ["codex"] },
+        scenarios: [
+          {
+            name: "Install",
+            prompt: "how to install",
+            requiredSources: ["readme"],
+          },
+        ],
+      };
+
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "codex-cli",
+            name: "codex",
+            async run(): Promise<TargetResult> {
+              throw new Error("codex failed");
+            },
+          }),
+        },
+      );
+
+      expect(report.scenarios[0]!.error).toContain("codex failed");
+      expect(report.scenarios[0]!.target).toEqual({
+        target: "codex",
+        category: "cli",
+        provider: "codex-cli",
+        model: "gpt-5.5",
+      });
+    });
+  });
 });

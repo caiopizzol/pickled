@@ -339,6 +339,75 @@ scenarios:
     });
   });
 
+  test("rejects codex-cli target without explicit model", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+targets:
+  codex:
+    category: cli
+    provider: codex-cli
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /codex-cli.*requires an explicit 'model'/,
+      );
+    });
+  });
+
+  test("rejects codex-cli target with maxTurns", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+targets:
+  codex:
+    category: cli
+    provider: codex-cli
+    model: gpt-5
+    maxTurns: 10
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /codex-cli.*does not support a turn cap/,
+      );
+    });
+  });
+
+  test("accepts codex-cli target with explicit model and no maxTurns", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+targets:
+  codex:
+    category: cli
+    provider: codex-cli
+    model: gpt-5
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.targets?.codex?.provider).toBe("codex-cli");
+      expect(cfg.targets?.codex?.model).toBe("gpt-5");
+    });
+  });
+
   test("rejects target.systemPrompt to prevent citation-prompt bypass", async () => {
     const yaml = `
 tool:

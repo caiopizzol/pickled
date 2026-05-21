@@ -7,6 +7,7 @@ import { scoreCitations, scoreTraps } from "./scorers/index.js";
 import { fetchAllSources } from "./sources.js";
 import {
   createTarget,
+  DEFAULT_TARGET,
   resolveContext,
   resolveTarget,
   type TargetRunner,
@@ -100,6 +101,10 @@ export async function runCheck(
         `  ${labelPadded} ${icon} ${status} (${result.confidence}%)`,
       );
     } catch (error) {
+      const targetConfig =
+        targetName === "default"
+          ? DEFAULT_TARGET
+          : (config.targets?.[targetName] ?? DEFAULT_TARGET);
       const errorResult: ScenarioResult = {
         scenario,
         answerable: "NO",
@@ -119,9 +124,9 @@ export async function runCheck(
         error: error instanceof Error ? error.message : String(error),
         target: {
           target: targetName,
-          category: "cli",
-          provider: "claude-code",
-          model: "unknown",
+          category: targetConfig.category,
+          provider: targetConfig.provider,
+          model: targetConfig.model ?? "unknown",
         },
         context: { name: contextName },
       };

@@ -1,6 +1,7 @@
 import type { Context, Target } from "@pickled-dev/config";
 import { DEFAULT_TARGET } from "@pickled-dev/config";
 import { ClaudeCodeTarget } from "./cli/claude-code.js";
+import { CodexCliTarget } from "./cli/codex.js";
 import type { ResolvedContext, TargetRunner } from "./types.js";
 
 export { DEFAULT_TARGET } from "@pickled-dev/config";
@@ -38,6 +39,8 @@ function createCliTarget(name: string, config: Target): TargetRunner {
   switch (config.provider) {
     case "claude-code":
       return new ClaudeCodeTarget(name, config);
+    case "codex-cli":
+      return new CodexCliTarget(name, config);
     case "gemini-cli":
       throw new Error(`Gemini CLI target not yet implemented. Coming soon!`);
     case "amazon-q":
