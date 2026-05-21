@@ -22,9 +22,15 @@ export {
 // Check
 export type { CheckOptions } from "./check.js";
 export { runCheck } from "./check.js";
-
+// Report status (shared scenario-status helper)
+export type { ScenarioStatus, StatusTone } from "./report-status.js";
+export { getScenarioStatus } from "./report-status.js";
 // Reporter
-export { formatCheckJSON, printCheckReport } from "./reporter.js";
+export {
+  formatCheckJSON,
+  formatCheckReport,
+  printCheckReport,
+} from "./reporter.js";
 
 // Scorers
 export type {

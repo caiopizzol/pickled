@@ -61,7 +61,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 - **Trap-aware.** A grounded answer can still be wrong. Declared traps fire when matched, and any firing forces the result to NO with confidence zero, regardless of how well the answer was grounded.
 - **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Gemini CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
 - **Source-agnostic.** Registers anything an agent can read. Public docs, private docs, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. URLs or local paths.
-- **The report is the receipt.** Each run produces a structured artifact: scenario, target, response, registered sources cited, unknown sources invented, traps that fired, threshold result. CI fails on the receipt, not on a vibe.
+- **The report is the receipt.** Each run produces a structured artifact: scenario, target, response, registered sources cited, unknown sources invented, traps that fired, threshold result. The run fails on the receipt, not on a vibe.
 - **CLI-first. CI-native. No dashboard required.**
 - **Open source. MIT.**
 
@@ -275,6 +275,86 @@ Use pickle language as punctuation:
 
 Do not turn the product into a pickle joke. If the metaphor starts competing with the scoring contract, cut it.
 
+### Interface Feedback
+
+Every interface should use the same feedback grammar: CLI, CI logs, web demos, and the future app. The surface can change. The message should not.
+
+**Default structure.**
+
+1. Command or screen name.
+2. Scope metadata: tool, sources, scenarios, target or surface when relevant.
+3. Scenario result.
+4. Evidence lines.
+5. Overall score and threshold result.
+6. One next-action sentence.
+
+**Scenario result grammar.**
+
+- `Scenario: Error handling`
+- `✓ Well grounded (92%)`
+- `✓ Grounded (84%)`
+- `⚠ Partially grounded (65%)`
+- `✗ Trap fired (0%)`
+- `✗ Ungrounded (0%)`
+- `✗ Error`
+
+**Evidence line grammar.**
+
+- `cited: [readme], [llms]`
+- `missing: [llms]`
+- `unknown: [old-docs]`
+- `trap: old_v2_api`
+- `reason: Deprecated in Zod 4; use z.treeifyError()`
+- `match: "ZodError.format()"`
+
+**Overall grammar.**
+
+- `Overall: 92 / 100 · threshold 80 · run passes`
+- `Overall: 42 / 100 · threshold 80 · run fails`
+- `Overall: 92 / 100` (no threshold configured)
+
+Use `run passes` and `run fails` everywhere. Do not switch between `CI fails`, `build fails`, and `check failed` for the same state.
+
+**Verdict layers.**
+
+Pickled has two verdicts. They are orthogonal. Renderers must not conflate them.
+
+- **Scenario verdict** answers whether one scenario satisfied the source and trap contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as the human labels above: `Well grounded`, `Grounded`, `Partially grounded`, `Trap fired`, `Ungrounded`, `Error`.
+- **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
+
+The scenario verdict determines the label family. Confidence may refine `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90), but it must never upgrade `PARTIAL`, `NO`, `Trap fired`, or `Error`. A partial answer at 95% confidence is still `Partially grounded`, not `Well grounded`. The categorical signal wins.
+
+Implementation rule: one shared helper (`getScenarioStatus`) returns the label, icon, and tone. Both progress output and final report consume it. Neither computes the label from raw confidence.
+
+**Feedback tone.**
+
+- Be concise.
+- Name the failed contract.
+- Show the evidence.
+- Give one next action.
+- Do not explain the brand in the result.
+- Do not use pickle language in pass/fail semantics.
+- Do not use cute copy in error states.
+
+**Good terminal copy.**
+
+```text
+pickled check
+Tool: zod
+Sources: [readme], [llms]
+Scenarios: 1
+
+Scenario: Error handling
+  ✗ Trap fired (0%)
+  trap: old_v2_api
+  reason: Deprecated in Zod 4; use z.treeifyError()
+  match: "ZodError.format()"
+  cited: [readme], [llms]
+
+Overall: 0 / 100 · threshold 80 · run fails
+Review fired traps before trusting this surface.
+```
+
 ### Social Bios
 
 **LinkedIn.**
@@ -303,7 +383,7 @@ An open-source CLI that tests what AI agents understand about your product. Toda
 2. Use words a developer would say out loud. No "leverage", "unlock", "empower", "seamless", "holistic".
 3. Show, don't sell. A code block beats a paragraph.
 4. Second person when teaching. First person plural ("we") only when stating identity.
-5. The pickle metaphor is a wink, not a theme. One mention per page, max.
+5. The pickle metaphor is a wink, not a theme. One mention per page in body copy, max. Global chrome is exempt: the logo (🥒 in nav and footer) and the footer sign-off ("Stay fresh.") are quiet structural repeats and do not count against the body-copy limit. Saturation is the failure mode the rule prevents, not presence.
 6. "AI" is fine. "AI-powered" is forbidden.
 7. Numbers are concrete. Never "up to X%" or "as much as X".
 8. If a sentence could appear on a Salesforce page, rewrite it.

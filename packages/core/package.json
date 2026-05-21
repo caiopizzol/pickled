@@ -1,7 +1,7 @@
 {
   "name": "@pickled-dev/core",
   "version": "0.1.0",
-  "description": "Core library for Pickled - Stay fresh in AI 🥒",
+  "description": "Core library for deterministic agent legibility checks",
   "module": "src/index.ts",
   "type": "module",
   "exports": {

@@ -1,8 +1,8 @@
 # @pickled-dev/cli
 
-> Stay fresh in AI 🥒
+> Test what agents actually understand about your product
 
-Test how well AI responds to questions about your developer tool. Define scenarios, run checks, and see your freshness score.
+Pickled runs scenarios against real agent targets, checks citations against registered sources, and matches declared traps deterministically. No LLM grades another LLM.
 
 ## Installation
 
@@ -22,25 +22,26 @@ Creates a `pickled.yml` file:
 
 ```yaml
 tool:
-  name: "your-tool"
-  description: "What your tool does"
+  name: "your-product"
+  description: "What your product does"
+
+docs:
+  sources:
+    readme: ./README.md
 
 scenarios:
-  - name: "Installation"
-    prompt: "How do I install this tool?"
-
   - name: "Getting started"
-    prompt: "How do I set up this tool for my project?"
+    prompt: "How do I install and set up this product?"
+    requiredSources: [readme]
 
-  - name: "Basic usage"
-    prompt: "Show me a basic example of using this tool"
+threshold: 80
 ```
 
 ### 2. Edit your config
 
-Update `pickled.yml` with your actual tool info and scenarios developers might ask about.
+Declare the sources agents should cite, the scenarios they should answer, and any stale patterns you want traps to catch.
 
-### 3. Run check
+### 3. Run the check
 
 ```bash
 pickled check
@@ -52,75 +53,62 @@ pickled check
 
 Create a starter `pickled.yml` config file.
 
+### `pickled audit [path]`
+
+Static scan of agent-context files. No LLM calls.
+
 ### `pickled check [path]`
 
-Run freshness checks and report results.
+Run agent scenarios against registered sources.
 
-| Option                | Description            |
-| --------------------- | ---------------------- |
-| `--json`              | Output as JSON         |
-| `-o, --output <file>` | Save report to file    |
-| `-v, --verbose`       | Show detailed progress |
-| `-t, --threshold <n>` | Min score % to pass    |
+| Option                | Description                         |
+| --------------------- | ----------------------------------- |
+| `--json`              | Output as JSON                      |
+| `-o, --output <file>` | Save JSON report to file            |
+| `-v, --verbose`       | Show progress while scenarios run   |
+| `-t, --threshold <n>` | Minimum score percent needed to pass |
 
 ## Example Output
 
-```
-🥒 Freshness Check
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+```text
+pickled check
+-------------------------------------------------------
 Tool: zod
+Sources: [readme], [llms]
+Scenarios: 1
 
-  [default] ✓ "Installation" - Well preserved (92%)
-  [default] ✓ "Basic parsing" - Fresh (85%)
-  [default] ⚠ "Error handling" - Going stale (65%)
-      Missing: safeParse details
+Scenario: Error handling
+  ✗ Trap fired (0%)
+  trap: old_v2_api
+  reason: Deprecated in Zod 4; use z.treeifyError()
+  match: "ZodError.format()"
+  cited: [readme], [llms]
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Freshness Score: 81% 🥒🥒🥒🥒░
-
-🥒 Looking fresh! Your docs are doing well.
+-------------------------------------------------------
+Overall: 0 / 100 · threshold 80 · run fails
+Review fired traps before trusting this surface.
 ```
 
-## Freshness Scores
+## Result Labels
 
-| Score | Status | Meaning |
-|-------|--------|---------|
-| 90%+ | Well preserved | AI nails it |
-| 70-89% | Fresh | Good, minor gaps |
-| 50-69% | Going stale | Needs attention |
-| <50% | Gone sour | Major documentation gaps |
+| Label | Meaning |
+| ----- | ------- |
+| `Well grounded` | Required sources cited. No unknown sources. High confidence. |
+| `Grounded` | Required sources cited. No unknown sources. Lower confidence. |
+| `Partially grounded` | Some required citations are missing, or unknown citations appeared. |
+| `Trap fired` | A declared stale pattern matched. Score is forced to 0 for that scenario. |
+| `Ungrounded` | No valid citations, or every citation is unknown. |
+| `Error` | The target failed before Pickled could score the response. |
 
-## Config Reference
-
-```yaml
-tool:
-  name: "tool-name"       # Required: your tool's name
-  description: "desc"     # Required: what it does
-
-scenarios:                # Required: scenarios to check
-  - name: "Scenario name" # Display name
-    prompt: "The question" # What to ask AI
-    target: target-name   # Optional: specific target
-
-targets:                  # Optional: named targets
-  claude-sonnet:
-    category: cli
-    provider: claude-code
-    model: claude-sonnet-4-20250514
-
-threshold: 80             # Optional: min score % to pass
-```
-
-## CI/CD Integration
+## CI
 
 ```yaml
 # GitHub Actions
-- name: Check AI freshness
+- name: Check agent legibility
   run: pickled check --threshold 80
 ```
 
-Fail the build if AI can't answer questions about your tool correctly.
+Fail the run when the overall score falls below the threshold.
 
 ## Local Development
 

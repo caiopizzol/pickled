@@ -13,46 +13,32 @@
   color: var(--color-text);
 }
 
-.logo-mark {
-  background: var(--color-primary);
-  border-radius: var(--radius-sm);
-  position: relative;
-}
-
-.logo-mark::after {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border-radius: 2px;
-  background: var(--color-bg);
+.logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family:
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
 .logo-sm {
   font-size: var(--text-base);
 }
-.logo-sm .logo-mark {
-  width: 18px;
-  height: 18px;
-}
-.logo-sm .logo-mark::after {
-  inset: 3px;
+.logo-sm .logo-icon {
+  font-size: var(--text-lg);
 }
 
 .logo-md {
   font-size: var(--text-lg);
 }
-.logo-md .logo-mark {
-  width: 22px;
-  height: 22px;
+.logo-md .logo-icon {
+  font-size: var(--text-xl);
 }
 
 .logo-lg {
   font-size: var(--text-xl);
 }
-.logo-lg .logo-mark {
-  width: 28px;
-  height: 28px;
-}
-.logo-lg .logo-mark::after {
-  inset: 5px;
+.logo-lg .logo-icon {
+  font-size: var(--text-2xl);
 }

@@ -1,95 +1,55 @@
 import chalk from "chalk";
+import {
+  getScenarioStatus,
+  type ScenarioStatus,
+  type StatusTone,
+} from "./report-status.js";
 import type { CheckReport, ScenarioResult } from "./types.js";
 
-const LINE = "━".repeat(55);
+const LINE = "─".repeat(55);
 
-/**
- * Get pickle visualization for score
- */
-function getScorePickles(score: number): string {
-  const filled = Math.round(score / 20);
-  const empty = 5 - filled;
-  return "🥒".repeat(filled) + "░".repeat(empty);
+type ChalkFn = typeof chalk.green;
+
+function toneToColor(tone: StatusTone): ChalkFn {
+  if (tone === "success") return chalk.green;
+  if (tone === "warning") return chalk.yellow;
+  return chalk.red;
 }
 
-function getStatus(score: number): {
-  label: string;
-  color: typeof chalk.green;
-} {
-  if (score >= 90) {
-    return { label: "Well grounded", color: chalk.green };
-  }
-  if (score >= 70) {
-    return { label: "Grounded", color: chalk.green };
-  }
-  if (score >= 50) {
-    return { label: "Partially grounded", color: chalk.yellow };
-  }
-  return { label: "Ungrounded", color: chalk.red };
+function getOverallColor(score: number): ChalkFn {
+  if (score >= 70) return chalk.green;
+  if (score >= 50) return chalk.yellow;
+  return chalk.red;
 }
 
-/**
- * Get result icon and status text
- */
+function renderStatusLine(status: ScenarioStatus): string {
+  // Error has no meaningful confidence; everything else shows the percent.
+  if (status.label === "Error") return status.label;
+  return `${status.label} (${status.confidence}%)`;
+}
+
 function getResultStatus(result: ScenarioResult): {
   icon: string;
   status: string;
-  color: typeof chalk.green;
+  color: ChalkFn;
 } {
-  if (result.error) {
-    return {
-      icon: chalk.red("✗"),
-      status: `error: ${result.error.slice(0, 40)}`,
-      color: chalk.red,
-    };
-  }
-
-  if (result.traps.fired.length > 0) {
-    return {
-      icon: chalk.red("✗"),
-      status: `Trap fired (${result.confidence}%)`,
-      color: chalk.red,
-    };
-  }
-
-  const { label, color } = getStatus(result.confidence);
-
-  if (result.answerable === "YES") {
-    return {
-      icon: chalk.green("✓"),
-      status: `${label} (${result.confidence}%)`,
-      color,
-    };
-  }
-
-  if (result.answerable === "PARTIAL") {
-    return {
-      icon: chalk.yellow("⚠"),
-      status: `${label} (${result.confidence}%)`,
-      color: chalk.yellow,
-    };
-  }
-
+  const status = getScenarioStatus(result);
+  const color = toneToColor(status.tone);
   return {
-    icon: chalk.red("✗"),
-    status: `Ungrounded (${result.confidence}%)`,
-    color: chalk.red,
+    icon: color(status.icon),
+    status: renderStatusLine(status),
+    color,
   };
 }
 
-/**
- * Format result label for matrix output [target/context]
- */
 function formatResultLabel(result: ScenarioResult): string {
   const target = result.target?.target ?? "default";
   const context = result.context?.name ?? "default";
 
-  // Skip label if both are default (non-matrix run)
   if (target === "default" && context === "default") {
     return "";
   }
 
-  // Only show context if not default
   if (context === "default") {
     return chalk.dim(`[${target}]`);
   }
@@ -97,38 +57,127 @@ function formatResultLabel(result: ScenarioResult): string {
   return chalk.dim(`[${target}/${context}]`);
 }
 
-/**
- * Check if report has matrix results (multiple results per scenario)
- */
 function hasMatrixResults(results: ScenarioResult[]): boolean {
   const scenarioNames = results.map((r) => r.scenario.name);
   return new Set(scenarioNames).size !== scenarioNames.length;
 }
 
-/**
- * Print branded check report to console
- */
-export function printCheckReport(report: CheckReport): void {
-  const { tool, scenarios, summary } = report;
-  const results = scenarios;
+export interface FormatReportOptions {
+  threshold?: number;
+}
 
-  console.log();
-  console.log(chalk.bold("🥒 Pickled Check"));
-  console.log(LINE);
-  console.log();
-  console.log(`Tool: ${chalk.cyan(tool.name)}`);
+function formatIds(ids: string[]): string {
+  return ids.map((id) => `[${id}]`).join(", ");
+}
 
-  if (report.docs.length > 0) {
-    console.log(
-      `Sources: ${chalk.dim(report.docs.map((d) => d.id).join(", "))}`,
+function formatDetails(result: ScenarioResult, indent: string): string[] {
+  const lines: string[] = [];
+
+  if (result.error) {
+    lines.push(chalk.dim(`${indent}error: ${result.error}`));
+    return lines;
+  }
+
+  if (result.traps.fired.length > 0) {
+    for (const hit of result.traps.fired) {
+      lines.push(chalk.red(`${indent}trap: ${hit.id}`));
+      lines.push(chalk.dim(`${indent}reason: ${hit.reason}`));
+      lines.push(chalk.dim(`${indent}match: "${hit.matched}"`));
+    }
+  } else if (result.reason && result.answerable !== "YES") {
+    lines.push(chalk.dim(`${indent}reason: ${result.reason}`));
+  }
+
+  if (result.citations.cited.length > 0) {
+    lines.push(
+      chalk.dim(`${indent}cited: ${formatIds(result.citations.cited)}`),
+    );
+  }
+  if (result.citations.missing.length > 0) {
+    lines.push(
+      chalk.dim(`${indent}missing: ${formatIds(result.citations.missing)}`),
+    );
+  }
+  if (result.citations.unknown.length > 0) {
+    lines.push(
+      chalk.dim(`${indent}unknown: ${formatIds(result.citations.unknown)}`),
     );
   }
 
-  console.log();
+  return lines;
+}
 
-  // Check if we have matrix results
+function formatResultLine(result: ScenarioResult): string {
+  const { icon, status, color } = getResultStatus(result);
+  const label = formatResultLabel(result);
+  const statusText = `${icon} ${status}`;
+  return label ? `${label} ${color(statusText)}` : color(statusText);
+}
+
+function getSummaryGuidance(scenarios: ScenarioResult[]): string {
+  const trapCount = scenarios.reduce((sum, result) => {
+    return sum + result.traps.fired.length;
+  }, 0);
+  const missingCount = scenarios.reduce((sum, result) => {
+    return sum + result.citations.missing.length;
+  }, 0);
+  const unknownCount = scenarios.reduce((sum, result) => {
+    return sum + result.citations.unknown.length;
+  }, 0);
+
+  if (trapCount > 0 && missingCount + unknownCount > 0) {
+    return "Review fired traps and citation gaps.";
+  }
+  if (trapCount > 0) {
+    return "Review fired traps before trusting this surface.";
+  }
+  if (missingCount + unknownCount > 0) {
+    return "Review missing and unknown citations.";
+  }
+  return "Citations hold. No declared traps fired.";
+}
+
+function formatOverall(
+  report: CheckReport,
+  threshold: number | undefined,
+): string {
+  const score = report.summary.score;
+  const color = getOverallColor(score);
+  const base = `Overall: ${color(`${score}`)} / 100`;
+
+  if (threshold === undefined || threshold <= 0) {
+    return base;
+  }
+
+  const passed = score >= threshold;
+  const result = passed ? chalk.green("run passes") : chalk.red("run fails");
+  return `${base} · threshold ${threshold} · ${result}`;
+}
+
+export function formatCheckReport(
+  report: CheckReport,
+  options: FormatReportOptions = {},
+): string {
+  const { tool, scenarios, summary } = report;
+  const results = scenarios;
+  const lines: string[] = [];
+
+  lines.push(chalk.bold("pickled check"));
+  lines.push(LINE);
+  lines.push(`Tool: ${chalk.cyan(tool.name)}`);
+
+  if (report.docs.length > 0) {
+    lines.push(
+      `Sources: ${chalk.dim(formatIds(report.docs.map((d) => d.id)))}`,
+    );
+  } else {
+    lines.push(`Sources: ${chalk.dim("none registered")}`);
+  }
+
+  lines.push(`Scenarios: ${chalk.dim(String(summary.total))}`);
+  lines.push("");
+
   if (hasMatrixResults(results)) {
-    // Group by scenario for matrix output
     const byScenario = new Map<string, ScenarioResult[]>();
     for (const result of results) {
       const name = result.scenario.name;
@@ -138,91 +187,37 @@ export function printCheckReport(report: CheckReport): void {
       byScenario.get(name)?.push(result);
     }
 
-    // Print grouped
     for (const [scenarioName, scenarioResults] of byScenario) {
-      console.log(`  "${scenarioName}"`);
+      lines.push(`Scenario: ${scenarioName}`);
 
       for (const result of scenarioResults) {
-        const label = formatResultLabel(result);
-        const { icon, status } = getResultStatus(result);
-        const labelPadded = label ? `${label.padEnd(20)} ` : "    ";
-
-        console.log(`    ${labelPadded}${icon} ${status}`);
-
-        // Show reason for non-YES results
-        if (result.reason && result.answerable !== "YES") {
-          console.log(chalk.dim(`                          ${result.reason}`));
-        }
+        lines.push(`  ${formatResultLine(result)}`);
+        lines.push(...formatDetails(result, "    "));
       }
 
-      console.log();
+      lines.push("");
     }
   } else {
-    // Flat output for non-matrix runs (single target/context)
     for (const result of results) {
-      const { icon, status } = getResultStatus(result);
-      const targetLabel = formatResultLabel(result);
-      const labelPart = targetLabel ? `${targetLabel} ` : "";
-
-      console.log(
-        `  ${labelPart}${icon} "${result.scenario.name}" - ${status}`,
-      );
-
-      // Show reason for non-YES results
-      if (result.reason && result.answerable !== "YES") {
-        console.log(chalk.dim(`      ${result.reason}`));
-      }
-
-      for (const hit of result.traps.fired) {
-        console.log(chalk.red(`      ↳ trap "${hit.id}": ${hit.reason}`));
-        console.log(chalk.dim(`        "${hit.snippet}"`));
-      }
-
-      if (result.citations.missing.length > 0) {
-        console.log(
-          chalk.dim(
-            `      Missing citations: ${result.citations.missing.join(", ")}`,
-          ),
-        );
-      }
-      if (result.citations.unknown.length > 0) {
-        console.log(
-          chalk.dim(
-            `      Unknown citations: ${result.citations.unknown.join(", ")}`,
-          ),
-        );
-      }
+      lines.push(`Scenario: ${result.scenario.name}`);
+      lines.push(`  ${formatResultLine(result)}`);
+      lines.push(...formatDetails(result, "  "));
+      lines.push("");
     }
-
-    console.log();
   }
 
-  console.log(LINE);
-  console.log(
-    `Legibility Score: ${summary.score}% ${getScorePickles(summary.score)}`,
-  );
-  console.log();
+  lines.push(LINE);
+  lines.push(formatOverall(report, options.threshold));
+  lines.push(chalk.dim(getSummaryGuidance(scenarios)));
 
-  const { color } = getStatus(summary.score);
-  const trapCount = scenarios.reduce((sum, result) => {
-    return sum + result.traps.fired.length;
-  }, 0);
-  if (summary.score >= 90) {
-    console.log(color("🥒 Solid grounding. Agents can answer from your docs."));
-  } else if (summary.score >= 70) {
-    console.log(color("🥒 Mostly grounded with a few gaps."));
-  } else if (summary.score >= 50) {
-    console.log(
-      color("🥒 Partial grounding. Several scenarios need attention."),
-    );
-  } else {
-    const message =
-      trapCount > 0
-        ? `🥒 ${trapCount} trap(s) fired. Review stale or deprecated guidance.`
-        : "🥒 Weak grounding. Most scenarios are missing required citations.";
-    console.log(color(message));
-  }
+  return lines.join("\n");
+}
 
+export function printCheckReport(
+  report: CheckReport,
+  options: FormatReportOptions = {},
+): void {
+  console.log(formatCheckReport(report, options));
   console.log();
 }
 

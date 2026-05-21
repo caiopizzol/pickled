@@ -19,9 +19,7 @@ export async function audit(
   try {
     result = await scan({ targetRepo: resolvedPath });
   } catch (error) {
-    console.error(
-      chalk.red(`🥒 ${error instanceof Error ? error.message : error}`),
-    );
+    console.error(chalk.red(error instanceof Error ? error.message : error));
     process.exit(1);
   }
 
@@ -41,10 +39,12 @@ export async function audit(
   if (!json && !output) {
     console.log();
     if (errors === 0 && warnings === 0) {
-      console.log(chalk.green(`🥒 Audit clean. No issues found.`));
+      console.log(chalk.green("Audit clean. No issues found."));
     } else {
       const tone = errors > 0 ? chalk.red : chalk.yellow;
-      console.log(tone(`🥒 ${errors} error(s), ${warnings} warning(s).`));
+      console.log(
+        tone(`Audit found ${errors} error(s), ${warnings} warning(s).`),
+      );
     }
   }
 

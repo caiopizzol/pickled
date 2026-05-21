@@ -3,6 +3,7 @@ import type {
   ResolvedDocSource,
   Scenario,
 } from "@pickled-dev/config";
+import { getScenarioStatus } from "./report-status.js";
 import { scoreCitations, scoreTraps } from "./scorers/index.js";
 import { fetchAllSources } from "./sources.js";
 import {
@@ -96,9 +97,9 @@ export async function runCheck(
       results.push(result);
 
       const labelPadded = label ? label.padEnd(18) : "";
-      const { icon, status } = formatResultStatus(result);
+      const status = getScenarioStatus(result);
       onProgress?.(
-        `  ${labelPadded} ${icon} ${status} (${result.confidence}%)`,
+        `  ${labelPadded} ${status.icon} ${status.label} (${status.confidence}%)`,
       );
     } catch (error) {
       const targetConfig =
@@ -144,25 +145,6 @@ function formatRunLabel(targetName: string, contextName: string): string {
   if (targetName === "default" && contextName === "default") return "";
   if (contextName === "default") return `[${targetName}]`;
   return `[${targetName}/${contextName}]`;
-}
-
-function formatResultStatus(result: ScenarioResult): {
-  icon: string;
-  status: string;
-} {
-  if (result.error) return { icon: "✗", status: "Error" };
-  if (result.traps.fired.length > 0) {
-    return { icon: "✗", status: "Trap fired" };
-  }
-  if (result.answerable === "YES") {
-    return result.confidence >= 90
-      ? { icon: "✓", status: "Well grounded" }
-      : { icon: "✓", status: "Grounded" };
-  }
-  if (result.answerable === "PARTIAL") {
-    return { icon: "⚠", status: "Partially grounded" };
-  }
-  return { icon: "✗", status: "Ungrounded" };
 }
 
 async function runScenario(

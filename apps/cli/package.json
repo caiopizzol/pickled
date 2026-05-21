@@ -1,7 +1,7 @@
 {
   "name": "@pickled-dev/cli",
   "version": "0.4.0",
-  "description": "Stay fresh in AI 🥒",
+  "description": "Test what agents actually understand about your product",
   "module": "dist/index.js",
   "type": "module",
   "bin": {
@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "dev": "bun run ./src/index.ts",
-    "build": "bun build ./src/index.ts --outdir ./dist --target node --minify",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun --minify",
     "release": "semantic-release"
   },
   "dependencies": {

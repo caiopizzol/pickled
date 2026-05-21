@@ -29,9 +29,7 @@ export async function check(
   try {
     config = await loadConfig(resolvedPath);
   } catch (error) {
-    console.error(
-      chalk.red(`🥒 ${error instanceof Error ? error.message : error}`),
-    );
+    console.error(chalk.red(error instanceof Error ? error.message : error));
     console.error();
     console.error(chalk.dim("Run `pickled init` to create a config file"));
     process.exit(1);
@@ -44,6 +42,8 @@ export async function check(
   };
 
   if (verbose) {
+    log(chalk.bold("pickled check"));
+    log("");
     log(chalk.dim(`   Tool: ${tool.name}`));
     log(chalk.dim(`   Scenarios: ${config.scenarios.length}`));
     for (const s of config.scenarios) {
@@ -52,43 +52,42 @@ export async function check(
   }
 
   // 2. Run check
-  log(chalk.dim("🥒 Pickled Check"));
-  log("");
-
   const report = await runCheck(tool, config, {
-    onProgress: (msg) => {
-      if (!json) {
-        log(chalk.dim(`   ${msg}`));
-      }
-    },
+    onProgress: verbose
+      ? (msg) => {
+          if (!json) {
+            log(chalk.dim(`   ${msg}`));
+          }
+        }
+      : undefined,
   });
 
-  // 3. Output
+  // 3. Check threshold
+  const threshold = options.threshold
+    ? parseInt(options.threshold, 10)
+    : (config.threshold ?? 0);
+  const thresholdFailed = threshold > 0 && report.summary.score < threshold;
+
+  // 4. Output
   if (output) {
     await Bun.write(output, formatCheckJSON(report, { verbose }));
   } else if (json) {
     await writeStdout(`${formatCheckJSON(report, { verbose })}\n`);
   } else {
-    printCheckReport(report);
+    printCheckReport(report, { threshold });
   }
 
-  // 4. Check threshold
-  const threshold = options.threshold
-    ? parseInt(options.threshold, 10)
-    : (config.threshold ?? 0);
-
-  if (report.summary.score < threshold) {
-    console.error("");
-    console.error(
-      chalk.red(
-        `Legibility score: ${report.summary.score}% (threshold: ${threshold}%)`,
-      ),
-    );
-    console.error(
-      chalk.dim(
-        "Below threshold. Review trap, citation, and grounding details.",
-      ),
-    );
+  if (thresholdFailed) {
+    if (json || output) {
+      console.error(
+        chalk.red(
+          `Overall: ${report.summary.score} / 100 · threshold ${threshold} · run fails`,
+        ),
+      );
+      console.error(
+        chalk.dim("Review failed scenarios before trusting this surface."),
+      );
+    }
     process.exit(1);
   }
 }

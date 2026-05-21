@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatCheckJSON } from "../src/reporter.js";
+import { formatCheckJSON, formatCheckReport } from "../src/reporter.js";
 import type { CheckReport } from "../src/types.js";
 
 function makeReport(): CheckReport {
@@ -42,6 +42,43 @@ function makeReport(): CheckReport {
   };
 }
 
+function makeTrapReport(): CheckReport {
+  return {
+    ...makeReport(),
+    scenarios: [
+      {
+        scenario: {
+          name: "Error handling",
+          prompt: "How do I get error messages?",
+          requiredSources: ["readme", "llms"],
+        },
+        answerable: "NO",
+        confidence: 0,
+        response: "Use ZodError.format().\n\n## Sources\n- [readme]\n- [llms]",
+        reason: 'Trap fired: "old_v2_api" (Deprecated in Zod 4)',
+        citations: {
+          cited: ["readme", "llms"],
+          required: ["readme", "llms"],
+          missing: [],
+          unknown: [],
+        },
+        traps: {
+          fired: [
+            {
+              id: "old_v2_api",
+              reason: "Deprecated in Zod 4; use z.treeifyError()",
+              matched: "ZodError.format()",
+              snippet: "Use ZodError.format().",
+            },
+          ],
+          avoided: [],
+        },
+      },
+    ],
+    summary: { total: 1, answered: 0, unanswered: 1, score: 0 },
+  };
+}
+
 describe("formatCheckJSON", () => {
   test("omits source content by default", () => {
     const json = formatCheckJSON(makeReport());
@@ -70,5 +107,58 @@ describe("formatCheckJSON", () => {
       const parsed = JSON.parse(json);
       expect(parsed.scenarios[0].citations.cited).toEqual(["readme"]);
     }
+  });
+});
+
+describe("formatCheckReport", () => {
+  test("uses the shared terminal feedback grammar for passing reports", () => {
+    const text = formatCheckReport(makeReport(), { threshold: 80 });
+    expect(text).toContain("pickled check");
+    expect(text).toContain("Tool: t");
+    expect(text).toContain("Sources: [readme]");
+    expect(text).toContain("Scenario: s");
+    expect(text).toContain("✓ Well grounded (100%)");
+    expect(text).toContain("cited: [readme]");
+    expect(text).toContain("Overall: 100 / 100 · threshold 80 · run passes");
+    expect(text).not.toContain("🥒");
+  });
+
+  test("prints trap evidence before the overall failure", () => {
+    const text = formatCheckReport(makeTrapReport(), { threshold: 80 });
+    expect(text).toContain("Scenario: Error handling");
+    expect(text).toContain("✗ Trap fired (0%)");
+    expect(text).toContain("trap: old_v2_api");
+    expect(text).toContain("reason: Deprecated in Zod 4; use z.treeifyError()");
+    expect(text).toContain('match: "ZodError.format()"');
+    expect(text).toContain("cited: [readme], [llms]");
+    expect(text).toContain("Overall: 0 / 100 · threshold 80 · run fails");
+    expect(text).toContain("Review fired traps before trusting this surface.");
+  });
+
+  test("PARTIAL at high confidence still renders Partially grounded, not Well grounded", () => {
+    const base = makeReport();
+    const baseScenario = base.scenarios[0];
+    if (!baseScenario) throw new Error("makeReport should produce a scenario");
+    const report = {
+      ...base,
+      scenarios: [
+        {
+          ...baseScenario,
+          answerable: "PARTIAL" as const,
+          confidence: 95,
+        },
+      ],
+    };
+    const text = formatCheckReport(report);
+    expect(text).toContain("⚠ Partially grounded (95%)");
+    expect(text).not.toContain("Well grounded (95%)");
+  });
+
+  test("no threshold renders Overall without pass/fail language", () => {
+    const text = formatCheckReport(makeReport());
+    expect(text).toContain("Overall: 100 / 100");
+    expect(text).not.toContain("run passes");
+    expect(text).not.toContain("run fails");
+    expect(text).not.toContain("threshold");
   });
 });

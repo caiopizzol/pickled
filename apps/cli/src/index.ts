@@ -7,7 +7,7 @@ import { init } from "./commands/init.js";
 
 program
   .name("pickled")
-  .description("Agent legibility checker for developer tools 🥒")
+  .description("Test what agents actually understand about your product")
   .version(pkg.version);
 
 program
@@ -33,7 +33,7 @@ program
 
 program
   .command("check")
-  .description("Check if AI can answer questions about your tool")
+  .description("Run agent scenarios against registered sources")
   .argument("[path]", "Path to your project (default: current directory)", ".")
   .option("--json", "Output as JSON")
   .option("-o, --output <file>", "Save report to file")

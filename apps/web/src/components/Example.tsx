@@ -79,8 +79,11 @@ export function Example() {
             </TerminalLine>
             <TerminalLine>
               <T.Dim>
-                &nbsp;&nbsp;&nbsp;&nbsp;match: "ZodError.format()" in response
+                {"    reason: Deprecated in Zod 4; use z.treeifyError()"}
               </T.Dim>
+            </TerminalLine>
+            <TerminalLine>
+              <T.Dim>{'    match: "ZodError.format()" in response'}</T.Dim>
             </TerminalLine>
             <TerminalLine>
               <T.Dim>&nbsp;&nbsp;&nbsp;&nbsp;cited: [readme, llms]</T.Dim>
@@ -88,7 +91,7 @@ export function Example() {
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
               <T.Dim>Overall:</T.Dim> <T.Error>0</T.Error>{" "}
-              <T.Muted>/ 100 · threshold 80 · CI fails</T.Muted>
+              <T.Muted>/ 100 · threshold 80 · run fails</T.Muted>
             </TerminalLine>
           </Terminal>
         </div>

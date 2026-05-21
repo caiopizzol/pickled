@@ -1,11 +1,11 @@
 import path from "node:path";
 import chalk from "chalk";
 
-const TEMPLATE = `# 🥒 pickled.yml — Agent legibility check for your developer tool
+const TEMPLATE = `# pickled.yml - Agent legibility check for your product
 
 tool:
-  name: "your-tool"
-  description: "A short description of what your tool does"
+  name: "your-product"
+  description: "A short description of what your product does"
 
 docs:
   sources:
@@ -14,14 +14,14 @@ docs:
 
 scenarios:
   - name: "Getting started"
-    prompt: "How do I install and set up this tool?"
+    prompt: "How do I install and set up this product?"
     requiredSources: [readme]
 
   - name: "Basic usage"
-    prompt: "Show me a basic example of using this tool"
+    prompt: "Show me a basic example of using this product"
     requiredSources: [readme]
 
-# Optional: Fail CI if score below threshold
+# Optional: fail CI if score falls below threshold
 # threshold: 80
 `;
 
@@ -31,12 +31,12 @@ export async function init(targetPath: string): Promise<void> {
 
   const file = Bun.file(configPath);
   if (await file.exists()) {
-    console.error(chalk.red("🥒 pickled.yml already exists"));
+    console.error(chalk.red("pickled.yml already exists"));
     process.exit(1);
   }
 
   await Bun.write(configPath, TEMPLATE);
-  console.log(chalk.green("🥒 Created pickled.yml"));
+  console.log(chalk.green("Created pickled.yml"));
   console.log();
   console.log(chalk.dim("Next steps:"));
   console.log(
