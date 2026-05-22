@@ -339,9 +339,7 @@ describe("runCheck compare-surfaces mode", () => {
     for (const [rel, content] of Object.entries(files)) {
       writeFileSync(join(dir, rel), content);
     }
-    return fn(dir).finally(() =>
-      rmSync(dir, { recursive: true, force: true }),
-    );
+    return fn(dir).finally(() => rmSync(dir, { recursive: true, force: true }));
   }
 
   test("populates surfaces[] and sets top-level evaluation fields to null", async () => {
