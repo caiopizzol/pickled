@@ -52,9 +52,18 @@ matrix:
   target: [quick, codex]
 
 scenarios:
+  # Compare-surfaces dogfood. Same install question, run against three
+  # candidate public surfaces. Per proposals/compare-surfaces.md the report
+  # shows one verdict per surface so we can see which surface actually
+  # carries the install answer. Adds two agent runs per matrix target
+  # (3 surfaces - 1 baseline run) compared to the v0.10.0 scenario.
   - name: "Installation"
     prompt: "How do I install pickled?"
     requiredSources: [readme]
+    compareSurfaces:
+      - [readme]
+      - [cli_readme]
+      - [llms]
 
   - name: "Basic usage"
     prompt: "According to the CLI README, how do I run pickled to check my project?"

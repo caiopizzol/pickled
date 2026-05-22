@@ -13,7 +13,12 @@ import {
   resolveTarget,
   type TargetRunner,
 } from "./targets/index.js";
-import type { CheckReport, ScenarioResult, ToolInfo } from "./types.js";
+import type {
+  CheckReport,
+  ScenarioResult,
+  SurfaceResult,
+  ToolInfo,
+} from "./types.js";
 
 interface ExpandedScenario {
   scenario: Scenario;
@@ -97,10 +102,27 @@ export async function runCheck(
       results.push(result);
 
       const labelPadded = label ? label.padEnd(18) : "";
-      const status = getScenarioStatus(result);
-      onProgress?.(
-        `  ${labelPadded} ${status.icon} ${status.label} (${status.confidence}%)`,
-      );
+      if (result.surfaces) {
+        onProgress?.(`  ${labelPadded} (compare-surfaces mode)`);
+        for (const surface of result.surfaces) {
+          const status = getScenarioStatus(surface);
+          const surfaceLabel = `    [${surface.active.join(",")}]`.padEnd(22);
+          onProgress?.(
+            `${surfaceLabel} ${status.icon} ${status.label} (${status.confidence}%)`,
+          );
+        }
+      } else {
+        // Single-mode result: top-level fields are populated.
+        const status = getScenarioStatus({
+          answerable: result.answerable ?? "NO",
+          confidence: result.confidence ?? 0,
+          traps: result.traps ?? { fired: [], avoided: [] },
+          error: result.error,
+        });
+        onProgress?.(
+          `  ${labelPadded} ${status.icon} ${status.label} (${status.confidence}%)`,
+        );
+      }
     } catch (error) {
       const targetConfig =
         targetName === "default"
@@ -167,6 +189,76 @@ async function runScenario(
     ? options.targetFactory(targetName, targetConfig)
     : createTarget(targetName, targetConfig);
 
+  // Compare-surfaces mode: run the scenario once per declared surface, each
+  // with only that surface's sources visible. Top-level evaluation fields
+  // stay null per proposals/compare-surfaces.md Decision 3.
+  if (scenario.compareSurfaces && scenario.compareSurfaces.length > 0) {
+    const surfaces: SurfaceResult[] = [];
+    let metadata: ScenarioResult["target"];
+    for (const surface of scenario.compareSurfaces) {
+      const surfaceIds = new Set(surface);
+      const surfaceDocs = docs.filter((d) => surfaceIds.has(d.id));
+      // Intersection citation contract: required ∩ surface. Empty intersection
+      // softens to "any cited source in the active surface counts."
+      const requiredInSurface = scenario.requiredSources.filter((id) =>
+        surfaceIds.has(id),
+      );
+
+      const runResult = await target.run(scenario.prompt, {
+        tool,
+        cwd: tool.path,
+        context: contextConfig,
+        docs: surfaceDocs,
+        requiredSources: requiredInSurface,
+        onProgress: options.onProgress,
+      });
+
+      const citationScore = scoreCitations({
+        response: runResult.response,
+        requiredSources: requiredInSurface,
+        registeredIds: surface,
+      });
+
+      const trapDetails = scoreTraps({
+        response: runResult.response,
+        traps: scenario.traps ?? [],
+      });
+
+      const trapFired = trapDetails.fired.length > 0;
+      const answerable = trapFired ? "NO" : citationScore.answerable;
+      const confidence = trapFired ? 0 : citationScore.confidence;
+      const reason = trapFired
+        ? `Trap fired: ${trapDetails.fired.map((t) => `"${t.id}" (${t.reason})`).join("; ")}`
+        : citationScore.reason;
+
+      surfaces.push({
+        active: surface,
+        answerable,
+        confidence,
+        response: runResult.response,
+        reason,
+        citations: citationScore.citations,
+        traps: trapDetails,
+        allResponses: runResult.allResponses,
+      });
+
+      metadata = runResult.metadata ?? metadata;
+    }
+
+    return {
+      scenario,
+      answerable: null,
+      confidence: null,
+      response: null,
+      reason: null,
+      citations: null,
+      traps: null,
+      surfaces,
+      target: metadata,
+      context: { name: contextName },
+    };
+  }
+
   const result = await target.run(scenario.prompt, {
     tool,
     cwd: tool.path,
@@ -218,17 +310,37 @@ function buildReport(
   docs: ResolvedDocSource[],
   results: ScenarioResult[],
 ): CheckReport {
-  const total = results.length;
-  const answered = results.filter(
-    (r) => r.answerable === "YES" || r.answerable === "PARTIAL",
+  // Each "evaluation" is one data point in the score average. Compare-mode
+  // results contribute one evaluation per surface; single-mode results
+  // contribute one. See proposals/compare-surfaces.md Decision 3.
+  type Eval = {
+    answerable: "YES" | "PARTIAL" | "NO";
+    confidence: number;
+  };
+  const evals: Eval[] = [];
+  for (const r of results) {
+    if (r.surfaces) {
+      for (const s of r.surfaces) {
+        evals.push({ answerable: s.answerable, confidence: s.confidence });
+      }
+      continue;
+    }
+    if (r.answerable !== null && r.confidence !== null) {
+      evals.push({ answerable: r.answerable, confidence: r.confidence });
+    }
+  }
+
+  const total = evals.length;
+  const answered = evals.filter(
+    (e) => e.answerable === "YES" || e.answerable === "PARTIAL",
   ).length;
 
   const score =
     total > 0
       ? Math.round(
-          results.reduce((sum, r) => {
-            if (r.answerable === "YES") return sum + r.confidence;
-            if (r.answerable === "PARTIAL") return sum + r.confidence * 0.5;
+          evals.reduce((sum, e) => {
+            if (e.answerable === "YES") return sum + e.confidence;
+            if (e.answerable === "PARTIAL") return sum + e.confidence * 0.5;
             return sum;
           }, 0) / total,
         )

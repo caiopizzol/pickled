@@ -294,3 +294,237 @@ describe("runCheck (mocked target)", () => {
     });
   });
 });
+
+describe("runCheck compare-surfaces mode", () => {
+  // A surface-aware mock target: looks at which source ids were passed in
+  // options.docs and returns a response keyed off the active surface. Lets
+  // tests assert that per-surface dispatch actually changed what the target
+  // received.
+  function makeSurfaceAwareTarget(
+    responsesByActive: Record<string, string>,
+  ): TargetRunner {
+    return {
+      category: "cli",
+      provider: "claude-code",
+      name: "surface-aware-mock",
+      async run(_prompt: string, options: RunOptions): Promise<TargetResult> {
+        const key = options.docs
+          .map((d) => d.id)
+          .sort()
+          .join(",");
+        const response =
+          responsesByActive[key] ??
+          `(no response configured for surface "${key}")`;
+        return {
+          response,
+          allResponses: [{ type: "final", text: response }],
+          toolsUsed: [],
+          sources: [],
+          metadata: {
+            model: "mock",
+            category: "cli",
+            provider: "claude-code",
+            target: "default",
+          },
+        };
+      },
+    };
+  }
+
+  function withTempCompareProject<T>(
+    files: Record<string, string>,
+    fn: (toolPath: string) => Promise<T>,
+  ): Promise<T> {
+    const dir = mkdtempSync(join(tmpdir(), "pickled-check-cmp-"));
+    for (const [rel, content] of Object.entries(files)) {
+      writeFileSync(join(dir, rel), content);
+    }
+    return fn(dir).finally(() =>
+      rmSync(dir, { recursive: true, force: true }),
+    );
+  }
+
+  test("populates surfaces[] and sets top-level evaluation fields to null", async () => {
+    await withTempCompareProject(
+      { "README.md": "x", "llms.txt": "y" },
+      async (path) => {
+        const config: CheckConfig = {
+          tool: { name: "t", description: "d" },
+          docs: { sources: { readme: "./README.md", llms: "./llms.txt" } },
+          scenarios: [
+            {
+              name: "Install",
+              prompt: "how",
+              requiredSources: ["readme"],
+              compareSurfaces: [["readme"], ["llms"]],
+            },
+          ],
+        };
+        const report = await runCheck(
+          { name: "t", description: "d", path },
+          config,
+          {
+            targetFactory: () =>
+              makeSurfaceAwareTarget({
+                readme: "via npm\n\n## Sources\n- [readme]",
+                llms: "no info here",
+              }),
+          },
+        );
+        const scenario = report.scenarios[0]!;
+        expect(scenario.surfaces).toBeDefined();
+        expect(scenario.surfaces).toHaveLength(2);
+        expect(scenario.answerable).toBeNull();
+        expect(scenario.confidence).toBeNull();
+        expect(scenario.response).toBeNull();
+        expect(scenario.citations).toBeNull();
+        expect(scenario.traps).toBeNull();
+      },
+    );
+  });
+
+  test("each surface counts as one data point in the run-level score", async () => {
+    // 2 surfaces, one passes (100), one fails (0). Expect Overall ~= 50.
+    await withTempCompareProject(
+      { "README.md": "x", "llms.txt": "y" },
+      async (path) => {
+        const config: CheckConfig = {
+          tool: { name: "t", description: "d" },
+          docs: { sources: { readme: "./README.md", llms: "./llms.txt" } },
+          scenarios: [
+            {
+              name: "Install",
+              prompt: "how",
+              requiredSources: ["readme"],
+              compareSurfaces: [["readme"], ["llms"]],
+            },
+          ],
+        };
+        const report = await runCheck(
+          { name: "t", description: "d", path },
+          config,
+          {
+            targetFactory: () =>
+              makeSurfaceAwareTarget({
+                readme: "Answer\n\n## Sources\n- [readme]",
+                llms: "no citation provided",
+              }),
+          },
+        );
+        expect(report.summary.total).toBe(2);
+        expect(report.summary.answered).toBe(1);
+        expect(report.summary.unanswered).toBe(1);
+        expect(report.summary.score).toBe(50);
+      },
+    );
+  });
+
+  test("intersection citation contract: requiredSources outside active surface softens to anything-in-surface", async () => {
+    // requiredSources: [readme], surface [llms]. Intersection is empty.
+    // Surface should pass as long as the response cites llms.
+    await withTempCompareProject(
+      { "README.md": "x", "llms.txt": "y" },
+      async (path) => {
+        const config: CheckConfig = {
+          tool: { name: "t", description: "d" },
+          docs: { sources: { readme: "./README.md", llms: "./llms.txt" } },
+          scenarios: [
+            {
+              name: "Install",
+              prompt: "how",
+              requiredSources: ["readme"],
+              compareSurfaces: [["llms"]],
+            },
+          ],
+        };
+        const report = await runCheck(
+          { name: "t", description: "d", path },
+          config,
+          {
+            targetFactory: () =>
+              makeSurfaceAwareTarget({
+                llms: "Answer from llms.\n\n## Sources\n- [llms]",
+              }),
+          },
+        );
+        const surface = report.scenarios[0]!.surfaces![0]!;
+        expect(surface.answerable).toBe("YES");
+        expect(surface.citations.cited).toEqual(["llms"]);
+      },
+    );
+  });
+
+  test("trap fired in one surface does not affect another surface", async () => {
+    await withTempCompareProject(
+      { "README.md": "x", "stale.md": "y" },
+      async (path) => {
+        const config: CheckConfig = {
+          tool: { name: "t", description: "d" },
+          docs: { sources: { readme: "./README.md", stale: "./stale.md" } },
+          scenarios: [
+            {
+              name: "Install",
+              prompt: "how",
+              requiredSources: ["readme"],
+              compareSurfaces: [["readme"], ["stale"]],
+              traps: [
+                {
+                  id: "bad_phrase",
+                  match: "BAD_PHRASE",
+                  reason: "stale claim",
+                },
+              ],
+            },
+          ],
+        };
+        const report = await runCheck(
+          { name: "t", description: "d", path },
+          config,
+          {
+            targetFactory: () =>
+              makeSurfaceAwareTarget({
+                readme: "Clean answer.\n\n## Sources\n- [readme]",
+                stale: "BAD_PHRASE appears here.\n\n## Sources\n- [stale]",
+              }),
+          },
+        );
+        const surfaces = report.scenarios[0]!.surfaces!;
+        const readmeSurface = surfaces.find((s) =>
+          s.active.includes("readme"),
+        )!;
+        const staleSurface = surfaces.find((s) => s.active.includes("stale"))!;
+        expect(readmeSurface.answerable).toBe("YES");
+        expect(readmeSurface.traps.fired).toHaveLength(0);
+        expect(staleSurface.answerable).toBe("NO");
+        expect(staleSurface.traps.fired).toHaveLength(1);
+        expect(staleSurface.traps.fired[0]!.id).toBe("bad_phrase");
+      },
+    );
+  });
+
+  test("scenarios without compareSurfaces behave exactly as v0.10.0", async () => {
+    await withTempProject("# README content", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Install",
+            prompt: "how",
+            requiredSources: ["readme"],
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () =>
+            makeMockTarget("Answer\n\n## Sources\n- [readme]"),
+        },
+      );
+      expect(report.scenarios[0]!.surfaces).toBeUndefined();
+      expect(report.scenarios[0]!.answerable).toBe("YES");
+    });
+  });
+});

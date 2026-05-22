@@ -33,7 +33,13 @@ function getResultStatus(result: ScenarioResult): {
   status: string;
   color: ChalkFn;
 } {
-  const status = getScenarioStatus(result);
+  // Single-mode result: top-level evaluation fields are populated.
+  const status = getScenarioStatus({
+    answerable: result.answerable ?? "NO",
+    confidence: result.confidence ?? 0,
+    traps: result.traps ?? { fired: [], avoided: [] },
+    error: result.error,
+  });
   const color = toneToColor(status.tone);
   return {
     icon: color(status.icon),
@@ -70,41 +76,64 @@ function formatIds(ids: string[]): string {
   return ids.map((id) => `[${id}]`).join(", ");
 }
 
-function formatDetails(result: ScenarioResult, indent: string): string[] {
+interface DetailFields {
+  error?: string;
+  traps: { fired: { id: string; reason: string; matched: string }[] };
+  reason: string;
+  answerable: "YES" | "PARTIAL" | "NO";
+  citations: { cited: string[]; missing: string[]; unknown: string[] };
+}
+
+function formatDetailFields(fields: DetailFields, indent: string): string[] {
   const lines: string[] = [];
 
-  if (result.error) {
-    lines.push(chalk.dim(`${indent}error: ${result.error}`));
+  if (fields.error) {
+    lines.push(chalk.dim(`${indent}error: ${fields.error}`));
     return lines;
   }
 
-  if (result.traps.fired.length > 0) {
-    for (const hit of result.traps.fired) {
+  if (fields.traps.fired.length > 0) {
+    for (const hit of fields.traps.fired) {
       lines.push(chalk.red(`${indent}trap: ${hit.id}`));
       lines.push(chalk.dim(`${indent}reason: ${hit.reason}`));
       lines.push(chalk.dim(`${indent}match: "${hit.matched}"`));
     }
-  } else if (result.reason && result.answerable !== "YES") {
-    lines.push(chalk.dim(`${indent}reason: ${result.reason}`));
+  } else if (fields.reason && fields.answerable !== "YES") {
+    lines.push(chalk.dim(`${indent}reason: ${fields.reason}`));
   }
 
-  if (result.citations.cited.length > 0) {
+  if (fields.citations.cited.length > 0) {
     lines.push(
-      chalk.dim(`${indent}cited: ${formatIds(result.citations.cited)}`),
+      chalk.dim(`${indent}cited: ${formatIds(fields.citations.cited)}`),
     );
   }
-  if (result.citations.missing.length > 0) {
+  if (fields.citations.missing.length > 0) {
     lines.push(
-      chalk.dim(`${indent}missing: ${formatIds(result.citations.missing)}`),
+      chalk.dim(`${indent}missing: ${formatIds(fields.citations.missing)}`),
     );
   }
-  if (result.citations.unknown.length > 0) {
+  if (fields.citations.unknown.length > 0) {
     lines.push(
-      chalk.dim(`${indent}unknown: ${formatIds(result.citations.unknown)}`),
+      chalk.dim(`${indent}unknown: ${formatIds(fields.citations.unknown)}`),
     );
   }
 
   return lines;
+}
+
+function formatDetails(result: ScenarioResult, indent: string): string[] {
+  // Single-mode only. Compare-mode rendering happens in formatCheckReport.
+  if (!result.traps || !result.citations) return [];
+  return formatDetailFields(
+    {
+      error: result.error,
+      traps: result.traps,
+      reason: result.reason ?? "",
+      answerable: result.answerable ?? "NO",
+      citations: result.citations,
+    },
+    indent,
+  );
 }
 
 function formatResultLine(result: ScenarioResult): string {
@@ -114,16 +143,61 @@ function formatResultLine(result: ScenarioResult): string {
   return label ? `${label} ${color(statusText)}` : color(statusText);
 }
 
+/**
+ * Compare-mode block per proposals/compare-surfaces.md Decisions 2 and 5.
+ * One preamble line names the intersection citation contract; each surface
+ * gets its own status line plus indented details. No synthesized top-level
+ * aggregate.
+ */
+function formatCompareBlock(result: ScenarioResult, indent: string): string[] {
+  if (!result.surfaces) return [];
+  const lines: string[] = [];
+  lines.push(
+    `${indent}${chalk.dim("Citations scoped to active surface (compare mode)")}`,
+  );
+  for (const surface of result.surfaces) {
+    const status = getScenarioStatus(surface);
+    const color = toneToColor(status.tone);
+    const surfaceLabel = chalk.dim(`[${surface.active.join(",")}]`);
+    const statusLine = `${color(status.icon)} ${color(renderStatusLine(status))}`;
+    lines.push(`${indent}${surfaceLabel} ${statusLine}`);
+    lines.push(
+      ...formatDetailFields(
+        {
+          traps: surface.traps,
+          reason: surface.reason,
+          answerable: surface.answerable,
+          citations: surface.citations,
+        },
+        `${indent}  `,
+      ),
+    );
+  }
+  return lines;
+}
+
 function getSummaryGuidance(scenarios: ScenarioResult[]): string {
-  const trapCount = scenarios.reduce((sum, result) => {
-    return sum + result.traps.fired.length;
-  }, 0);
-  const missingCount = scenarios.reduce((sum, result) => {
-    return sum + result.citations.missing.length;
-  }, 0);
-  const unknownCount = scenarios.reduce((sum, result) => {
-    return sum + result.citations.unknown.length;
-  }, 0);
+  // Aggregate across all evaluations, including per-surface ones in compare
+  // mode. Each surface counts as its own data point for guidance purposes,
+  // mirroring the run-level score aggregation.
+  let trapCount = 0;
+  let missingCount = 0;
+  let unknownCount = 0;
+  for (const result of scenarios) {
+    if (result.surfaces) {
+      for (const s of result.surfaces) {
+        trapCount += s.traps.fired.length;
+        missingCount += s.citations.missing.length;
+        unknownCount += s.citations.unknown.length;
+      }
+      continue;
+    }
+    if (result.traps) trapCount += result.traps.fired.length;
+    if (result.citations) {
+      missingCount += result.citations.missing.length;
+      unknownCount += result.citations.unknown.length;
+    }
+  }
 
   if (trapCount > 0 && missingCount + unknownCount > 0) {
     return "Review fired traps and citation gaps.";
@@ -194,8 +268,12 @@ export function formatCheckReport(
       lines.push(`Scenario: ${scenarioName}`);
 
       for (const result of scenarioResults) {
-        lines.push(`  ${formatResultLine(result)}`);
-        lines.push(...formatDetails(result, "    "));
+        if (result.surfaces) {
+          lines.push(...formatCompareBlock(result, "    "));
+        } else {
+          lines.push(`  ${formatResultLine(result)}`);
+          lines.push(...formatDetails(result, "    "));
+        }
       }
 
       lines.push("");
@@ -203,8 +281,12 @@ export function formatCheckReport(
   } else {
     for (const result of results) {
       lines.push(`Scenario: ${result.scenario.name}`);
-      lines.push(`  ${formatResultLine(result)}`);
-      lines.push(...formatDetails(result, "  "));
+      if (result.surfaces) {
+        lines.push(...formatCompareBlock(result, "  "));
+      } else {
+        lines.push(`  ${formatResultLine(result)}`);
+        lines.push(...formatDetails(result, "  "));
+      }
       lines.push("");
     }
   }

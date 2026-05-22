@@ -15,14 +15,37 @@ export interface CitationDetails {
   unknown: string[];
 }
 
-export interface ScenarioResult {
-  scenario: Scenario;
+/**
+ * One per-surface evaluation produced by compare-surfaces mode. Carries the
+ * same shape as a single-mode ScenarioResult's evaluation fields, plus the
+ * source ids that were active for this run.
+ */
+export interface SurfaceResult {
+  active: string[];
   answerable: Answerable;
   confidence: number;
   response: string;
   reason: string;
   citations: CitationDetails;
   traps: TrapDetails;
+  allResponses?: ResponseEntry[];
+}
+
+export interface ScenarioResult {
+  scenario: Scenario;
+  /**
+   * Top-level evaluation fields. In compare mode (when `surfaces` is set per
+   * `scenario.compareSurfaces`), these are `null` and `surfaces[]` is the
+   * source of truth. Consumers must check for `surfaces` first.
+   */
+  answerable: Answerable | null;
+  confidence: number | null;
+  response: string | null;
+  reason: string | null;
+  citations: CitationDetails | null;
+  traps: TrapDetails | null;
+  /** Per-surface evaluations. Present iff scenario.compareSurfaces declared. */
+  surfaces?: SurfaceResult[];
   error?: string;
   target?: {
     target: string;
