@@ -2,9 +2,15 @@ name: Agent dogfood
 
 # Manual-only for now. Agent-target runs are stochastic and cost real LLM
 # tokens; we don't want every push to burn budget or block infra on a flaky
-# model day. Trigger from the Actions tab when you want a real signal.
+# model day. Trigger from the Actions tab when you want a real signal, and
+# pick which target to run against (quick / codex / anthropic_api).
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Which target from pickled.yml to run (e.g., quick, codex, anthropic_api)"
+        required: true
+        default: quick
 
 jobs:
   check:
@@ -26,14 +32,14 @@ jobs:
       # The check step is intentionally non-blocking. A low score is signal,
       # not infra failure. The receipt (pickled-report.json) is uploaded
       # regardless so a failing run still leaves an artifact to inspect.
-      - name: pickled check (--target quick)
+      - name: pickled check (--target ${{ inputs.target }})
         id: check
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
         run: |
           ./apps/cli/dist/index.js check . \
-            --target quick \
+            --target "${{ inputs.target }}" \
             --output pickled-report.json \
             --verbose
 
@@ -41,7 +47,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pickled-report
+          # Distinguish artifacts per target so successive runs (e.g.,
+          # quick then anthropic_api) do not overwrite each other.
+          name: pickled-report-${{ inputs.target }}
           path: pickled-report.json
           # error, not warn: a missing receipt means the run failed before
           # producing one (auth/config/runtime broke). A low-score receipt
