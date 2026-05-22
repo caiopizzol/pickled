@@ -195,6 +195,92 @@ scenarios:
     expect(ids).toEqual(["t1", "t2"]);
   });
 
+  test("skips URL sources in v1 (audit stays local)", async () => {
+    const dir = makeRepo({
+      "README.md": "this README contains docs.source: a banned phrase.",
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme: ./README.md
+    remote: https://example.com/docs.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [readme]
+    traps:
+      - id: old_schema
+        match: "docs.source:"
+        reason: "Removed singular schema"
+`,
+    });
+    const { matches } = await scanSourceTraps(dir);
+    // Only readme is scanned. The URL source is silently skipped (no fetch).
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.sourceId).toBe("readme");
+  });
+
+  test("returns empty when every source is a URL", async () => {
+    const dir = makeRepo({
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    remote: https://example.com/docs.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [remote]
+    traps:
+      - id: x
+        match: "anything"
+        reason: "r"
+`,
+    });
+    const { matches, findings } = await scanSourceTraps(dir);
+    expect(matches).toHaveLength(0);
+    expect(findings).toHaveLength(0);
+  });
+
+  test("treats same-id traps in different scenarios independently for severity", async () => {
+    const dir = makeRepo({
+      "README.md": "this README contains docs.source: in it.",
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: s1
+    prompt: p
+    requiredSources: [readme]
+    traps:
+      - id: dup
+        match: "docs.source:"
+        reason: "r warning"
+        auditSeverity: warning
+  - name: s2
+    prompt: p
+    requiredSources: [readme]
+    traps:
+      - id: dup
+        match: "docs.source:"
+        reason: "r error"
+        auditSeverity: error
+`,
+    });
+    const { matches } = await scanSourceTraps(dir);
+    expect(matches).toHaveLength(2);
+    const severities = matches.map((m) => m.severity).sort();
+    expect(severities).toEqual(["error", "warning"]);
+  });
+
   test("produces accurate line numbers for matches on different lines", async () => {
     const lines: string[] = [];
     for (let i = 1; i <= 50; i++) lines.push(`line ${i}`);

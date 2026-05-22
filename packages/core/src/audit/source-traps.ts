@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { loadConfig, type Trap } from "@pickled-dev/config";
+import {
+  type DocSourceEntry,
+  loadConfig,
+  type Trap,
+} from "@pickled-dev/config";
 import { scoreTraps } from "../scorers/traps.js";
 import { fetchAllSources } from "../sources.js";
 import type { AuditFinding, SourceTrapMatch } from "./schema.js";
@@ -16,6 +20,12 @@ import type { AuditFinding, SourceTrapMatch } from "./schema.js";
  *
  * Sources with `audit.traps: false` are excluded from the scan. Other audit
  * rules (broken refs, etc.) are not affected by this opt-out.
+ *
+ * URL sources are skipped in v1. The audit is expected to be local and
+ * deterministic; including URL sources would make every run network-dependent
+ * (latency, flake, rate limits). Vendors who want URL coverage today still
+ * get it via `pickled check`. A follow-up may add opt-in URL scanning with
+ * timeouts and caching.
  */
 export async function scanSourceTraps(
   targetRepo: string,
@@ -31,12 +41,25 @@ export async function scanSourceTraps(
     return { matches: [], findings: [] };
   }
 
+  const localSourcesMap: Record<string, string | DocSourceEntry> = {};
+  for (const [id, value] of Object.entries(sourcesMap)) {
+    const path = typeof value === "string" ? value : value.path;
+    if (path.startsWith("http://") || path.startsWith("https://")) continue;
+    localSourcesMap[id] = value;
+  }
+  if (Object.keys(localSourcesMap).length === 0) {
+    return { matches: [], findings: [] };
+  }
+
+  // Track severity per trap object, not per id. Same id appearing in two
+  // scenarios with different auditSeverity stays independent; an id-keyed
+  // map would let the second overwrite the first.
   const trapsList: Trap[] = [];
-  const severityByTrapId = new Map<string, "warning" | "error">();
+  const severityByTrap = new Map<Trap, "warning" | "error">();
   for (const scenario of config.scenarios) {
     for (const trap of scenario.traps ?? []) {
       trapsList.push(trap);
-      severityByTrapId.set(trap.id, trap.auditSeverity ?? "warning");
+      severityByTrap.set(trap, trap.auditSeverity ?? "warning");
     }
   }
 
@@ -44,7 +67,7 @@ export async function scanSourceTraps(
     return { matches: [], findings: [] };
   }
 
-  const sources = await fetchAllSources(sourcesMap, targetRepo);
+  const sources = await fetchAllSources(localSourcesMap, targetRepo);
 
   const matches: SourceTrapMatch[] = [];
   const findings: AuditFinding[] = [];
@@ -52,11 +75,17 @@ export async function scanSourceTraps(
   for (const source of sources) {
     if (source.auditTraps === false) continue;
 
-    const result = scoreTraps({ response: source.content, traps: trapsList });
-
-    for (const hit of result.fired) {
+    // scoreTraps returns hits in trap-list order with fired/avoided IDs only.
+    // Re-evaluate per trap so we can map back to the Trap object for severity.
+    for (const trap of trapsList) {
+      const { fired } = scoreTraps({
+        response: source.content,
+        traps: [trap],
+      });
+      const hit = fired[0];
+      if (!hit) continue;
       const line = computeLine(source.content, hit.index);
-      const severity = severityByTrapId.get(hit.id) ?? "warning";
+      const severity = severityByTrap.get(trap) ?? "warning";
       matches.push({
         sourceId: source.id,
         sourcePath: source.source,

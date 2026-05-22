@@ -102,14 +102,17 @@ scenarios:
     requiredSources: [llms]
 
   # Tests that the agent surfaces the supported/stubbed split for CLI targets.
-  # The trap fires only on affirmative "supports gemini-cli/amazon-q" forms;
-  # correct answers describe both as stubbed and pass the negation lookbehind.
+  # The trap fires on affirmative forms in either direction: verb-first
+  # ("pickled supports gemini-cli", "works with amazon-q") and subject-first
+  # ("gemini-cli is supported", "amazon-q is fully available"). Negation
+  # variants ("not", "no", "never", "don't", "doesn't", "didn't", with or
+  # without apostrophe) are rejected by lookbehind/lookahead.
   - name: "Supported targets"
     prompt: "Which CLI targets does pickled support today, and which are stubbed (not yet implemented)?"
     requiredSources: [llms]
     traps:
       - id: claims_unsupported_target_works
-        pattern: '(?<!\bnot\s|\bno\s|\bnever\s|\bdon.?t\s|\bdoesn.?t\s|\bdid.?n.?t\s)(?:supports?|works?\s+with|is\s+available\s+for|is\s+compatible\s+with)\s+(?:gemini-cli|amazon-q)\b'
+        pattern: '(?:(?<!\bnot\s|\bno\s|\bnever\s|\bdon.?t\s|\bdoesn.?t\s|\bdid.?n.?t\s)(?:supports?|works?\s+with|is\s+available\s+for|is\s+compatible\s+with)\s+(?:gemini-cli|amazon-q)\b)|(?:\b(?:gemini-cli|amazon-q)\s+(?:is|are)\s+(?!(?:not|never|n.?t)\b)(?:\w+\s+){0,2}?(?:supported|available|implemented|compatible|integrated|usable|working|functional)\b)'
         flags: i
         reason: "gemini-cli and amazon-q are stubbed in code; do not claim them as currently supported targets. See llms.txt and AGENTS.md."
 

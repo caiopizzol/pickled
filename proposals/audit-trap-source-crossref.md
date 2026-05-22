@@ -1,8 +1,7 @@
 # Proposal: audit trap-source cross-reference
 
-**Status:** draft, no implementation
+**Status:** decided and implemented. Schema + audit rule shipped across commits `ada9444` (schema migration), `917fa13` (audit cross-reference + tests), and `d925560` (pickled's own opt-out config + llms.txt rephrase). This file now reads as a design record. The dogfood prediction table below reflects the final HEAD state, not the pre-implementation state.
 **Motivated by:** verified dogfood findings. Pickled's own `AGENTS.md`, `brand.md`, and `llms.txt` contain declared trap phrases (`freshness score`, `AI-powered`) as intentional ban declarations. Today nothing catches the inverse case: a registered public surface (README, CLI README, llms.txt body) carrying the same phrases as actual drift. The check-time trap engine only sees agent responses, not source text.
-**Decision needed:** scoped source opt-out shape, audit severity field, remediation message template, first-run dogfood expectation.
 
 ## Problem
 
@@ -80,9 +79,9 @@ Only entries in `docs.sources` are scanned. `apps/web/public/llms.txt` is the sy
 | `brand` (`./brand.md`) | 1 | `ai_powered` (lines 89, 418, 439 - "We Never Say" examples) | mark `audit.traps: false` |
 | `agents` (`./AGENTS.md`) | 3 | `ai_powered` (line 61) + both freshness traps fire on line 58 | mark `audit.traps: false` |
 | `llms` (`./llms.txt`) | 2 | both freshness traps fire on line 66 | see Open Question 1 |
-| `stale` (`./dogfood/stale-source.md`) | 4 | `ai_powered` + both freshness traps + `provider_as_target`. `json_human_label` does **not** match this fixture today (see Open Question 4). | mark `audit.traps: false` |
+| `stale` (`./dogfood/stale-source.md`) | 5 | all five non-`old_schema` traps fire after the `json_human_label` regex fix landed in `f9f20c5` | mark `audit.traps: false` |
 
-Total: 10 findings across 7 registered sources. Real drift: zero. The release note leads with this: *"The new audit found zero stale claims in pickled's public docs."*
+Total: 11 findings across 7 registered sources before opt-outs. Real drift: zero. After opt-outs land in `d925560` (brand, agents, stale) and the rephrase of `llms.txt:66`, the audit reports zero findings. The release note leads with this: *"The new audit found zero stale claims in pickled's public docs."*
 
 ## Schema migration (the real engineering cost)
 
@@ -106,6 +105,7 @@ The matcher reuse is the cheap part. The schema migration is what makes "half a 
 
 ## Explicitly out of scope
 
+- **URL source scanning.** `scanSourceTraps` skips sources whose path starts with `http://` or `https://` in v1. Audit is expected to be local and deterministic; including URLs would make every run network-dependent (latency, flake, rate limits). Vendors who want URL coverage still get it via `pickled check`. A follow-up may add opt-in URL scanning with timeouts and caching once the local rule has shipped.
 - **Auto-suggested traps from git diff.** Different mechanism (rename detection on code changes feeding suggested trap entries). Revisit after this lands and produces data on how often manual trap maintenance is the bottleneck.
 - **Compare-surfaces audit** (e.g., does README and llms.txt agree on the same fact). Needs a per-source `covers:` schema decision first. Sketched but deferred.
 - **Remote link verification.** Network calls, rate limits, CI flake.
@@ -125,5 +125,6 @@ The matcher reuse is the cheap part. The schema migration is what makes "half a 
 1. **Do not casually opt out `llms.txt`.** It is one of pickled's main public agent surfaces; full opt-out weakens the dogfood story (the public file pickled most wants agents to read becomes the file pickled does not check). Recommended path: rephrase the ban prose at `llms.txt:66` so it cites the rule without quoting the phrase verbatim (e.g., "do not reintroduce the legacy scoring branding"). If that prose contortion is unacceptable, defer to trap-id-level suppression (Open Question 2) rather than full opt-out.
 2. **Should `audit.traps` accept a trap-id list instead of a boolean** (e.g., `audit.traps: [old_freshness_brand, freshness_score]` to skip these but scan the rest)? Probably yes eventually. Ship the boolean shape first; adding granularity later is non-breaking and lets Open Question 1 be resolved without prose contortion.
 3. **Trap config redundancy.** `old_freshness_brand` and `freshness_score` declare identical regex patterns. They live in different scenarios (Config format vs Trap pipeline smoke) but the audit cross-reference treats them as two findings. Consolidate into one trap and reference it from both scenarios? Cleaner config; minor follow-up.
-4. **`json_human_label` trap currently misses the stale fixture.** The pattern requires `includes?\s+["'\b]?Well grounded` (the word "includes" immediately followed by an optional quote, then "Well grounded"). The fixture (`dogfood/stale-source.md:17`) has "JSON output includes human-friendly labels like \"Well grounded\"...", which the trap misses. Two issues compound: the `\b` inside the character class is the backspace character, not a word boundary (dev debt), and the regex is rigid - it does not match common drift variants like "JSON output has Well grounded" or "the JSON includes a Well grounded field". Loosen the pattern before relying on it as the dogfood demonstration of trap firing. This is config polish, not blocking on the audit extension.
-5. **Line numbers in findings.** The current `TrapHit` interface (`packages/core/src/scorers/traps.ts:3-8`) carries `matched` and `snippet` but no byte offset or line index. Rendering `./README.md:L42` in audit findings requires either (a) extending `TrapHit` with an `index: number` byte offset and deriving the line number from it, or (b) duplicating a search in the audit code to find the line. Path (a) is cleaner and is the recommended choice when implementing; flag here so it is not a surprise during implementation.
+4. **`json_human_label` trap missed the stale fixture** (resolved in `f9f20c5`). Original pattern required "includes" to be immediately followed by optional quote then "Well grounded". Fixture had "includes human-friendly labels like 'Well grounded'", with intervening prose. Loosened the regex to allow up to 80 non-period chars between "includes" and "Well grounded", and dropped the `\b`-inside-char-class footgun (it was the backspace character, not a word boundary). Verified: matches the fixture, zero false positives across the seven registered sources.
+5. **Line numbers in findings** (resolved in `917fa13`). Took path (a): extended `TrapHit` with `index: number` (byte offset of the match start). Audit computes 1-indexed line numbers from offset.
+6. **Trap-ID severity collision** (resolved in pre-push cleanup). Two scenarios could declare different traps with the same `id` but different `auditSeverity`; an id-keyed severity map would let the second silently overwrite the first. The scanner now tracks severity per `Trap` object identity, not per id. Same-id traps are matched and reported independently.
