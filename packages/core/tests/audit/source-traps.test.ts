@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanSourceTraps } from "../../src/audit/source-traps.js";
@@ -369,6 +369,42 @@ scenarios:
     });
     const { matches } = await scanSourceTraps(dir);
     expect(matches).toHaveLength(0);
+  });
+
+  test("codebase source: trap matches report per-file paths", async () => {
+    const dir = makeRepo({
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    code:
+      type: codebase
+      path: "src/**/*.ts"
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [code]
+    traps:
+      - id: bad_call
+        match: "BANNED_CALL"
+        reason: "Stale API"
+`,
+    });
+    // Two files; only one contains the trap pattern
+    const srcDir = join(dir, "src");
+    mkdirSync(srcDir, { recursive: true });
+    writeFileSync(join(srcDir, "clean.ts"), "export const x = 1;\n");
+    writeFileSync(
+      join(srcDir, "stale.ts"),
+      "line one\nline two has BANNED_CALL here\nline three\n",
+    );
+    const { matches } = await scanSourceTraps(dir);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.sourcePath).toBe("src/stale.ts");
+    expect(matches[0]?.line).toBe(2);
+    expect(matches[0]?.trapId).toBe("bad_call");
   });
 
   test("list form preserves scanning on sources that do NOT use list-form suppression", async () => {

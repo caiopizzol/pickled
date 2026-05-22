@@ -32,6 +32,15 @@ docs:
       audit:
         traps: false
 
+    # Codebase source: pickled's own core scorer + audit modules. Demonstrates
+    # the codebase loader; lets us test whether agents understand pickled's
+    # actual implementation by reading the TypeScript source directly rather
+    # than from prose docs.
+    core_src:
+      type: codebase
+      path: "packages/core/src/scorers/**/*.ts"
+      exclude: ["**/*.test.ts"]
+
 targets:
   quick:
     category: cli
@@ -118,6 +127,13 @@ scenarios:
   - name: "Comment policy"
     prompt: "When should an AIDEV-NOTE comment be added to pickled's source code?"
     requiredSources: [comment_policy]
+
+  # Codebase source dogfood. Tests whether the agent can answer an
+  # implementation-detail question by reading the TypeScript source files
+  # directly (no prose docs needed).
+  - name: "Trap matcher implementation"
+    prompt: "How does pickled's trap matcher distinguish a literal-substring match from a regex pattern match? Answer based on the source code in the scorers module."
+    requiredSources: [core_src]
 
   - name: "Pickled contracts"
     prompt: "What is pickled and what contracts should agents preserve when describing it?"

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve as resolvePath } from "node:path";
 import {
   type DocSourceEntry,
   loadConfig,
@@ -80,38 +80,66 @@ export async function scanSourceTraps(
     // List form: skip only the listed trap ids, scan everything else.
     const skipSet = Array.isArray(skip) ? new Set(skip) : null;
 
-    // scoreTraps returns hits in trap-list order with fired/avoided IDs only.
-    // Re-evaluate per trap so we can map back to the Trap object for severity.
-    for (const trap of trapsList) {
-      if (skipSet?.has(trap.id)) continue;
-      const { fired } = scoreTraps({
-        response: source.content,
-        traps: [trap],
-      });
-      const hit = fired[0];
-      if (!hit) continue;
-      const line = computeLine(source.content, hit.index);
-      const severity = severityByTrap.get(trap) ?? "warning";
-      matches.push({
-        sourceId: source.id,
-        sourcePath: source.source,
-        trapId: hit.id,
-        trapReason: hit.reason,
-        matched: hit.matched,
-        snippet: hit.snippet,
-        line,
-        severity,
-      });
-      findings.push({
-        severity,
-        category: "trap-source-match",
-        file: source.source,
-        message: `source [${source.id}] matches trap '${hit.id}' ("${hit.matched}"). ${hit.reason} Fix: remove the stale claim from the source, retire the trap if no longer relevant, set audit.traps: ['${hit.id}'] on the source to suppress just this trap (other traps still apply), or set audit.traps: false if the source is deliberately stale or test-only.`,
-      });
+    // Codebase sources scan each matched file independently so findings
+    // carry per-file paths and lines. Other source types scan the
+    // single content blob.
+    const segments =
+      source.type === "codebase" && source.matchedFiles
+        ? await readSegments(source.matchedFiles, targetRepo, source.source)
+        : [{ path: source.source, content: source.content }];
+
+    for (const seg of segments) {
+      for (const trap of trapsList) {
+        if (skipSet?.has(trap.id)) continue;
+        const { fired } = scoreTraps({
+          response: seg.content,
+          traps: [trap],
+        });
+        const hit = fired[0];
+        if (!hit) continue;
+        const line = computeLine(seg.content, hit.index);
+        const severity = severityByTrap.get(trap) ?? "warning";
+        matches.push({
+          sourceId: source.id,
+          sourcePath: seg.path,
+          trapId: hit.id,
+          trapReason: hit.reason,
+          matched: hit.matched,
+          snippet: hit.snippet,
+          line,
+          severity,
+        });
+        findings.push({
+          severity,
+          category: "trap-source-match",
+          file: seg.path,
+          message: `source [${source.id}] matches trap '${hit.id}' ("${hit.matched}") in ${seg.path}. ${hit.reason} Fix: remove the stale claim from the source, retire the trap if no longer relevant, set audit.traps: ['${hit.id}'] on the source to suppress just this trap (other traps still apply), or set audit.traps: false if the source is deliberately stale or test-only.`,
+        });
+      }
     }
   }
 
   return { matches, findings };
+}
+
+async function readSegments(
+  matchedFiles: string[],
+  targetRepo: string,
+  sourceLabel: string,
+): Promise<Array<{ path: string; content: string }>> {
+  const segments: Array<{ path: string; content: string }> = [];
+  for (const rel of matchedFiles) {
+    try {
+      const content = await Bun.file(resolvePath(targetRepo, rel)).text();
+      segments.push({ path: rel, content });
+    } catch {
+      // File disappeared between fetchAllSources and the audit scan;
+      // skip silently rather than fail the whole audit run. The source
+      // label is preserved in case the operator wants to investigate.
+      void sourceLabel;
+    }
+  }
+  return segments;
 }
 
 function computeLine(content: string, byteOffset: number): number {

@@ -110,6 +110,32 @@ Review fired traps before trusting this surface.
 | `Ungrounded` | No valid citations, or every citation is unknown. |
 | `Error` | The target failed before Pickled could score the response. |
 
+## Sources
+
+Sources are what scenarios cite. Three loader types:
+
+- **`file` (default)** - a path to one local file. The string form (`readme: ./README.md`) implicitly uses this.
+- **`url`** - an `http(s)://` path. Fetched on every `pickled check` run.
+- **`codebase`** - a glob expanded into one logical source whose content is every matched file concatenated with file-separator headers. Useful when you want the agent to answer from a directory of JSDoc, per-package agent docs, or examples.
+
+Codebase sources are always explicit:
+
+```yaml
+docs:
+  sources:
+    readme: ./README.md                       # file (string form)
+    docs_site: https://example.com/docs.md    # url (string form, http prefix)
+    jsdoc:
+      type: codebase
+      path: "packages/**/src/**/*.ts"
+      exclude: ["**/*.test.ts"]               # codebase-only
+      maxBytes: 524288                        # optional; default 256 KB soft cap
+```
+
+Codebase loader safety defaults: skips directories (`onlyFiles`), does not follow symlinks, rejects glob patterns containing `..` segments. Files are read in lexicographic order so the same config produces the same content for reproducible LLM calls. The audit's trap cross-reference scans each matched file individually so findings carry per-file `source_id:path:line`.
+
+URL sources are NOT scanned by the audit's trap cross-reference in v1; they are fetched only during `pickled check`.
+
 ## Targets
 
 Pickled ships three target shapes today. Each target is a distinct surface that exercises the agent differently; results are comparable but not identical.

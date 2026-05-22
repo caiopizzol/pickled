@@ -254,8 +254,72 @@ function validateDocSourceEntry(id: string, value: unknown): void {
       }
     }
   }
+  if (entry.type !== undefined) {
+    if (
+      entry.type !== "file" &&
+      entry.type !== "url" &&
+      entry.type !== "codebase"
+    ) {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"].type must be "file", "url", or "codebase"`,
+      );
+    }
+  }
+  if (entry.type === "codebase") {
+    if (
+      typeof entry.path === "string" &&
+      entry.path.split("/").includes("..")
+    ) {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"].path must not contain ".." segments. Codebase loader stays within the project root.`,
+      );
+    }
+    if (entry.exclude !== undefined) {
+      if (!Array.isArray(entry.exclude)) {
+        throw new Error(
+          `pickled.yml: docs.sources["${id}"].exclude must be an array of glob patterns`,
+        );
+      }
+      for (let i = 0; i < entry.exclude.length; i++) {
+        if (typeof entry.exclude[i] !== "string") {
+          throw new Error(
+            `pickled.yml: docs.sources["${id}"].exclude[${i}] must be a string glob pattern`,
+          );
+        }
+      }
+    }
+    if (entry.maxBytes !== undefined) {
+      if (
+        typeof entry.maxBytes !== "number" ||
+        !Number.isFinite(entry.maxBytes) ||
+        entry.maxBytes <= 0
+      ) {
+        throw new Error(
+          `pickled.yml: docs.sources["${id}"].maxBytes must be a positive number of bytes`,
+        );
+      }
+    }
+  } else {
+    // exclude and maxBytes are codebase-only
+    if (entry.exclude !== undefined) {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"].exclude only applies to type: codebase sources`,
+      );
+    }
+    if (entry.maxBytes !== undefined) {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"].maxBytes only applies to type: codebase sources`,
+      );
+    }
+  }
   for (const key of Object.keys(entry)) {
-    if (key !== "path" && key !== "audit") {
+    if (
+      key !== "path" &&
+      key !== "audit" &&
+      key !== "type" &&
+      key !== "exclude" &&
+      key !== "maxBytes"
+    ) {
       throw new Error(
         `pickled.yml: docs.sources["${id}"] has unknown field "${key}"`,
       );

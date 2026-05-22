@@ -442,6 +442,167 @@ scenarios:
     });
   });
 
+  test("accepts type: codebase with path glob and exclude list", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    code:
+      type: codebase
+      path: "src/**/*.ts"
+      exclude: ["**/*.test.ts"]
+      maxBytes: 65536
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [code]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      const src = cfg.docs?.sources.code;
+      if (typeof src === "string") throw new Error("expected object form");
+      expect(src?.type).toBe("codebase");
+      expect(src?.exclude).toEqual(["**/*.test.ts"]);
+      expect(src?.maxBytes).toBe(65536);
+    });
+  });
+
+  test("rejects type: codebase path containing '..' segments (no root escape)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      type: codebase
+      path: "../outside/**/*.ts"
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /path must not contain ".."/,
+      );
+    });
+  });
+
+  test("rejects exclude on non-codebase source", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      path: ./README.md
+      exclude: ["foo"]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /exclude only applies to type: codebase sources/,
+      );
+    });
+  });
+
+  test("rejects maxBytes on non-codebase source", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      path: ./README.md
+      maxBytes: 100
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /maxBytes only applies to type: codebase sources/,
+      );
+    });
+  });
+
+  test("rejects unknown type value", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      type: bogus
+      path: ./README.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /type must be "file", "url", or "codebase"/,
+      );
+    });
+  });
+
+  test("rejects exclude entries that are not strings", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    code:
+      type: codebase
+      path: "src/**/*.ts"
+      exclude: [42]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [code]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /exclude\[0\] must be a string glob pattern/,
+      );
+    });
+  });
+
+  test("rejects non-positive maxBytes", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    code:
+      type: codebase
+      path: "src/**/*.ts"
+      maxBytes: 0
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [code]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /maxBytes must be a positive number/,
+      );
+    });
+  });
+
   test("allows cross-scenario duplicate trap id when NO source uses list form (backward compat)", async () => {
     const yaml = `
 tool:

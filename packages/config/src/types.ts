@@ -166,12 +166,32 @@ export interface DocSource {
 }
 
 /**
- * Object form of a docs.sources entry. Allows per-source audit metadata
- * alongside the file path or URL. The plain string form (just the path)
- * stays valid and is the default for most sources.
+ * Object form of a docs.sources entry. Allows per-source audit metadata,
+ * source-type selection, and codebase glob options alongside the file path
+ * or URL. The plain string form (just the path) stays valid and is the
+ * default for single-file or single-URL sources.
  */
 export interface DocSourceEntry {
   path: string;
+  /**
+   * Source loader to use. Default (when omitted) is to auto-detect file vs
+   * URL based on the path prefix. Set explicitly to `codebase` to treat
+   * `path` as a glob and load every matching file as one logical source.
+   * See `proposals/codebase-source-loader.md`.
+   */
+  type?: "file" | "url" | "codebase";
+  /**
+   * Exclude patterns for `type: codebase` sources. Each entry is a glob
+   * applied AFTER the include glob in `path`. Ignored for other types.
+   */
+  exclude?: string[];
+  /**
+   * Maximum total concatenated content size in bytes for `type: codebase`
+   * sources. Defaults to 262144 (256 KB). Loading emits a warning to
+   * `onProgress` if exceeded; hard cap at 4194304 (4 MB) always throws.
+   * Ignored for other types.
+   */
+  maxBytes?: number;
   audit?: {
     /**
      * Controls the audit's trap cross-reference rule for this source:
@@ -227,6 +247,12 @@ export interface ResolvedDocSource extends DocSource {
    * NormalizedDocSource.auditTraps for the three-way union semantics.
    */
   auditTraps: boolean | string[];
+  /**
+   * For `type: codebase` sources, the relative paths of every file the
+   * glob expanded to. Used by the audit's trap cross-reference rule for
+   * per-file finding attribution. Absent for file and URL sources.
+   */
+  matchedFiles?: string[];
 }
 
 // Matrix configuration for running scenarios across multiple targets/contexts
