@@ -112,6 +112,25 @@ export function renderAuditMarkdown(scan: ScanResult): string {
     }
   }
 
+  lines.push("## Registered-source trap matches\n");
+  lines.push(
+    "Catches stale claims in `docs.sources` against declared traps. Sources with `audit.traps: false` are excluded.\n",
+  );
+  if (scan.sourceTrapMatches.length === 0) {
+    lines.push("None.\n");
+  } else {
+    for (const m of scan.sourceTrapMatches) {
+      lines.push(
+        `- **${m.sourceId}** (\`${m.sourcePath}:L${m.line}\`) — trap \`${m.trapId}\` matched \`${m.matched}\` (${m.severity})`,
+      );
+      lines.push(`  - reason: ${m.trapReason}`);
+      lines.push(
+        `  - fix: remove the stale claim, retire the trap, or set \`audit.traps: false\` on the source`,
+      );
+    }
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -217,6 +236,23 @@ export function renderAuditTerminal(scan: ScanResult): string {
       for (const s of f.sections.slice(0, 10)) {
         lines.push(`    ${s.header.padEnd(40)} ${s.lines} lines`);
       }
+    }
+  }
+  lines.push("");
+
+  lines.push("Registered-source trap matches");
+  if (scan.sourceTrapMatches.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const m of scan.sourceTrapMatches) {
+      const sev = m.severity === "error" ? "error" : "warning";
+      lines.push(
+        `  [${sev}] ${m.sourceId} (${m.sourcePath}:L${m.line}): trap ${m.trapId} matched "${m.matched}"`,
+      );
+      lines.push(`    reason: ${m.trapReason}`);
+      lines.push(
+        `    fix: remove the stale claim, retire the trap, or set audit.traps: false on the source`,
+      );
     }
   }
 

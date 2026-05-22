@@ -100,9 +100,28 @@ export interface AuditFinding {
     | "unresolved-command"
     | "over-budget"
     | "divergent-pair"
-    | "duplicate-pair";
+    | "duplicate-pair"
+    | "trap-source-match";
   file: string;
   message: string;
+}
+
+/**
+ * A registered docs.sources entry contains content matching a declared trap.
+ * Produced by the audit's trap cross-reference rule. Findings carry remediation
+ * guidance in addition to the structural fields so the renderers can show
+ * actionable output without re-deriving advice.
+ */
+export interface SourceTrapMatch {
+  sourceId: string;
+  sourcePath: string;
+  trapId: string;
+  trapReason: string;
+  matched: string;
+  snippet: string;
+  /** 1-indexed line number computed from byte offset in the source content. */
+  line: number;
+  severity: "error" | "warning";
 }
 
 export interface ScanResult {
@@ -110,4 +129,5 @@ export interface ScanResult {
   files: DocFile[];
   pairs: DocPair[];
   findings: AuditFinding[];
+  sourceTrapMatches: SourceTrapMatch[];
 }

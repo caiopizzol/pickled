@@ -5,6 +5,9 @@ export interface TrapHit {
   reason: string;
   matched: string;
   snippet: string;
+  /** Byte offset of the match start in the scanned text. Used by the
+   *  audit cross-reference rule to compute line numbers for findings. */
+  index: number;
 }
 
 export interface TrapDetails {
@@ -39,6 +42,7 @@ function matchTrap(response: string, trap: Trap): TrapHit | null {
       reason: trap.reason,
       matched: trap.match,
       snippet: buildSnippet(response, idx, trap.match.length),
+      index: idx,
     };
   }
   if (trap.pattern !== undefined) {
@@ -50,6 +54,7 @@ function matchTrap(response: string, trap: Trap): TrapHit | null {
       reason: trap.reason,
       matched: m[0],
       snippet: buildSnippet(response, m.index, m[0].length),
+      index: m.index,
     };
   }
   return null;

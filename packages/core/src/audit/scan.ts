@@ -15,6 +15,7 @@ import {
   resolveAuditConfig,
   type ScanResult,
 } from "./schema.js";
+import { scanSourceTraps } from "./source-traps.js";
 
 const DOC_PATTERNS = [
   "AGENTS.md",
@@ -78,7 +79,16 @@ export async function scan(
   const pairs = classifyPairs(files, config);
   const findings = collectFindings(files, pairs, config);
 
-  return { config, files, pairs, findings };
+  const { matches: sourceTrapMatches, findings: trapFindings } =
+    await scanSourceTraps(target);
+
+  return {
+    config,
+    files,
+    pairs,
+    findings: [...findings, ...trapFindings],
+    sourceTrapMatches,
+  };
 }
 
 async function inspectFile(
