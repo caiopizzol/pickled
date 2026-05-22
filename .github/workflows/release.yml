@@ -31,6 +31,15 @@ jobs:
 
       - run: bun install
 
+      # Gate: do not publish from a red commit. CI runs the same checks in
+      # parallel but its conclusion does not currently feed back into this
+      # workflow (workflows run independently). Running verify here keeps
+      # the publish pipeline self-contained: if lint, tests, build, or
+      # the audit fail, the release does not happen. See the v0.12.0
+      # post-mortem in commit history.
+      - name: Verify before release
+        run: bun run verify
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
