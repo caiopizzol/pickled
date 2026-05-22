@@ -114,7 +114,7 @@ export function renderAuditMarkdown(scan: ScanResult): string {
 
   lines.push("## Registered-source trap matches\n");
   lines.push(
-    "Catches stale claims in `docs.sources` against declared traps. Sources with `audit.traps: false` are excluded.\n",
+    "Catches stale claims in `docs.sources` against declared traps. Per-source suppression: `audit.traps: false` skips all traps; `audit.traps: [<trap_id>, ...]` skips only the listed traps and keeps scanning the rest.\n",
   );
   if (scan.sourceTrapMatches.length === 0) {
     lines.push("None.\n");
@@ -125,7 +125,7 @@ export function renderAuditMarkdown(scan: ScanResult): string {
       );
       lines.push(`  - reason: ${m.trapReason}`);
       lines.push(
-        `  - fix: remove the stale claim, retire the trap, or set \`audit.traps: false\` on the source`,
+        `  - fix: remove the stale claim, retire the trap, set \`audit.traps: ['${m.trapId}']\` to suppress just this one (other traps still apply), or set \`audit.traps: false\` if the source is deliberately stale`,
       );
     }
     lines.push("");
@@ -251,7 +251,7 @@ export function renderAuditTerminal(scan: ScanResult): string {
       );
       lines.push(`    reason: ${m.trapReason}`);
       lines.push(
-        `    fix: remove the stale claim, retire the trap, or set audit.traps: false on the source`,
+        `    fix: remove the stale claim, retire the trap, set audit.traps: ['${m.trapId}'] to suppress just this trap (others still apply), or set audit.traps: false if deliberately stale`,
       );
     }
   }

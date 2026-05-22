@@ -12,7 +12,7 @@ function isUrl(source: string): boolean {
 async function fetchUrl(
   id: string,
   url: string,
-  auditTraps: boolean,
+  auditTraps: boolean | string[],
 ): Promise<ResolvedDocSource> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -35,7 +35,7 @@ async function readFile(
   id: string,
   filePath: string,
   cwd: string,
-  auditTraps: boolean,
+  auditTraps: boolean | string[],
 ): Promise<ResolvedDocSource> {
   const resolved = path.isAbsolute(filePath)
     ? filePath

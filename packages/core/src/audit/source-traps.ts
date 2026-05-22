@@ -18,8 +18,10 @@ import type { AuditFinding, SourceTrapMatch } from "./schema.js";
  * (e.g., a project that uses audit without check). It propagates loadConfig
  * errors otherwise so a malformed pickled.yml is loud, not silently skipped.
  *
- * Sources with `audit.traps: false` are excluded from the scan. Other audit
- * rules (broken refs, etc.) are not affected by this opt-out.
+ * Sources with `audit.traps: false` are excluded from the scan entirely.
+ * Sources with `audit.traps: [<trap_id>, ...]` are scanned for every trap
+ * except those listed (list-form suppression). Other audit rules (broken
+ * refs, etc.) are not affected by either form.
  *
  * URL sources are skipped in v1. The audit is expected to be local and
  * deterministic; including URL sources would make every run network-dependent
@@ -104,7 +106,7 @@ export async function scanSourceTraps(
         severity,
         category: "trap-source-match",
         file: source.source,
-        message: `source [${source.id}] matches trap '${hit.id}' ("${hit.matched}"). ${hit.reason} Fix: remove the stale claim from the source, retire the trap if no longer relevant, or set audit.traps: false on the source if it is deliberately stale or test-only.`,
+        message: `source [${source.id}] matches trap '${hit.id}' ("${hit.matched}"). ${hit.reason} Fix: remove the stale claim from the source, retire the trap if no longer relevant, set audit.traps: ['${hit.id}'] on the source to suppress just this trap (other traps still apply), or set audit.traps: false if the source is deliberately stale or test-only.`,
       });
     }
   }
