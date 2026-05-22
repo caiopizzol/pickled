@@ -142,7 +142,29 @@ stale:
 
 ## Dogfood follow-up on pickled itself
 
-Once shipped, pickled's own `pickled.yml` can move from total opt-out to fine-grained suppression on `brand.md` and `AGENTS.md`. The trap-id uniqueness migration also gives us a clean reason to consolidate `old_freshness_brand` and `freshness_score` into one trap referenced from both scenarios (the redundancy flagged in `proposals/audit-trap-source-crossref.md` Open Question 3). That cleanup happens in the same PR that ships the feature, so the migration cost is paid exactly once.
+Once shipped, pickled's own `pickled.yml` can move from total opt-out to fine-grained suppression on `brand.md` and `AGENTS.md`. The intentional banned-phrase examples in those files fire specific traps; the new list form lets us name exactly those without giving up scan coverage for everything else.
+
+Concretely:
+
+```yaml
+brand:
+  path: ./brand.md
+  audit:
+    traps: [ai_powered]                            # brand.md cites only AI-powered
+agents:
+  path: ./AGENTS.md
+  audit:
+    traps: [ai_powered, freshness_score, old_freshness_brand]
+                                                   # AGENTS.md cites both phrases; the freshness phrase
+                                                   # fires both freshness traps (identical regex), so both
+                                                   # ids must be listed
+stale:
+  path: ./dogfood/stale-source.md
+  audit:
+    traps: false                                   # every trap fires by design; keep total opt-out
+```
+
+The `old_freshness_brand` / `freshness_score` redundancy (different ids, identical regex) is **not** consolidated by this proposal. The two traps stay as they are, and the suppression list names both explicitly. Consolidating into a reusable cross-scenario trap is a different feature (it would require a "global/reusable trap" schema concept that this proposal explicitly defers; see Open Question in `proposals/audit-trap-source-crossref.md` Open Question 3). Keeping the redundancy lets us ship this proposal without expanding scope.
 
 ## Implementation order
 
@@ -150,16 +172,16 @@ Once shipped, pickled's own `pickled.yml` can move from total opt-out to fine-gr
 2. Loader: validate array form, validate listed ids reference declared traps, reject empty arrays, enforce global trap-id uniqueness when any list form is present.
 3. Audit: extend `scanSourceTraps` with the skip-set filter (Decision 3).
 4. Tests: backward compat with boolean forms, list form skips only listed traps, listed unknown id rejected with helpful message, global uniqueness rejection only triggers when list form is used, empty array rejected.
-5. Dogfood: consolidate `old_freshness_brand` and `freshness_score` in pickled.yml; switch `brand.md` and `AGENTS.md` from `false` to targeted lists; keep `stale` on `false`. Run `pickled audit` and confirm zero findings.
+5. Dogfood: switch `brand.md` and `AGENTS.md` from `false` to targeted lists naming the specific traps each source legitimately cites; keep `stale` on `false`. Do not consolidate `old_freshness_brand` / `freshness_score`; the suppression list names both ids explicitly. Run `pickled audit` and confirm zero findings.
 6. Release: lead the notes with the dogfood data.
 
 ## Explicitly out of scope
 
-- **Per-trap regex consolidation primitives.** This proposal makes the `old_freshness_brand`/`freshness_score` redundancy fixable but does not introduce a "global/reusable trap" schema concept. That would be a larger schema change; revisit if vendors start asking for it.
+- **Per-trap regex consolidation primitives.** The `old_freshness_brand`/`freshness_score` redundancy (different ids, same regex) stays. This proposal does not introduce a "global/reusable trap" schema concept that would let one trap definition be referenced from multiple scenarios. That would be a larger schema change; revisit if vendors start asking for it.
 - **Trap-id renaming across scenarios.** Not introduced; the global uniqueness rule means authors handle renaming with normal config edits.
 - **Compound suppression** (e.g., "skip all traps matching regex X"). Listed ids are the only suppression vocabulary. If the trap registry grows large enough to want regex-suppression, that is a follow-up proposal with its own design.
 
 ## Open questions
 
-1. **Should the global uniqueness rule apply unconditionally, not just when list form is used?** Strictest answer is yes: cross-scenario duplicate ids are a config smell regardless. The current proposal scopes the new rule narrowly to avoid breaking existing configs that have cross-scenario duplicates (pickled's own `freshness score` traps). If we go unconditional, pickled needs the consolidation in the same PR. Lean toward narrow now, unconditional later.
+1. **Should the global uniqueness rule apply unconditionally, not just when list form is used?** Strictest answer is yes: cross-scenario duplicate ids are a config smell regardless. The proposal scopes the rule narrowly to keep backward compatibility - existing configs that never use list-form suppression keep their current per-scenario uniqueness behavior. Verified that pickled's own config already has zero duplicate ids across scenarios (`old_schema`, `old_freshness_brand`, `ai_powered`, `freshness_score`, `provider_as_target`, `json_human_label`, `claims_unsupported_target_works` are all distinct), so unconditional would not break us today. Lean toward narrow for the first ship; revisit when we have a vendor case that wants the strictness.
 2. **Should `audit.traps: [...]` accept a wildcard like `"*"`?** Probably not. `true` and `false` already cover the all/nothing endpoints. Wildcards introduce parsing ambiguity for any vendor whose trap id happens to be `*`.
