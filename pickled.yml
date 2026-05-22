@@ -106,7 +106,13 @@ scenarios:
         pattern: '--target\s+claude-code'
         reason: "Wrong --target example: claude-code is the provider, target names are matrix.target keys."
       - id: json_human_label
-        pattern: 'JSON\s+(output\s+)?includes?\s+["''\b]?Well grounded'
+        # Catches affirmative claims that the JSON output includes the human
+        # label "Well grounded" (the stale-fixture form is "JSON output
+        # includes human-friendly labels like \"Well grounded\""). Stays
+        # sentence-scoped via [^.\n]{0,80}? so it does not span paragraphs
+        # and does not fire on the correct contract ("JSON output is raw;
+        # Well grounded lives in renderers").
+        pattern: 'JSON\s+(?:output\s+)?includes?[^.\n]{0,80}?\bWell grounded\b'
         flags: i
         reason: "JSON output is raw; human labels live only in renderers."
 
