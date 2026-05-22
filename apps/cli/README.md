@@ -110,6 +110,40 @@ Review fired traps before trusting this surface.
 | `Ungrounded` | No valid citations, or every citation is unknown. |
 | `Error` | The target failed before Pickled could score the response. |
 
+## Targets
+
+Pickled ships three target shapes today. Each target is a distinct surface that exercises the agent differently; results are comparable but not identical.
+
+### CLI targets
+
+- `claude-code` (Claude Agent SDK) - runs the model with tools and workspace context. Requires the Claude Code CLI install.
+- `codex-cli` (Codex CLI binary) - spawns the codex binary, pipes the prompt, parses the response.
+
+### API target
+
+- `anthropic` - calls the Anthropic Messages API directly via `@anthropic-ai/sdk`. No tools, no workspace, no agent orchestration. Useful when you want a controlled baseline that isolates "did the model understand the registered sources" from "did the agent's tools fix it for the model."
+
+API targets require:
+
+- `ANTHROPIC_API_KEY` in the environment
+- An explicit `model` field on the target config (no silent defaults; reproducibility depends on pinning)
+
+Example config:
+
+```yaml
+targets:
+  anthropic_haiku:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    temperature: 0
+    maxTokens: 4096
+```
+
+API targets accept only `model`, `temperature`, `maxTokens`, and `threshold`. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on an API target so silent no-ops cannot create false confidence.
+
+**Cost note:** API targets meter by input + output tokens, not by CLI session. Budget accordingly when running matrices with many sources or large scenario sets.
+
 ## CI
 
 ```yaml

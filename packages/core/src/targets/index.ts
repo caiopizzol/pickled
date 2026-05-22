@@ -1,5 +1,6 @@
 import type { Context, Target } from "@pickled-dev/config";
 import { DEFAULT_TARGET } from "@pickled-dev/config";
+import { AnthropicApiTarget } from "./api/anthropic.js";
 import { ClaudeCodeTarget } from "./cli/claude-code.js";
 import { CodexCliTarget } from "./cli/codex.js";
 import type { ResolvedContext, TargetRunner } from "./types.js";
@@ -22,7 +23,7 @@ export function createTarget(name: string, config?: Target): TargetRunner {
     case "cli":
       return createCliTarget(name, target);
     case "api":
-      throw new Error(`API targets not yet implemented. Coming soon!`);
+      return createApiTarget(name, target);
     case "ide":
       throw new Error(`IDE targets not yet implemented. Coming soon!`);
     default:
@@ -47,6 +48,22 @@ function createCliTarget(name: string, config: Target): TargetRunner {
       throw new Error(`Amazon Q target not yet implemented. Coming soon!`);
     default:
       throw new Error(`Unknown CLI provider: ${config.provider}`);
+  }
+}
+
+/**
+ * Create an API target runner
+ */
+function createApiTarget(name: string, config: Target): TargetRunner {
+  switch (config.provider) {
+    case "anthropic":
+      return new AnthropicApiTarget(name, config);
+    case "openai":
+      throw new Error(`OpenAI API target not yet implemented. Coming soon!`);
+    case "google":
+      throw new Error(`Google API target not yet implemented. Coming soon!`);
+    default:
+      throw new Error(`Unknown API provider: ${config.provider}`);
   }
 }
 

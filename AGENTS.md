@@ -44,8 +44,11 @@ A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**` or `package
 
 - `claude-code` (Claude Agent SDK)
 - `codex-cli` (Codex CLI binary)
+- `anthropic` (Anthropic API, direct SDK)
 
-Stubbed and not yet implemented: `gemini-cli`, `amazon-q`. Do not claim they work; do not list them in user-facing present tense.
+API targets call the model directly via `@anthropic-ai/sdk`. No tools, no workspace, no Agent SDK orchestration. Comparable to CLI targets but not identical. Require `ANTHROPIC_API_KEY` and an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets.
+
+Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, OpenAI and Google API targets. Do not claim they work; do not list them in user-facing present tense.
 
 ## Two audiences
 

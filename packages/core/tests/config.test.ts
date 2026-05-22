@@ -605,6 +605,110 @@ scenarios:
     });
   });
 
+  test("rejects API target without explicit model", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+targets:
+  api_no_model:
+    category: api
+    provider: anthropic
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /api\/anthropic\) requires an explicit 'model' field/,
+      );
+    });
+  });
+
+  test("rejects API target with CLI-only fields", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+targets:
+  api_cli_field:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    maxTurns: 5
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /sets 'maxTurns', which only applies to CLI/,
+      );
+    });
+  });
+
+  test("rejects API target with mcpServers (CLI-only)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+targets:
+  api_mcp:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    mcpServers:
+      foo: {}
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(/sets 'mcpServers'/);
+    });
+  });
+
+  test("accepts API target with valid fields only", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+targets:
+  anth:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    temperature: 0
+    maxTokens: 2048
+    threshold: 70
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.targets?.anth?.model).toBe("claude-haiku-4-5");
+      expect(cfg.targets?.anth?.temperature).toBe(0);
+      expect(cfg.targets?.anth?.maxTokens).toBe(2048);
+    });
+  });
+
   test("rejects target.systemPrompt to prevent citation-prompt bypass", async () => {
     const yaml = `
 tool:

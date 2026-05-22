@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that runs scenarios against real agent targets (Claude Code, Codex CLI), requires every answer to cite a registered source, and matches declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+Pickled is an open-source CLI that runs scenarios against real agent targets (Claude Code, Codex CLI, Anthropic API), requires every answer to cite a registered source, and matches declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
 
 ## Install
 
@@ -52,8 +52,9 @@ Pickled does not magically introspect your product. You declare what counts as t
 
 - `claude-code` - Claude Agent SDK
 - `codex-cli` - Codex CLI binary
+- `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. No tools, no workspace; comparable to CLI targets but not identical.
 
-Stubbed and not yet implemented: `gemini-cli`, `amazon-q`. Do not list these as supported in present tense.
+Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, OpenAI and Google API targets. Do not list these as supported in present tense.
 
 ## JSON contract
 

@@ -54,6 +54,34 @@ function validate(config: CheckConfig): void {
           );
         }
       }
+      if (target.category === "api") {
+        if (!target.model) {
+          throw new Error(
+            `pickled.yml: target "${name}" (api/${target.provider}) requires an explicit 'model' field. Pickled does not substitute a default; reproducible evals depend on pinning the model.`,
+          );
+        }
+        const cliOnlyFields: Array<keyof Target> = [
+          "allowedTools",
+          "disallowedTools",
+          "mcpServers",
+          "permissionMode",
+          "maxTurns",
+          "maxThinkingTokens",
+          "maxBudgetUsd",
+        ];
+        for (const field of cliOnlyFields) {
+          if (target[field] !== undefined) {
+            throw new Error(
+              `pickled.yml: target "${name}" (api/${target.provider}) sets '${field}', which only applies to CLI/Agent SDK targets. Remove the field; API targets accept only model/temperature/maxTokens/threshold.`,
+            );
+          }
+        }
+        if (target.workspaceContext !== undefined) {
+          throw new Error(
+            `pickled.yml: target "${name}" (api/${target.provider}) sets 'workspaceContext', which only applies to IDE targets. Remove the field.`,
+          );
+        }
+      }
     }
   }
 
