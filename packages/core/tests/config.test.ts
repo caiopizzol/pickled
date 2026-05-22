@@ -112,7 +112,7 @@ scenarios: []
     });
   });
 
-  test("rejects non-string docs.sources values", async () => {
+  test("rejects object docs.sources values without 'path'", async () => {
     const yaml = `
 tool:
   name: t
@@ -128,7 +128,7 @@ scenarios:
 `;
     await withTempConfig(yaml, async (dir) => {
       await expect(loadConfig(dir)).rejects.toThrow(
-        /docs.sources\["bad"\] must be a non-empty string/,
+        /docs.sources\["bad"\] object form requires a non-empty 'path' field/,
       );
     });
   });
@@ -148,7 +148,204 @@ scenarios:
 `;
     await withTempConfig(yaml, async (dir) => {
       await expect(loadConfig(dir)).rejects.toThrow(
-        /must be a non-empty string/,
+        /docs.sources\["empty"\] string form must be a non-empty file path or URL/,
+      );
+    });
+  });
+
+  test("accepts object form with path only", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme:
+      path: ./README.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [readme]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.docs?.sources.readme).toEqual({ path: "./README.md" });
+    });
+  });
+
+  test("accepts object form with audit.traps: false", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    stale:
+      path: ./stale.md
+      audit:
+        traps: false
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [stale]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      const stale = cfg.docs?.sources.stale;
+      expect(stale).toBeDefined();
+      if (typeof stale === "string") {
+        throw new Error("expected object form");
+      }
+      expect(stale?.audit?.traps).toBe(false);
+    });
+  });
+
+  test("accepts mixed string and object source forms", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    plain: ./plain.md
+    objectFormDefault:
+      path: ./object.md
+    objectFormOptOut:
+      path: ./optout.md
+      audit:
+        traps: false
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [plain, objectFormDefault, objectFormOptOut]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(typeof cfg.docs?.sources.plain).toBe("string");
+      expect(typeof cfg.docs?.sources.objectFormDefault).toBe("object");
+      expect(typeof cfg.docs?.sources.objectFormOptOut).toBe("object");
+    });
+  });
+
+  test("rejects unknown field on object source form", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      path: ./bad.md
+      unknownField: true
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /docs.sources\["bad"\] has unknown field "unknownField"/,
+      );
+    });
+  });
+
+  test("rejects unknown field on source audit object", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      path: ./bad.md
+      audit:
+        traps: false
+        bogus: true
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /docs.sources\["bad"\].audit has unknown field "bogus"/,
+      );
+    });
+  });
+
+  test("rejects non-boolean audit.traps", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    bad:
+      path: ./bad.md
+      audit:
+        traps: "false"
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [bad]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /docs.sources\["bad"\].audit.traps must be a boolean/,
+      );
+    });
+  });
+
+  test("accepts Trap.auditSeverity = warning or error", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [a]
+    traps:
+      - id: t1
+        match: "foo"
+        reason: "r1"
+        auditSeverity: warning
+      - id: t2
+        match: "bar"
+        reason: "r2"
+        auditSeverity: error
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios[0]?.traps?.[0]?.auditSeverity).toBe("warning");
+      expect(cfg.scenarios[0]?.traps?.[1]?.auditSeverity).toBe("error");
+    });
+  });
+
+  test("rejects invalid Trap.auditSeverity", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [a]
+    traps:
+      - id: t1
+        match: "foo"
+        reason: "r1"
+        auditSeverity: critical
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /auditSeverity must be "warning" or "error"/,
       );
     });
   });

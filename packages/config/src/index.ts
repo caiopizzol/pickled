@@ -10,17 +10,20 @@ export {
 export { loadConfig } from "./loader.js";
 // Overrides
 export { overrideTarget } from "./override.js";
+export { normalizeDocSource } from "./types.js";
 export type {
   ApiProvider,
   CheckConfig,
   CliProvider,
   Context,
   DocSource,
+  DocSourceEntry,
   DocSourceType,
   DocsConfig,
   IdeProvider,
   MatrixConfig,
   McpServerConfig,
+  NormalizedDocSource,
   ResolvedDocSource,
   Scenario,
   Target,

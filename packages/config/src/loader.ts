@@ -31,11 +31,7 @@ function validate(config: CheckConfig): void {
 
   if (config.docs?.sources) {
     for (const [id, value] of Object.entries(config.docs.sources)) {
-      if (typeof value !== "string" || value.length === 0) {
-        throw new Error(
-          `pickled.yml: docs.sources["${id}"] must be a non-empty string (file path or URL)`,
-        );
-      }
+      validateDocSourceEntry(id, value);
     }
   }
 
@@ -82,6 +78,55 @@ function validate(config: CheckConfig): void {
   }
 }
 
+function validateDocSourceEntry(id: string, value: unknown): void {
+  if (typeof value === "string") {
+    if (value.length === 0) {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"] string form must be a non-empty file path or URL`,
+      );
+    }
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    throw new Error(
+      `pickled.yml: docs.sources["${id}"] must be a string (path/URL) or an object with a 'path' field`,
+    );
+  }
+  const entry = value as Record<string, unknown>;
+  if (typeof entry.path !== "string" || entry.path.length === 0) {
+    throw new Error(
+      `pickled.yml: docs.sources["${id}"] object form requires a non-empty 'path' field`,
+    );
+  }
+  if (entry.audit !== undefined) {
+    if (typeof entry.audit !== "object" || entry.audit === null) {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"].audit must be an object`,
+      );
+    }
+    const audit = entry.audit as Record<string, unknown>;
+    if (audit.traps !== undefined && typeof audit.traps !== "boolean") {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"].audit.traps must be a boolean`,
+      );
+    }
+    for (const key of Object.keys(audit)) {
+      if (key !== "traps") {
+        throw new Error(
+          `pickled.yml: docs.sources["${id}"].audit has unknown field "${key}"`,
+        );
+      }
+    }
+  }
+  for (const key of Object.keys(entry)) {
+    if (key !== "path" && key !== "audit") {
+      throw new Error(
+        `pickled.yml: docs.sources["${id}"] has unknown field "${key}"`,
+      );
+    }
+  }
+}
+
 const FORBIDDEN_FLAGS = new Set(["g", "y"]);
 const ALLOWED_FLAGS = new Set(["i", "m", "s", "u", "v"]);
 
@@ -108,6 +153,15 @@ function validateTraps(scenarioName: string, traps: Trap[] | undefined): void {
     if (!trap.reason || typeof trap.reason !== "string") {
       throw new Error(
         `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" requires non-empty 'reason'`,
+      );
+    }
+    if (
+      trap.auditSeverity !== undefined &&
+      trap.auditSeverity !== "warning" &&
+      trap.auditSeverity !== "error"
+    ) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" auditSeverity must be "warning" or "error"`,
       );
     }
     const hasMatch = typeof trap.match === "string";

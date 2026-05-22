@@ -1,11 +1,19 @@
 import path from "node:path";
-import type { ResolvedDocSource } from "@pickled-dev/config";
+import {
+  type DocSourceEntry,
+  normalizeDocSource,
+  type ResolvedDocSource,
+} from "@pickled-dev/config";
 
 function isUrl(source: string): boolean {
   return source.startsWith("http://") || source.startsWith("https://");
 }
 
-async function fetchUrl(id: string, url: string): Promise<ResolvedDocSource> {
+async function fetchUrl(
+  id: string,
+  url: string,
+  auditTraps: boolean,
+): Promise<ResolvedDocSource> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -19,6 +27,7 @@ async function fetchUrl(id: string, url: string): Promise<ResolvedDocSource> {
     content,
     name: new URL(url).hostname + new URL(url).pathname,
     type: "url",
+    auditTraps,
   };
 }
 
@@ -26,6 +35,7 @@ async function readFile(
   id: string,
   filePath: string,
   cwd: string,
+  auditTraps: boolean,
 ): Promise<ResolvedDocSource> {
   const resolved = path.isAbsolute(filePath)
     ? filePath
@@ -41,20 +51,22 @@ async function readFile(
     content,
     name: path.basename(resolved),
     type: "file",
+    auditTraps,
   };
 }
 
 export async function fetchSource(
   id: string,
-  source: string,
+  source: string | DocSourceEntry,
   cwd: string,
 ): Promise<ResolvedDocSource> {
-  if (isUrl(source)) return fetchUrl(id, source);
-  return readFile(id, source, cwd);
+  const { path: srcPath, auditTraps } = normalizeDocSource(source);
+  if (isUrl(srcPath)) return fetchUrl(id, srcPath, auditTraps);
+  return readFile(id, srcPath, cwd, auditTraps);
 }
 
 export async function fetchAllSources(
-  sources: Record<string, string>,
+  sources: Record<string, string | DocSourceEntry>,
   cwd: string,
 ): Promise<ResolvedDocSource[]> {
   const entries = Object.entries(sources);

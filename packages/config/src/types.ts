@@ -119,6 +119,13 @@ export interface Trap {
   match?: string;
   pattern?: string;
   flags?: string;
+  /**
+   * Severity when this trap matches a registered source via audit
+   * cross-reference. Defaults to "warning". Check-time semantics are
+   * unchanged: trap firing in an agent response always forces NO with
+   * confidence 0, regardless of this field.
+   */
+  auditSeverity?: "warning" | "error";
 }
 
 // Scenario - a test case
@@ -149,15 +156,54 @@ export interface DocSource {
   type: DocSourceType;
 }
 
-export interface DocsConfig {
-  /** Named sources, keyed by ID, value is file path or URL. */
-  sources: Record<string, string>;
+/**
+ * Object form of a docs.sources entry. Allows per-source audit metadata
+ * alongside the file path or URL. The plain string form (just the path)
+ * stays valid and is the default for most sources.
+ */
+export interface DocSourceEntry {
+  path: string;
+  audit?: {
+    /**
+     * If false, the audit's trap cross-reference rule skips this source.
+     * Other audit rules (broken refs, etc.) still apply. Use for stale
+     * fixtures and policy docs that intentionally contain banned phrases.
+     * Defaults to true.
+     */
+    traps?: boolean;
+  };
 }
 
-/** A loaded source with its registry ID and original location. */
+export interface DocsConfig {
+  /**
+   * Named sources, keyed by ID. Value is either a file path / URL (string
+   * form) or a `DocSourceEntry` object with optional audit metadata.
+   */
+  sources: Record<string, string | DocSourceEntry>;
+}
+
+/** Canonical normalized form of a docs.sources entry. */
+export interface NormalizedDocSource {
+  path: string;
+  auditTraps: boolean;
+}
+
+/** Normalize a string or object docs.sources entry to the canonical form. */
+export function normalizeDocSource(
+  value: string | DocSourceEntry,
+): NormalizedDocSource {
+  if (typeof value === "string") {
+    return { path: value, auditTraps: true };
+  }
+  return { path: value.path, auditTraps: value.audit?.traps ?? true };
+}
+
+/** A loaded source with its registry ID, original location, and audit metadata. */
 export interface ResolvedDocSource extends DocSource {
   id: string;
   source: string;
+  /** Whether the audit's trap cross-reference rule should scan this source. */
+  auditTraps: boolean;
 }
 
 // Matrix configuration for running scenarios across multiple targets/contexts
