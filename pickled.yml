@@ -87,6 +87,18 @@ scenarios:
     prompt: "What is pickled and what contracts should agents preserve when describing it?"
     requiredSources: [llms]
 
+  # Tests that the agent surfaces the supported/stubbed split for CLI targets.
+  # The trap fires only on affirmative "supports gemini-cli/amazon-q" forms;
+  # correct answers describe both as stubbed and pass the negation lookbehind.
+  - name: "Supported targets"
+    prompt: "Which CLI targets does pickled support today, and which are stubbed (not yet implemented)?"
+    requiredSources: [llms]
+    traps:
+      - id: claims_unsupported_target_works
+        pattern: '(?<!\bnot\s|\bno\s|\bnever\s|\bdon.?t\s|\bdoesn.?t\s|\bdid.?n.?t\s)(?:supports?|works?\s+with|is\s+available\s+for|is\s+compatible\s+with)\s+(?:gemini-cli|amazon-q)\b'
+        flags: i
+        reason: "gemini-cli and amazon-q are stubbed in code; do not claim them as currently supported targets. See llms.txt and AGENTS.md."
+
   # Trap-pipeline smoke. Reads a deliberately stale fixture and parrots it
   # back, which should trip every declared trap and force NO with confidence
   # zero. If this scenario ever scores YES, the trap matcher regressed.
