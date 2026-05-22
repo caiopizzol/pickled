@@ -12,19 +12,20 @@ The codebase loader closes that gap by accepting a glob pattern and treating the
 
 ## Proposal
 
-A new `docs.sources` entry type, declared via either the existing object form with `type: codebase`, or a glob-shaped string that is auto-detected:
+A new `docs.sources` entry type, declared via the object form with explicit `type: codebase`:
 
 ```yaml
 docs:
   sources:
-    # Object form, recommended for clarity.
     core_jsdoc:
       type: codebase
       path: "packages/core/src/**/*.ts"
-    # Auto-detected from glob characters in a string-form value
-    # (presence of * or ? characters anywhere in the string).
-    agent_docs: "**/CLAUDE.md"
+    agent_docs:
+      type: codebase
+      path: "**/CLAUDE.md"
 ```
+
+Codebase sources are always explicit. String-form `docs.sources` entries stay as "load exactly this file or URL"; they do not silently become globs based on character content. The slight verbosity of the object form is the price of an unambiguous registered-source contract.
 
 When a source has `type: codebase`, the loader:
 
@@ -36,11 +37,11 @@ Sub-source attribution (one source id per matched file) is **explicitly deferred
 
 ## Decision 1: schema shape
 
-**Recommendation:** object form with `type: codebase`. String-form globs auto-detected by character presence (`*` or `?`).
+**Recommendation:** object form with `type: codebase`. Explicit always. String-form `docs.sources` entries are never auto-detected as codebase sources.
 
-The object form is unambiguous. The auto-detect string form is convenience for the common case of `agent_docs: "**/CLAUDE.md"`. The detection rule is "if the string contains `*` or `?` anywhere, treat as a codebase glob." Path strings with literal `*` characters in filenames are vanishingly rare; vendors who need that escape hatch can use the explicit object form with `type: file`.
+A previous draft proposed auto-detecting glob characters (`*` or `?`) in string-form values, on the theory that `agent_docs: "**/CLAUDE.md"` is convenient. Rejected: auto-detection weakens the "string means load exactly this file or URL" half of the existing registered-source contract. It creates odd edge cases (literal `*` in filenames) and forces every future source-type addition to think about whether some character pattern should silently change the loader's behavior. The explicit object form is one extra line and removes the ambiguity entirely.
 
-Alternative considered and rejected: separate top-level fields like `docs.codebase:` parallel to `docs.sources:`. Rejected because it splits the registry and breaks the "every source has an id" invariant the existing citation contract depends on.
+Alternative also considered and rejected: separate top-level fields like `docs.codebase:` parallel to `docs.sources:`. Rejected because it splits the registry and breaks the "every source has an id" invariant the existing citation contract depends on.
 
 ## Decision 2: citation semantics
 
@@ -75,9 +76,15 @@ Why caps: the LLM API call cost scales with input tokens. A directory glob expan
 
 Behavior at the soft cap: the loader emits a warning to `onProgress` (so progress output flags it) but still loads. At the hard cap: throw.
 
-## Decision 5: glob behavior and excludes
+## Decision 5: glob behavior, excludes, symlinks, and root containment
 
-**Recommendation:** Bun's `Glob` semantics. Matches are relative to the project root (the directory containing `pickled.yml`). Excludes via a per-source `exclude` list.
+**Recommendation:** Bun's `Glob` from the project root (the directory containing `pickled.yml`), with the following safety defaults:
+
+- `onlyFiles: true` - skip directories in matches.
+- `followSymlinks: false` - do not traverse symlinks. The audit's `scan.ts:53` uses the same default for the same reason: surprising symlink traversal pulls in content the vendor did not register.
+- Glob patterns containing `..` segments are rejected by the loader. The codebase loader does not escape the project root.
+
+Excludes via a per-source `exclude` list:
 
 ```yaml
 docs:
@@ -88,7 +95,9 @@ docs:
       exclude: ["**/*.test.ts", "**/*.spec.ts"]
 ```
 
-The loader runs the include glob, then filters out anything matching any exclude pattern. No magic `.gitignore` integration; users who want that can add the patterns explicitly. Out of scope to make .gitignore opt-in.
+The loader runs the include glob, then filters out anything matching any exclude pattern. No magic `.gitignore` integration; vendors who want that add the patterns explicitly. Out of scope to make `.gitignore` opt-in.
+
+Conservative defaults are deliberate. Vendors who legitimately need symlink traversal (e.g., monorepos with `node_modules`-style hoisted layouts) can revisit in v2 with an explicit opt-in like `followSymlinks: true` per source. v1 keeps loading boring.
 
 ## Decision 6: file ordering
 
@@ -124,7 +133,9 @@ scenarios:
 ```yaml
 docs:
   sources:
-    agent_docs: "**/CLAUDE.md"
+    agent_docs:
+      type: codebase
+      path: "**/CLAUDE.md"
 
 scenarios:
   - name: "Per-package agent guidance"
@@ -171,18 +182,17 @@ scenarios:
 
 ## Implementation order
 
-1. Schema: add `type: codebase`, `exclude?: string[]`, `maxBytes?: number` to `DocSourceEntry`. Update loader validation.
-2. Auto-detection: when a string-form value contains `*` or `?`, treat as codebase glob with the string as `path`.
-3. Loader: new branch in `fetchSource` for `type: codebase`. Walks the glob via Bun's `Glob`, reads each file, sorts deterministically, concatenates with file-separator headers, returns one `ResolvedDocSource` with `matchedFiles` populated.
-4. Size enforcement: soft cap with warning, hard cap throws. Both configurable.
-5. Audit interaction: extend `scanSourceTraps` to scan each matched file when the source has `matchedFiles`. Findings carry the per-file relative path in `sourcePath`.
-6. Tests: glob expansion, file ordering determinism, soft and hard cap, exclude patterns, audit per-file findings, citation against parent id, compare-surfaces interop, auto-detected string form, malformed glob rejection.
-7. Dogfood: add one codebase source to pickled.yml (likely `core_src: "packages/core/src/**/*.ts"`) and one scenario that exercises it.
-8. Docs: extend `apps/cli/README.md` Targets section and root `README.md` with the codebase shape.
+1. Schema: add `type: codebase`, `exclude?: string[]`, `maxBytes?: number` to `DocSourceEntry`. Update loader validation: require `path` for codebase, reject `..` segments in the pattern.
+2. Loader: new branch in `fetchSource` for `type: codebase`. Walks the glob via Bun's `Glob` with `onlyFiles: true` and `followSymlinks: false`, reads each file, sorts deterministically by relative path, concatenates with file-separator headers, returns one `ResolvedDocSource` with `matchedFiles` populated.
+3. Size enforcement: soft cap with warning to `onProgress`, hard cap throws. Both configurable via `maxBytes`.
+4. Audit interaction: extend `scanSourceTraps` to scan each matched file when the source has `matchedFiles`. Findings carry the per-file relative path in `sourcePath`.
+5. Tests: glob expansion, file ordering determinism, soft and hard cap, exclude patterns, audit per-file findings, citation against parent id, compare-surfaces interop, malformed glob rejection (including `..` rejection), symlink-not-followed.
+6. Dogfood: add one codebase source to `pickled.yml` (likely `core_src: { type: codebase, path: "packages/core/src/**/*.ts" }`) and one scenario that exercises it.
+7. Docs: extend `apps/cli/README.md` Targets section and root `README.md` with the codebase shape and the explicit-type requirement.
 
 ## Open questions
 
 1. **Sub-source attribution.** v1 punts on per-file citation. The v2 question: do we generate ids like `core_jsdoc:packages/core/src/check.ts`, or invent a separate citation grammar? Wait for evidence from v1 use before designing.
 2. **Should `matchedFiles` be the audit's scoping unit even when `audit.traps: ['<id>']` is set?** Yes, but the suppression list is still source-level (all matched files share the same suppression). Per-file suppression inside a codebase source is its own design.
 3. **What is the file-separator format in concatenated content?** Sketched as a header line like `// === packages/core/src/check.ts ===`. Pick during implementation; tests will pin the exact format.
-4. **Symlinks inside the glob.** v1 follows them. If that causes loops or unexpected content, revisit with `followSymlinks: false`. Bun's Glob defaults to following.
+4. ~~**Symlinks inside the glob.**~~ Resolved in Decision 5: v1 does NOT follow symlinks. Default is `followSymlinks: false`, mirroring the audit's `scan.ts:53` pattern. Vendors who need traversal can opt in via a per-source field in v2.
