@@ -76,26 +76,41 @@ Verbose but explicit. Best for scenarios with strong per-surface contracts.
 
 **Recommendation:** Option C. It preserves the scenario's authoring intent when sources overlap, gracefully degrades to "cite anything visible" when they don't, and keeps the declaration shape compact. Option B can be added as a refinement later if vendors find Option C too coarse.
 
+**Renderer requirement (not optional):** Intersection semantics are a behavior shift that readers will not infer from the per-surface output. Every compare-mode report must include a one-line preamble naming the rule: *"Citations scoped to active surface (compare mode)."* The terminal renderer prints this once under the scenario header; the markdown renderer prints it once under the scenario heading. Without that line, a reader looking at a surface with no required-source row will not know whether the contract was satisfied trivially or whether `requiredSources` was intentionally scoped down. Making the rule explicit is part of the proposal, not implementation polish.
+
 ## Decision 3: scoring semantics
 
-Per-surface scoring uses the existing scenario verdict ladder (`YES`, `PARTIAL`, `NO`, `Trap fired`, `Error`). The overall scenario verdict in compare mode is the worst per-surface verdict. The aggregate score (`Overall: X / 100`) averages across all per-surface runs.
+Per-surface scoring uses the existing scenario verdict ladder (`YES`, `PARTIAL`, `NO`, `Trap fired`, `Error`).
 
-Trap behavior is global, not per-surface. A trap fired in any surface forces that surface's verdict to `NO` with confidence 0, and is reported once with the active surface noted. A trap firing in the agent response is a trap fire regardless of which sources were loaded; the source attribution comes from comparing surfaces *that did not fire the trap* vs *those that did*.
+**No top-level verdict in compare mode.** The compare report deliberately omits a per-scenario aggregate verdict. The point of compare mode is the *spread* across surfaces. Collapsing 5 surfaces (4 pass, 1 fail) into "the scenario failed" hides exactly the signal vendors run compare mode to see. Earlier drafts of this proposal proposed "worst-result" aggregation; that draft was wrong and the worst-aggregate framing was rejected.
+
+In compare mode:
+- The `surfaces[]` array is authoritative. Each entry has its own verdict, confidence, citations, and traps.
+- The top-level scenario fields (`answerable`, `confidence`, `response`, `citations`, `traps`) are omitted (or set to `null`), not aggregated. JSON consumers that want a single verdict must derive it from `surfaces[]` themselves or treat the scenario as multi-valued.
+- The run-level `Overall: X / 100` averages across all per-surface evaluations. Each surface counts as one data point in the run aggregate, the same way scenarios do today. A scenario with N surfaces contributes N data points.
+
+This is a deliberate JSON contract change from v0.10.0. It is the right shape for the product question compare mode answers; the alternative ("Mixed" label or worst-aggregate) either weakens the verdict-layers grammar in `brand.md` or misleads about scenario health.
+
+Trap behavior is per-surface in evaluation but reported with the active surface attached. A trap fired in surface `[llms]` forces that surface's verdict to `NO` with confidence 0; surface `[readme]` is unaffected even if it loads the same response prompt. The source attribution emerges from comparing surfaces *that did not fire the trap* vs *those that did*.
 
 ## Decision 4: JSON output shape
 
-Extend `ScenarioResult` with an optional `surfaces` array. When `compareSurfaces` is declared, `surfaces` carries one entry per surface; the top-level scenario fields (`answerable`, `confidence`, `response`, `citations`, `traps`) reflect the worst result across surfaces, to keep backward compatibility with downstream parsers.
+Extend `ScenarioResult` with an optional `surfaces` array. When `compareSurfaces` is declared, `surfaces` is the source of truth; the top-level evaluation fields are `null` (or omitted) per Decision 3.
 
 ```jsonc
 {
   "scenario": {...},
-  "answerable": "NO",
-  "confidence": 0,
+  "answerable": null,
+  "confidence": null,
+  "response": null,
+  "citations": null,
+  "traps": null,
   "surfaces": [
     {
       "active": ["readme"],
       "answerable": "YES",
       "confidence": 94,
+      "response": "...",
       "citations": {...},
       "traps": {...}
     },
@@ -103,6 +118,7 @@ Extend `ScenarioResult` with an optional `surfaces` array. When `compareSurfaces
       "active": ["llms"],
       "answerable": "NO",
       "confidence": 0,
+      "response": "...",
       "citations": {...},
       "traps": {...}
     }
@@ -110,15 +126,32 @@ Extend `ScenarioResult` with an optional `surfaces` array. When `compareSurfaces
 }
 ```
 
-Existing single-run scenarios omit the `surfaces` field entirely.
+Existing single-run scenarios (no `compareSurfaces` declared) omit the `surfaces` field entirely and keep all evaluation fields populated at the top level, exactly as in v0.10.0.
+
+This is a deliberate, additive JSON contract change. Downstream consumers must check for `surfaces[]` first before reading top-level evaluation fields. Document the new field in the release notes when this ships; the change rule from `brand.md §Release Notes` applies.
 
 ## Decision 5: renderer changes
 
-Terminal: print the per-surface block under the scenario header (sketch in the Proposal section above). The existing `getScenarioStatus` helper handles each per-surface verdict; the new code is loop + indentation, not new logic.
+Terminal: print the per-surface block under the scenario header. The first line under the scenario header is the citation-scope preamble required by Decision 2. The existing `getScenarioStatus` helper handles each per-surface verdict; the new code is loop, indentation, and the preamble line, not new logic.
 
-Markdown: same structure as terminal, with the per-surface block as a sub-list under the scenario heading.
+```text
+Scenario: Installation
+  Citations scoped to active surface (compare mode)
+  [readme]            ✓ Well grounded (94%)
+    cited: [readme]
+  [cli_readme]        ⚠ Partially grounded (62%)
+    cited: [cli_readme]
+  [llms]              ✗ Ungrounded (0%)
+    missing: (no required source visible in this surface)
+```
+
+The "no required source visible in this surface" line is the human-readable version of the intersection-with-empty case (Decision 2 Option C). It tells the reader that the scoring contract softened.
+
+Markdown: same structure as terminal, with the per-surface block as a sub-list under the scenario heading. The citation-scope preamble appears as a single italicized line.
 
 JSON: structured per Decision 4. The `--verbose` flag continues to emit per-surface `allResponses` arrays.
+
+No top-level scenario verdict line in compare mode. The renderer does not synthesize a fake aggregate. The terminal block ends after the last surface row.
 
 ## What does NOT change
 
