@@ -10,18 +10,20 @@ docs:
     cli_readme: ./apps/cli/README.md
     llms: ./llms.txt
     comment_policy: ./comment-policy.md
-    # Policy/brand docs that intentionally cite banned phrases as examples
-    # (e.g., "AI-powered" in the We Never Say table). The trap cross-reference
-    # would false-positive here; check-time scoring of agent responses is
-    # unaffected by this opt-out.
+    # Policy/brand docs that intentionally cite specific banned phrases as
+    # examples. The list form names exactly those traps so future traps still
+    # apply to these files. brand.md cites only "AI-powered"; AGENTS.md cites
+    # both "AI-powered" and "freshness score" (the latter fires both freshness
+    # traps because their regex is identical). Check-time scoring of agent
+    # responses is unaffected.
     brand:
       path: ./brand.md
       audit:
-        traps: false
+        traps: [ai_powered]
     agents:
       path: ./AGENTS.md
       audit:
-        traps: false
+        traps: [ai_powered, freshness_score, old_freshness_brand]
     # Deliberately stale fixture. Used only by Trap pipeline smoke below to
     # prove traps fire end-to-end. The audit trap cross-reference must skip
     # this file or every declared trap would fire on it.

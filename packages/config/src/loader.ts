@@ -105,6 +105,52 @@ function validate(config: CheckConfig): void {
     validateTraps(scenario.name, scenario.traps);
     validateCompareSurfaces(scenario.name, scenario.compareSurfaces, sourceIds);
   }
+
+  validateAuditTrapsSuppression(config);
+}
+
+/**
+ * Cross-source check for list-form audit.traps suppression. Enforces global
+ * trap-id uniqueness (across all scenarios) and validates that every listed
+ * suppression id references a real declared trap. Only runs if at least one
+ * source uses the list form; configs that only use boolean forms keep the
+ * existing per-scenario uniqueness rule for backward compatibility.
+ */
+function validateAuditTrapsSuppression(config: CheckConfig): void {
+  if (!config.docs?.sources) return;
+  const suppressors: Array<{ id: string; list: string[] }> = [];
+  for (const [sourceId, value] of Object.entries(config.docs.sources)) {
+    if (typeof value === "string") continue;
+    const traps = value.audit?.traps;
+    if (Array.isArray(traps)) {
+      suppressors.push({ id: sourceId, list: traps });
+    }
+  }
+  if (suppressors.length === 0) return;
+
+  const declared = new Map<string, string>();
+  for (const scenario of config.scenarios) {
+    for (const trap of scenario.traps ?? []) {
+      const prior = declared.get(trap.id);
+      if (prior !== undefined) {
+        throw new Error(
+          `pickled.yml: trap id "${trap.id}" is declared in both scenario "${prior}" and scenario "${scenario.name}". Globally unique trap ids are required when any source uses list-form audit.traps suppression. Rename one of the traps.`,
+        );
+      }
+      declared.set(trap.id, scenario.name);
+    }
+  }
+
+  for (const { id: sourceId, list } of suppressors) {
+    for (const trapId of list) {
+      if (!declared.has(trapId)) {
+        const known = [...declared.keys()].join(", ") || "(none)";
+        throw new Error(
+          `pickled.yml: docs.sources["${sourceId}"].audit.traps lists unknown trap id "${trapId}". Declared trap ids: ${known}`,
+        );
+      }
+    }
+  }
 }
 
 function validateCompareSurfaces(
@@ -177,10 +223,28 @@ function validateDocSourceEntry(id: string, value: unknown): void {
       );
     }
     const audit = entry.audit as Record<string, unknown>;
-    if (audit.traps !== undefined && typeof audit.traps !== "boolean") {
-      throw new Error(
-        `pickled.yml: docs.sources["${id}"].audit.traps must be a boolean`,
-      );
+    if (audit.traps !== undefined) {
+      const traps = audit.traps;
+      if (typeof traps === "boolean") {
+        // boolean form is always valid
+      } else if (Array.isArray(traps)) {
+        if (traps.length === 0) {
+          throw new Error(
+            `pickled.yml: docs.sources["${id}"].audit.traps cannot be an empty array; use true (scan all) or false (skip all) instead`,
+          );
+        }
+        for (let i = 0; i < traps.length; i++) {
+          if (typeof traps[i] !== "string") {
+            throw new Error(
+              `pickled.yml: docs.sources["${id}"].audit.traps[${i}] must be a string trap id`,
+            );
+          }
+        }
+      } else {
+        throw new Error(
+          `pickled.yml: docs.sources["${id}"].audit.traps must be a boolean or an array of trap ids`,
+        );
+      }
     }
     for (const key of Object.keys(audit)) {
       if (key !== "traps") {

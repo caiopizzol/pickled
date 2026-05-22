@@ -174,12 +174,17 @@ export interface DocSourceEntry {
   path: string;
   audit?: {
     /**
-     * If false, the audit's trap cross-reference rule skips this source.
-     * Other audit rules (broken refs, etc.) still apply. Use for stale
-     * fixtures and policy docs that intentionally contain banned phrases.
-     * Defaults to true.
+     * Controls the audit's trap cross-reference rule for this source:
+     * - `true` (default when omitted): scan with every declared trap.
+     * - `false`: scan with no traps. Use for deliberately stale fixtures.
+     * - `string[]`: scan with every declared trap EXCEPT those listed by
+     *   id. Use for policy docs that intentionally cite specific banned
+     *   phrases as examples; future traps still apply.
+     * Other audit rules (broken refs, line budgets, etc.) are unaffected
+     * by this field. The list form requires every trap id across all
+     * scenarios to be globally unique; the loader enforces this.
      */
-    traps?: boolean;
+    traps?: boolean | string[];
   };
 }
 
@@ -194,7 +199,13 @@ export interface DocsConfig {
 /** Canonical normalized form of a docs.sources entry. */
 export interface NormalizedDocSource {
   path: string;
-  auditTraps: boolean;
+  /**
+   * Resolved audit-traps directive for this source:
+   * - `true`: scan with every declared trap.
+   * - `false`: skip all traps for this source.
+   * - `string[]`: scan with every declared trap except those listed by id.
+   */
+  auditTraps: boolean | string[];
 }
 
 /** Normalize a string or object docs.sources entry to the canonical form. */
@@ -211,8 +222,11 @@ export function normalizeDocSource(
 export interface ResolvedDocSource extends DocSource {
   id: string;
   source: string;
-  /** Whether the audit's trap cross-reference rule should scan this source. */
-  auditTraps: boolean;
+  /**
+   * Audit trap cross-reference directive carried from the config. See
+   * NormalizedDocSource.auditTraps for the three-way union semantics.
+   */
+  auditTraps: boolean | string[];
 }
 
 // Matrix configuration for running scenarios across multiple targets/contexts

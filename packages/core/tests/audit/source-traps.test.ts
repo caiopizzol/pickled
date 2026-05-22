@@ -308,4 +308,96 @@ scenarios:
     expect(matches).toHaveLength(1);
     expect(matches[0]?.line).toBe(25);
   });
+
+  test("audit.traps as list skips only the listed traps", async () => {
+    const dir = makeRepo({
+      "policy.md":
+        "We ban docs.source: and freshness score as policy examples.",
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [old_schema]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: old_schema
+        match: "docs.source:"
+        reason: "Removed singular schema"
+      - id: stale_brand
+        match: "freshness score"
+        reason: "Legacy brand phrase"
+`,
+    });
+    const { matches } = await scanSourceTraps(dir);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.trapId).toBe("stale_brand");
+  });
+
+  test("audit.traps as list with all traps suppressed is equivalent to scanning none of those", async () => {
+    const dir = makeRepo({
+      "policy.md": "We cite docs.source: AND freshness score on purpose.",
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [old_schema, stale_brand]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: old_schema
+        match: "docs.source:"
+        reason: "Removed singular schema"
+      - id: stale_brand
+        match: "freshness score"
+        reason: "Legacy brand phrase"
+`,
+    });
+    const { matches } = await scanSourceTraps(dir);
+    expect(matches).toHaveLength(0);
+  });
+
+  test("list form preserves scanning on sources that do NOT use list-form suppression", async () => {
+    const dir = makeRepo({
+      "policy.md": "docs.source: in policy.",
+      "stale.md": "docs.source: in stale.",
+      "pickled.yml": `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [old_schema]
+    stale: ./stale.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: old_schema
+        match: "docs.source:"
+        reason: "Removed singular schema"
+`,
+    });
+    const { matches } = await scanSourceTraps(dir);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.sourceId).toBe("stale");
+  });
 });

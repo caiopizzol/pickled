@@ -273,7 +273,7 @@ scenarios:
     });
   });
 
-  test("rejects non-boolean audit.traps", async () => {
+  test("rejects audit.traps that is neither boolean nor array", async () => {
     const yaml = `
 tool:
   name: t
@@ -291,8 +291,184 @@ scenarios:
 `;
     await withTempConfig(yaml, async (dir) => {
       await expect(loadConfig(dir)).rejects.toThrow(
-        /docs.sources\["bad"\].audit.traps must be a boolean/,
+        /audit.traps must be a boolean or an array of trap ids/,
       );
+    });
+  });
+
+  test("accepts audit.traps as a string array (list-form suppression)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [t1, t2]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: t1
+        match: "foo"
+        reason: "r1"
+      - id: t2
+        match: "bar"
+        reason: "r2"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      const src = cfg.docs?.sources.policy;
+      if (typeof src === "string") throw new Error("expected object form");
+      expect(src?.audit?.traps).toEqual(["t1", "t2"]);
+    });
+  });
+
+  test("rejects empty audit.traps array (ambiguous; use true or false)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: []
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: t1
+        match: "foo"
+        reason: "r"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /audit.traps cannot be an empty array/,
+      );
+    });
+  });
+
+  test("rejects audit.traps array with non-string entries", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [t1, 42]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: t1
+        match: "foo"
+        reason: "r"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /audit.traps\[1\] must be a string trap id/,
+      );
+    });
+  });
+
+  test("rejects audit.traps list with unknown trap id", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [t1, ghost_trap]
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: t1
+        match: "foo"
+        reason: "r"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /audit.traps lists unknown trap id "ghost_trap"/,
+      );
+    });
+  });
+
+  test("rejects cross-scenario duplicate trap id when any source uses list form", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    policy:
+      path: ./policy.md
+      audit:
+        traps: [t_dup]
+scenarios:
+  - name: s1
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: t_dup
+        match: "foo"
+        reason: "r1"
+  - name: s2
+    prompt: p
+    requiredSources: [policy]
+    traps:
+      - id: t_dup
+        match: "bar"
+        reason: "r2"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /trap id "t_dup" is declared in both scenario "s1" and scenario "s2"/,
+      );
+    });
+  });
+
+  test("allows cross-scenario duplicate trap id when NO source uses list form (backward compat)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s1
+    prompt: p
+    requiredSources: [a]
+    traps:
+      - id: t_dup
+        match: "foo"
+        reason: "r1"
+  - name: s2
+    prompt: p
+    requiredSources: [a]
+    traps:
+      - id: t_dup
+        match: "bar"
+        reason: "r2"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios).toHaveLength(2);
     });
   });
 

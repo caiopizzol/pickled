@@ -73,11 +73,15 @@ export async function scanSourceTraps(
   const findings: AuditFinding[] = [];
 
   for (const source of sources) {
-    if (source.auditTraps === false) continue;
+    const skip = source.auditTraps;
+    if (skip === false) continue;
+    // List form: skip only the listed trap ids, scan everything else.
+    const skipSet = Array.isArray(skip) ? new Set(skip) : null;
 
     // scoreTraps returns hits in trap-list order with fired/avoided IDs only.
     // Re-evaluate per trap so we can map back to the Trap object for severity.
     for (const trap of trapsList) {
+      if (skipSet?.has(trap.id)) continue;
       const { fired } = scoreTraps({
         response: source.content,
         traps: [trap],
