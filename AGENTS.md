@@ -33,6 +33,13 @@ These are the rules new edits most often break. Each lives in a single source of
 - **Tests:** `bun test` runs across all packages. All tests must pass before merging.
 - **Lint/format:** Biome. `bun run lint` should exit 0; `bun run format` auto-fixes.
 
+## Release discipline
+
+A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**` or `packages/core/**` triggers a release via semantic-release, which publishes the CLI to npm. Two consequences:
+
+- Bundle partial features into a single `feat:` commit so runtime ships with the schema. A `feat:` commit that lands schema-only forces a misleading release; future cleanup commits are then `chore:` against a public artifact that already claimed the feature.
+- The Release job runs `bun run verify` (tests, lint, builds, dogfood audit) before semantic-release. CI runs in parallel for surface signal; verify-in-release is the canonical publishability check. See `.github/workflows/release.yml`.
+
 ## Targets (today)
 
 - `claude-code` (Claude Agent SDK)
