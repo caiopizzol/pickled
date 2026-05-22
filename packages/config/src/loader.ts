@@ -75,6 +75,50 @@ function validate(config: CheckConfig): void {
       }
     }
     validateTraps(scenario.name, scenario.traps);
+    validateCompareSurfaces(scenario.name, scenario.compareSurfaces, sourceIds);
+  }
+}
+
+function validateCompareSurfaces(
+  scenarioName: string,
+  surfaces: string[][] | undefined,
+  sourceIds: Set<string>,
+): void {
+  if (surfaces === undefined) return;
+  if (!Array.isArray(surfaces)) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" compareSurfaces must be an array of source-id lists`,
+    );
+  }
+  if (surfaces.length === 0) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" compareSurfaces cannot be empty (use a non-empty list of surfaces, or remove the field)`,
+    );
+  }
+  for (let i = 0; i < surfaces.length; i++) {
+    const surface = surfaces[i];
+    if (!Array.isArray(surface)) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" compareSurfaces[${i}] must be an array of source ids`,
+      );
+    }
+    if (surface.length === 0) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" compareSurfaces[${i}] must be a non-empty list of source ids`,
+      );
+    }
+    for (const id of surface) {
+      if (typeof id !== "string") {
+        throw new Error(
+          `pickled.yml: scenario "${scenarioName}" compareSurfaces[${i}] entries must be string source ids`,
+        );
+      }
+      if (!sourceIds.has(id)) {
+        throw new Error(
+          `pickled.yml: scenario "${scenarioName}" compareSurfaces[${i}] references unknown source "${id}". Declared sources: ${[...sourceIds].join(", ") || "(none)"}`,
+        );
+      }
+    }
   }
 }
 

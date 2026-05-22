@@ -146,6 +146,15 @@ export interface Scenario {
    * any trap forces the scenario to NO with confidence 0.
    */
   traps?: Trap[];
+
+  /**
+   * Compare-surfaces mode. Each entry is a list of source IDs forming
+   * one surface. The scenario runs once per declared surface, with only
+   * those sources visible to the agent. Per-surface results live in
+   * `ScenarioResult.surfaces[]`; the top-level evaluation fields are
+   * `null` when this is set. See `proposals/compare-surfaces.md`.
+   */
+  compareSurfaces?: string[][];
 }
 
 export type DocSourceType = "url" | "file" | "mcp" | "codebase";

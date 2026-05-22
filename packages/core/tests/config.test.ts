@@ -627,4 +627,139 @@ scenarios:
       await expect(loadConfig(dir)).rejects.toThrow(/systemPrompt/);
     });
   });
+
+  test("accepts a scenario with compareSurfaces", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme: ./README.md
+    llms: ./llms.txt
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [readme]
+    compareSurfaces:
+      - [readme]
+      - [llms]
+      - [readme, llms]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios[0]?.compareSurfaces).toEqual([
+        ["readme"],
+        ["llms"],
+        ["readme", "llms"],
+      ]);
+    });
+  });
+
+  test("rejects empty compareSurfaces array", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [a]
+    compareSurfaces: []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /compareSurfaces cannot be empty/,
+      );
+    });
+  });
+
+  test("rejects empty surface inside compareSurfaces", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [a]
+    compareSurfaces:
+      - [a]
+      - []
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /compareSurfaces\[1\] must be a non-empty list/,
+      );
+    });
+  });
+
+  test("rejects compareSurfaces with unknown source id", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [readme]
+    compareSurfaces:
+      - [readme]
+      - [unknown_source]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /compareSurfaces\[1\] references unknown source "unknown_source"/,
+      );
+    });
+  });
+
+  test("rejects compareSurfaces that is not an array", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [a]
+    compareSurfaces: "not an array"
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /compareSurfaces must be an array/,
+      );
+    });
+  });
+
+  test("compareSurfaces is optional (backward compat with v0.10.0 scenarios)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    a: ./a.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [a]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios[0]?.compareSurfaces).toBeUndefined();
+    });
+  });
 });
