@@ -63,7 +63,7 @@ JSON output stays raw. It carries machine fields (`answerable`, `confidence`, `t
 
 - It tests what agents understand. It is not a generic LLM eval framework.
 - Scoring is deterministic by contract. No LLM grades the answer.
-- "Stay fresh" is footer chrome only. Do not reintroduce "freshness score" branding in product surfaces.
+- "Stay fresh" is footer chrome only. The retired draft branding for the scoring metric is gone; do not reintroduce it.
 - The pickle metaphor is a wink, not a theme. One body-copy mention per page, max.
 - No em dashes in copy. Hyphens, colons, periods, or parentheses are fine.
 

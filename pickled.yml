@@ -7,14 +7,28 @@ tool:
 docs:
   sources:
     readme: ./README.md
-    brand: ./brand.md
-    agents: ./AGENTS.md
-    comment_policy: ./comment-policy.md
     cli_readme: ./apps/cli/README.md
     llms: ./llms.txt
+    comment_policy: ./comment-policy.md
+    # Policy/brand docs that intentionally cite banned phrases as examples
+    # (e.g., "AI-powered" in the We Never Say table). The trap cross-reference
+    # would false-positive here; check-time scoring of agent responses is
+    # unaffected by this opt-out.
+    brand:
+      path: ./brand.md
+      audit:
+        traps: false
+    agents:
+      path: ./AGENTS.md
+      audit:
+        traps: false
     # Deliberately stale fixture. Used only by Trap pipeline smoke below to
-    # prove traps fire end-to-end. Do not require this in real scenarios.
-    stale: ./dogfood/stale-source.md
+    # prove traps fire end-to-end. The audit trap cross-reference must skip
+    # this file or every declared trap would fire on it.
+    stale:
+      path: ./dogfood/stale-source.md
+      audit:
+        traps: false
 
 targets:
   quick:
