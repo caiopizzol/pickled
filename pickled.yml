@@ -48,6 +48,17 @@ targets:
     provider: codex-cli
     model: gpt-5.5
 
+  # Direct Anthropic API target. Not in the default matrix so every dogfood
+  # run does not pay the API token cost; invoke explicitly with
+  # 'pickled check --target anthropic_api' for the CLI-agent-vs-direct-API
+  # comparison. Requires ANTHROPIC_API_KEY at runtime.
+  anthropic_api:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    temperature: 0
+    maxTokens: 4096
+
 matrix:
   target: [quick, codex]
 

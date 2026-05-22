@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { Target } from "@pickled-dev/config";
 import { AnthropicApiTarget } from "../../src/targets/api/anthropic.js";
+
+// Cast through unknown to satisfy the AnthropicApiTarget signature with a
+// structural mock. Avoids `any` so biome's noExplicitAny does not fire and
+// keeps the warning count clean.
+type MockClient = ReturnType<typeof makeMockClient>["client"];
+function asAnthropic(client: MockClient): Anthropic {
+  return client as unknown as Anthropic;
+}
 
 const baseConfig: Target = {
   category: "api",
@@ -53,11 +62,8 @@ function makeMockClient(response: string): {
 describe("AnthropicApiTarget", () => {
   test("returns the assistant text response", async () => {
     const { client } = makeMockClient("Answer here.\n\n## Sources\n- [readme]");
-    // biome-ignore lint/suspicious/noExplicitAny: mock client typing matches the SDK shape used by the adapter
-    const target = new AnthropicApiTarget(
-      "anth",
-      baseConfig,
-      () => client as any,
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
     );
     const result = await target.run("How?", baseRunOptions);
     expect(result.response).toBe("Answer here.\n\n## Sources\n- [readme]");
@@ -72,8 +78,7 @@ describe("AnthropicApiTarget", () => {
     const target = new AnthropicApiTarget(
       "production-anth",
       { ...baseConfig, model: "claude-sonnet-4-5" },
-      // biome-ignore lint/suspicious/noExplicitAny: mock client typing matches the SDK shape used by the adapter
-      () => client as any,
+      () => asAnthropic(client),
     );
     const result = await target.run("?", baseRunOptions);
     expect(result.metadata).toEqual({
@@ -86,11 +91,8 @@ describe("AnthropicApiTarget", () => {
 
   test("passes citation prompt as system, user prompt as message", async () => {
     const { client, calls } = makeMockClient("ok");
-    // biome-ignore lint/suspicious/noExplicitAny: mock client typing matches the SDK shape used by the adapter
-    const target = new AnthropicApiTarget(
-      "anth",
-      baseConfig,
-      () => client as any,
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
     );
     await target.run("How do I install?", baseRunOptions);
     expect(calls).toHaveLength(1);
@@ -105,11 +107,8 @@ describe("AnthropicApiTarget", () => {
 
   test("applies temperature and maxTokens from config (defaults: 0 and 4096)", async () => {
     const { client, calls } = makeMockClient("ok");
-    // biome-ignore lint/suspicious/noExplicitAny: mock client typing matches the SDK shape used by the adapter
-    const target = new AnthropicApiTarget(
-      "anth",
-      baseConfig,
-      () => client as any,
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
     );
     await target.run("?", baseRunOptions);
     expect(calls[0]?.temperature).toBe(0);
@@ -121,8 +120,7 @@ describe("AnthropicApiTarget", () => {
     const target = new AnthropicApiTarget(
       "anth",
       { ...baseConfig, temperature: 0.5, maxTokens: 2048 },
-      // biome-ignore lint/suspicious/noExplicitAny: mock client typing matches the SDK shape used by the adapter
-      () => client as any,
+      () => asAnthropic(client),
     );
     await target.run("?", baseRunOptions);
     expect(calls[0]?.temperature).toBe(0.5);
@@ -131,12 +129,14 @@ describe("AnthropicApiTarget", () => {
 
   test("throws when model is missing (defense in depth)", async () => {
     // The loader normally rejects this; the runtime guard catches callers that
-    // bypass the loader (e.g., programmatic CheckConfig).
+    // bypass the loader (e.g., programmatic CheckConfig). The runtime guard
+    // fires before clientFactory is invoked, so the factory does not need to
+    // be supplied.
+    const { client } = makeMockClient("(unused)");
     const target = new AnthropicApiTarget(
       "bad",
       { category: "api", provider: "anthropic" },
-      // biome-ignore lint/suspicious/noExplicitAny: not reached
-      () => null as any,
+      () => asAnthropic(client),
     );
     await expect(target.run("?", baseRunOptions)).rejects.toThrow(
       /missing 'model'/,
@@ -158,11 +158,8 @@ describe("AnthropicApiTarget", () => {
         }),
       },
     };
-    // biome-ignore lint/suspicious/noExplicitAny: mock client typing matches the SDK shape used by the adapter
-    const target = new AnthropicApiTarget(
-      "anth",
-      baseConfig,
-      () => client as any,
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
     );
     const result = await target.run("?", baseRunOptions);
     expect(result.response).toBe("");

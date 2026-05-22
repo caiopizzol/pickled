@@ -100,6 +100,12 @@ targets:
     category: cli
     provider: codex-cli
     model: gpt-5.5
+  anthropic_api:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    temperature: 0
+    maxTokens: 4096
 
 matrix:
   target: [claude, codex]
@@ -108,6 +114,8 @@ matrix:
 **`claude-code`** uses the Claude Agent SDK. Requires `claude` installed and authenticated (or `ANTHROPIC_API_KEY` set). Supports `model`, `maxTurns`, `maxThinkingTokens`, `maxBudgetUsd`, `permissionMode`.
 
 **`codex-cli`** shells out to `codex --ask-for-approval never exec` with `--sandbox read-only --ignore-user-config --ignore-rules --ephemeral --skip-git-repo-check`. Requires `codex` installed and authenticated. `model` is **required** (Codex's default model can change). `maxTurns` is **rejected** at config load (Codex CLI does not support a turn cap).
+
+**`anthropic`** calls the Anthropic Messages API directly via `@anthropic-ai/sdk`. No tools, no workspace, no Agent SDK orchestration. Useful as a controlled baseline: did the model understand the registered sources without help from agent tooling? Requires `ANTHROPIC_API_KEY` in the environment. `model` is **required** (no silent default; reproducibility depends on pinning). The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets so silent no-ops cannot create false confidence. API targets meter by token, not by CLI session.
 
 Caveats for `codex-cli`:
 
