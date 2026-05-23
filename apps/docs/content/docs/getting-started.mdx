@@ -1,0 +1,79 @@
+---
+title: Getting started
+description: Install pickled, write a minimal pickled.yml, and run your first check.
+---
+
+## Install
+
+Pickled runs on Bun. Install the CLI globally or use `bunx` for one-off runs:
+
+```bash
+bunx @pickled-dev/cli init
+```
+
+This writes a starter `pickled.yml` in the current directory.
+
+## Minimum config
+
+A minimum scenario needs a tool name, at least one registered source, and at least one of: `requiredSources`, `expected`, or `traps`.
+
+```yaml
+tool:
+  name: my-product
+  description: short one-liner about what your product does
+
+docs:
+  sources:
+    readme: ./README.md
+
+targets:
+  quick:
+    category: cli
+    provider: claude-code
+    model: claude-haiku-4-5
+
+scenarios:
+  - name: Install
+    prompt: How do I install my-product?
+    requiredSources: [readme]
+```
+
+## Run a check
+
+```bash
+bunx @pickled-dev/cli check .
+```
+
+Pickled spawns the configured target, hands it the prompt with the registered source content injected, and scores the response against the citation contract. A successful run looks like:
+
+```
+Scenario: Install
+  ✓ Well grounded (100%)
+    cited: [readme]
+
+Overall: 100 / 100 · run passes
+Citations hold. No declared traps fired.
+```
+
+## Add a matrix
+
+To compare how different surfaces hold up, expand the scenario across an axis:
+
+```yaml
+scenarios:
+  - name: Install
+    prompt: How do I install my-product?
+    requiredSources: [readme]
+    matrix:
+      interfaces: [quick]
+      sources: [readme, llms]
+      toolsets: [none]
+```
+
+This produces one cell per `(interface × source × toolset)` combination. The [Matrix evaluation](/docs/matrix-evaluation) page describes the full design and the `web` and `mcp` toolset shapes.
+
+## Next steps
+
+- Read about [matrix evaluation](/docs/matrix-evaluation) to test discovery surfaces.
+- Read the [pickled.yml reference](/docs/pickled-yml) for every field.
+- Wire pickled into CI with [GitHub Actions](/docs/github-actions).

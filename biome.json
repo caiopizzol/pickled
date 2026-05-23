@@ -6,7 +6,10 @@
       "packages/**",
       "*.ts",
       "!**/node_modules",
-      "!**/dist"
+      "!**/dist",
+      "!**/.next",
+      "!**/.source",
+      "!apps/docs/out"
     ]
   },
   "linter": {

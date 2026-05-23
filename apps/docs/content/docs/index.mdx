@@ -1,0 +1,33 @@
+---
+title: Pickled
+description: An open-source CLI that tests whether AI agents actually understand a product.
+---
+
+Pickled is an open-source CLI that runs scenarios against real agent targets (Claude Code, Codex CLI, Anthropic API), checks that answers cite registered sources, and matches declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+
+## What pickled tests
+
+Two audiences, one tool:
+
+- **External.** Vendors testing how outside-world agents understand their published product. Register your README, llms.txt, docs URLs, and the things you do not want agents to say. Pickled tells you whether the agent answered from your sources or made it up.
+- **Internal.** Engineering teams testing whether their own CLAUDE.md, AGENTS.md, JSDoc, comments, and runbooks steer their own agents correctly. This repo is the dogfood case.
+
+## How the matrix works
+
+A scenario expands into one cell per `(interface × source × toolset)` tuple. Each cell scores independently:
+
+- **Trap firing** is a universal veto. Any matched trap forces the cell to `NO` with confidence `0`.
+- **Citation contract** applies in controlled mode (`toolset: none`): the agent must cite registered source IDs.
+- **Expected substrings** apply in discovery mode (`toolset: web`, `toolset: mcp`): the response must include declared phrases and avoid excluded ones.
+- **Tool-use provenance** applies whenever a non-`none` toolset is configured: the agent must invoke at least one of the configured tools, or the cell is vetoed.
+
+## Getting started
+
+Install the CLI, write a `pickled.yml`, run a check:
+
+```bash
+bunx @pickled-dev/cli init
+bunx @pickled-dev/cli check .
+```
+
+See [Getting started](/docs/getting-started) for a real first check.
