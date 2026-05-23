@@ -1203,4 +1203,106 @@ scenarios:
       expect(cfg.scenarios[0]?.compareSurfaces).toBeUndefined();
     });
   });
+
+  test("rejects matrix with non-none toolsets when only requiredSources is declared", async () => {
+    // Non-none cells skip the citation contract (source is not injected).
+    // requiredSources alone leaves them with no actionable answer contract:
+    // the cell would otherwise default to YES because no parts are scored.
+    // The loader must reject this shape and tell the user to add expected
+    // or traps, or restrict toolsets to ["none"].
+    const yaml = `
+tool:
+  name: t
+  description: d
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+targets:
+  a:
+    category: cli
+    provider: claude-code
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: Discovery probe with only requiredSources
+    prompt: p
+    requiredSources: [readme]
+    matrix:
+      interfaces: [a]
+      sources: [readme]
+      toolsets: [web]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /non-none toolsets \[web\] but has neither expected.*nor traps/,
+      );
+    });
+  });
+
+  test("accepts matrix with non-none toolsets when expected is declared", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+targets:
+  a:
+    category: cli
+    provider: claude-code
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: Discovery probe with expected
+    prompt: p
+    requiredSources: [readme]
+    expected:
+      includes: [pickled]
+    matrix:
+      interfaces: [a]
+      sources: [readme]
+      toolsets: [web]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios[0]?.expected?.includes).toEqual(["pickled"]);
+    });
+  });
+
+  test("accepts matrix with only [none] toolset and only requiredSources", async () => {
+    // None cells inject the source, so citation contract is meaningful;
+    // requiredSources alone is a valid contract here.
+    const yaml = `
+tool:
+  name: t
+  description: d
+toolsets:
+  none: {}
+targets:
+  a:
+    category: cli
+    provider: claude-code
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: Controlled probe with only requiredSources
+    prompt: p
+    requiredSources: [readme]
+    matrix:
+      interfaces: [a]
+      sources: [readme]
+      toolsets: [none]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios[0]?.matrix?.toolsets).toEqual(["none"]);
+    });
+  });
 });

@@ -316,6 +316,19 @@ function validateActionableContract(scenario: {
       `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources, expected.includes/excludes, or traps. A scenario with nothing to check has no verdict.`,
     );
   }
+  // Non-none cells skip the citation contract (source is not injected; the
+  // agent uses tools to discover the answer). So requiredSources alone is
+  // not actionable for those cells, the verdict would default to YES with
+  // no real evidence beyond tool-use provenance. Require expected or traps
+  // when the matrix declares any non-none toolset.
+  const nonNoneToolsets = (scenario.matrix?.toolsets ?? []).filter(
+    (t) => t !== "none",
+  );
+  if (nonNoneToolsets.length > 0 && !hasExpected && !hasTraps) {
+    throw new Error(
+      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has neither expected.includes/excludes nor traps. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected or traps, or restrict matrix.toolsets to ["none"].`,
+    );
+  }
 }
 
 function validateCompareSurfaces(
