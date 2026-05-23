@@ -167,10 +167,14 @@ URL sources are NOT scanned by the audit's trap cross-reference in v1; they are 
 Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. Three shapes ship today:
 
 - **`none`** (the deterministic baseline). Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared. Same scoring shape as non-matrix scenarios.
-- **`web`** on Claude Code only. Set `webSearch: true` and/or `webFetch: true`. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target. Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes` + tool-use provenance.
-- **`mcp`** on Claude Code only. Declare `mcpServers` (a map of server name to `McpServerConfig` with `stdio`, `http`, or `sse` transport). Maps to `allowedTools: ["mcp__<server>__*", ...]` on the cell's Claude Code target so default Read/Edit/Bash do not leak. The configured MCP servers are passed through to the Agent SDK; tool-use provenance accepts any invocation of `mcp__<server>__*` for any configured server.
+- **`web`** on Claude Code only. Set `webSearch: true` and/or `webFetch: true`. The cell scopes the SDK's built-in tool set to exactly those web tools (`tools: ["WebSearch", "WebFetch"]`) so default Read/Edit/Bash do not leak, and adds them to `allowedTools` so they execute without permission prompts. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target. Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes` + tool-use provenance.
+- **`mcp`** on Claude Code only. Declare `mcpServers` (a map of server name to `McpServerConfig` with `stdio`, `http`, or `sse` transport). The cell sets `tools: []` (all built-ins disabled; MCP tools come from `mcpServers`) and `allowedTools: ["mcp__<server>__*", ...]` (auto-permission for the configured server namespaces). Tool-use provenance accepts any invocation of `mcp__<server>__*` for any configured server.
+
+The SDK `tools` option (not `allowedTools`) is what actually restricts which tools the agent can call: `allowedTools` is only a permission-prompt-bypass list. Pickled sets both for non-none cells so the agent is confined to the configured tool path with no fallback to local filesystem tools.
 
 Tool-use provenance (web and MCP) is a hard veto. A cell that does not invoke at least one of the configured tools is forced to `NO` with confidence `0`, because an answer pulled from model prior knowledge cannot testify to the tool path the cell is meant to test.
+
+For non-none cells, scenario-level `context` overrides for `allowedTools`, `disallowedTools`, and `mcpServers` are ignored: the toolset declaration is the single source of truth so the cell label honestly describes what the agent had available. None cells still honor `context` as before.
 
 Declare profiles at the top level of `pickled.yml`:
 
