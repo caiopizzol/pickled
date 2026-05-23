@@ -70,3 +70,36 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy apps/web/dist --project-name=pickled-web
+
+  # apps/docs is deliberately built only inside this deploy job, not in the
+  # main `verify` job above. The Fumadocs static template currently sets
+  # `typescript.ignoreBuildErrors: true` (see apps/docs/next.config.mjs),
+  # which means a "successful" docs build can mask real type regressions.
+  # Until that type gap is resolved upstream, the docs build runs only on
+  # push-to-main so it cannot pollute PR signal. The deploy still fails
+  # loudly if next build itself throws (runtime, not type) errors.
+  deploy-docs:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build docs
+        run: bun run --cwd apps/docs build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/docs/out --project-name=pickled-docs
