@@ -53,6 +53,10 @@ The matrix evaluation proposal lists `none / web / mcp / firecrawl` as planned t
 - **brand.md two-mode language.** Earlier session work proposed splitting brand around controlled vs discovery modes. Matrix framing supersedes that; brand should crystallize the one-product story after schema + dogfood examples cohere. Don't write aspirational brand language before the contract exists.
 - **README.md rewrite around matrix.** Same. Comes after matrix scoring lands.
 
+## Parked: release-notes hardening
+
+- **Restore AI release notes after upstream fix.** `semantic-release-ai-notes` 0.3.0 has a real bug: when the Anthropic API returns a 400 (e.g., usage limit), the SDK delivers the error string as a success-subtype result, the plugin caches it as the notes, and the GitHub release body ships "API Error: 400 ..." as public copy. We saw this on cli-v0.18.0 (hand-patched via `gh release edit`). Until the plugin fails closed on error-shaped content (or sanity-checks min length / markdown shape), we use `@semantic-release/release-notes-generator` for deterministic notes from conventional commits. Restore the AI plugin once it rejects the failure mode; track the upstream issue before flipping back. The brand voice rules in `brand.md` Release Notes still describe the AI-notes intent.
+
 ## How to use this file
 
 When picking up a parked item:

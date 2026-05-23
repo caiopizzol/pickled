@@ -357,7 +357,11 @@ Review fired traps before trusting this surface.
 
 ### Release Notes
 
-Release notes are a public interface surface. They are subject to the same grammar as CLI output: short, specific, no marketing voice. The AI notes plugin reads this file. When its output drifts, prefer fixing the prompt or the commit messages so the next release renders correctly on its own. A one-off hand-edit on a high-stakes release is fine; just don't let it substitute for fixing the generator.
+Release notes are a public interface surface. They are subject to the same grammar as CLI output: short, specific, no marketing voice.
+
+Release notes are currently generated deterministically by `@semantic-release/release-notes-generator` from conventional commit subjects (see `plan.md` → Parked: release-notes hardening for context on why the AI notes plugin was removed). The rules below still apply: they describe the target voice for the AI notes plugin we want to restore, and the shape every hand-edited release body should follow. While deterministic notes ship, the cleanest way to satisfy them is to write commit subjects that read like the bullet shape below.
+
+A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just don't let it substitute for fixing the generator path long-term.
 
 **Section names.** Use only `What's New`, `Fixes`, `Improvements`, and `Breaking Changes`. Do not invent grouping headers like `Under the Hood`, `Other`, `Miscellaneous`, or `Behind the Scenes`. If a change does not fit one of the four, ask whether it belongs in the notes at all.
 

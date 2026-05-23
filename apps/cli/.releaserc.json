@@ -3,13 +3,7 @@
   "branches": ["main"],
   "plugins": [
     "@semantic-release/commit-analyzer",
-    [
-      "semantic-release-ai-notes",
-      {
-        "brandFile": "../../brand.md",
-        "style": "concise"
-      }
-    ],
+    "@semantic-release/release-notes-generator",
     [
       "@semantic-release/exec",
       {

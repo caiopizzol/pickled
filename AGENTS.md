@@ -70,4 +70,4 @@ Surface the conflict before silently choosing one side. Brand contracts and verd
 - Do not use em dashes (`—`). Use hyphens, periods, colons, or parentheses.
 - Do not commit `AI-powered`, `unlock`, `seamless`, or `holistic` in any user-facing copy.
 - Do not add comments that paraphrase the next line. See `comment-policy.md`.
-- Do not write release notes by rephrasing commit messages. The release-notes plugin reads `brand.md` for voice.
+- Release notes are currently generated deterministically by `@semantic-release/release-notes-generator` from conventional commit subjects. `semantic-release-ai-notes` was removed in cli-v0.18.0+1 after it shipped an Anthropic API error string as the public release body of cli-v0.18.0 (the plugin treated a success-subtype agent result that contained "API Error: 400 ..." as the notes). Until the upstream plugin fails closed on error-shaped content, write commit subjects so the deterministic generator reads cleanly; a hand-edited release body via `gh release edit` remains the escape hatch for high-stakes releases.
