@@ -843,9 +843,16 @@ describe("runCheck matrix mode", () => {
       );
       const cell = report.scenarios[0]!.cells![0]!;
       expect(cell.answerable).toBe("NO");
-      expect(cell.confidence).toBeLessThan(100);
+      // Hard veto: provenance failure forces confidence 0, mirroring trap
+      // semantics. Cell cannot testify to the toolset axis even if the
+      // response happens to satisfy expected.includes.
+      expect(cell.confidence).toBe(0);
+      expect(cell.reason).toMatch(/Provenance failed/);
       expect(cell.reason).toMatch(/configured but none of \[/);
       expect(cell.reason).toMatch(/prior knowledge/);
+      // Diagnostics are appended so a reader still sees what the response
+      // happened to say. Here expected.includes was satisfied.
+      expect(cell.reason).toMatch(/expected checks satisfied/);
       expect(cell.toolsUsed).toEqual([]);
     });
   });
@@ -948,6 +955,8 @@ describe("runCheck matrix mode", () => {
       );
       const cell = report.scenarios[0]!.cells![0]!;
       expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+      expect(cell.reason).toMatch(/Provenance failed/);
       expect(cell.reason).toMatch(/configured but none of \[/);
       expect(cell.toolsUsed).toEqual(["Bash"]);
     });

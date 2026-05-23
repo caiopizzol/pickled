@@ -168,10 +168,16 @@ scenarios:
       sources: [readme]
 
   # Discovery-mode dogfood: Claude Code with WebSearch+WebFetch tools
-  # enabled, source NOT injected. The agent should reach the README URL
-  # via its tools. Toolsets restricted to [web]; matrix.interfaces
-  # restricted to [quick] because the `web` toolset is Claude-Code-only.
-  # Disabled in matrix.target so cost stays opt-in: dispatch with
+  # enabled, source NOT injected. The agent receives `llms.txt` as the
+  # named canonical reference (via the discovery hint) and is expected
+  # to research the answer using its web tools. The cell scores on
+  # expected.includes/excludes plus a tool-use provenance check: a run
+  # that satisfies expected but never invokes WebSearch or WebFetch is
+  # vetoed to NO/0 because the answer would rest on model prior
+  # knowledge rather than the tool path the cell is meant to test.
+  # Toolsets restricted to [web]; matrix.interfaces restricted to
+  # [quick] because the `web` toolset is Claude-Code-only. Disabled in
+  # matrix.target so cost stays opt-in: dispatch with
   # `pickled check --target quick --interface quick --toolset web` to
   # exercise this cell explicitly.
   - name: "Matrix discovery: pickled positioning via web"

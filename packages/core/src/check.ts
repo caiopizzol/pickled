@@ -708,11 +708,12 @@ async function runMatrixScenario(
         // Tool-use provenance check. A non-none cell exists to prove the
         // agent reached the answer via the configured toolset; if it
         // answered without invoking any of the expected tools, the cell
-        // is not evidence the toolset works (the model answered from
-        // prior knowledge). Composes as a scoring part: YES if any
-        // configured tool was used, NO otherwise. Skipped when the cell
-        // has no configured tools (`allowedForCell` empty), which only
-        // happens for `none` cells today.
+        // cannot testify to that axis (the model answered from prior
+        // knowledge). Provenance failure is a hard veto with the same
+        // shape as trap firing: NO / confidence 0, regardless of what
+        // the response happens to say. Skipped when the cell has no
+        // configured tools (`allowedForCell` empty), which only happens
+        // for `none` cells today.
         const toolUseDetail =
           toolsetName !== "none" && allowedForCell.length > 0
             ? {
@@ -722,6 +723,37 @@ async function runMatrixScenario(
                 ),
               }
             : null;
+        const provenanceFailed =
+          toolUseDetail !== null && toolUseDetail.used.length === 0;
+
+        // Helper: render the diagnostic notes from citation + expected so
+        // a veto reason can still tell the reader what the response said,
+        // even when the verdict is forced to NO/0.
+        const renderDiagnostics = (): string[] => {
+          const notes: string[] = [];
+          if (citationScore) notes.push(citationScore.reason);
+          if (expectedDetail) {
+            const missing = expectedDetail.includes
+              .filter((c) => !c.satisfied)
+              .map((c) => `"${c.value}"`);
+            const banned = expectedDetail.excludes
+              .filter((c) => !c.satisfied)
+              .map((c) => `"${c.value}"`);
+            const expectedNotes: string[] = [];
+            if (missing.length > 0) {
+              expectedNotes.push(`missing includes: ${missing.join(", ")}`);
+            }
+            if (banned.length > 0) {
+              expectedNotes.push(`hit excludes: ${banned.join(", ")}`);
+            }
+            notes.push(
+              expectedNotes.length > 0
+                ? expectedNotes.join("; ")
+                : `expected checks satisfied (${expectedDetail.satisfied}/${expectedDetail.total})`,
+            );
+          }
+          return notes.filter((n) => n.length > 0);
+        };
 
         let answerable: Answerable;
         let confidence: number;
@@ -733,6 +765,17 @@ async function runMatrixScenario(
           reason = `Trap fired: ${trapDetails.fired
             .map((t) => `"${t.id}" (${t.reason})`)
             .join("; ")}`;
+        } else if (provenanceFailed) {
+          // toolUseDetail is non-null here (provenanceFailed implies it).
+          const tud = toolUseDetail as NonNullable<typeof toolUseDetail>;
+          answerable = "NO";
+          confidence = 0;
+          const provReason = `Provenance failed: toolset "${toolsetName}" configured but none of [${tud.expected.join(", ")}] were used (answer rests on model prior knowledge)`;
+          const diagnostics = renderDiagnostics();
+          reason =
+            diagnostics.length > 0
+              ? `${provReason} | ${diagnostics.join(" | ")}`
+              : provReason;
         } else {
           // Compose verdict from citation + expected when both are declared.
           // Score is the average of declared check satisfactions; verdict is
@@ -777,15 +820,9 @@ async function runMatrixScenario(
             );
           }
           if (toolUseDetail) {
-            const satisfied = toolUseDetail.used.length > 0;
-            parts.push({
-              answerable: satisfied ? "YES" : "NO",
-              confidence: satisfied ? 100 : 0,
-            });
+            // Verified branch only: provenance failure was vetoed above.
             reasons.push(
-              satisfied
-                ? `tool use verified (${toolUseDetail.used.join(", ")})`
-                : `toolset "${toolsetName}" configured but none of [${toolUseDetail.expected.join(", ")}] were used (answer rests on model prior knowledge)`,
+              `tool use verified (${toolUseDetail.used.join(", ")})`,
             );
           }
           if (parts.length === 0) {

@@ -167,7 +167,7 @@ URL sources are NOT scanned by the audit's trap cross-reference in v1; they are 
 Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. Two profiles ship today:
 
 - **`none`** (the deterministic baseline). Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared. Same scoring shape as non-matrix scenarios.
-- **`web`** on Claude Code only. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target ("the canonical source for this question is at ..."). Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes`.
+- **`web`** on Claude Code only. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target ("the canonical source for this question is at ..."). Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes` + tool-use provenance. Tool-use provenance is a hard veto: a cell that does not invoke at least one of the configured web tools is forced to `NO` with confidence `0`, because an answer pulled from model prior knowledge cannot testify to the tool path the cell is meant to test.
 
 Declare profiles at the top level of `pickled.yml`:
 
