@@ -1,29 +1,17 @@
-import Link from "next/link";
+"use client";
 
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+// docs.pickled.dev/ is not a real landing page. The landing lives at
+// pickled.dev; here we send anyone who hits the root straight into
+// the docs. Production traffic gets a 301 via apps/docs/public/_redirects
+// (Cloudflare Pages serves it before this HTML), so this client-side
+// fallback only fires in local dev and as a safety net.
 export default function HomePage() {
-  return (
-    <div className="flex flex-col justify-center text-center flex-1 gap-6 max-w-2xl mx-auto p-6">
-      <h1 className="text-3xl font-bold">pickled</h1>
-      <p className="text-lg">
-        Test what agents actually understand about your product.
-      </p>
-      <p className="text-sm opacity-80">
-        Pickled runs scenarios against real agent targets, checks that answers
-        cite registered sources, and matches declared traps against the
-        response. Scoring is deterministic by contract. No LLM grades another
-        LLM.
-      </p>
-      <div className="flex gap-3 justify-center">
-        <Link href="/docs" className="font-medium underline underline-offset-4">
-          Read the docs
-        </Link>
-        <Link
-          href="https://github.com/caiopizzol/pickled"
-          className="font-medium underline underline-offset-4"
-        >
-          GitHub
-        </Link>
-      </div>
-    </div>
-  );
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/docs");
+  }, [router]);
+  return null;
 }

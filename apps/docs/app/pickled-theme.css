@@ -1,0 +1,74 @@
+/*
+ * pickled-theme.css - minimal token bridge for Fumadocs UI.
+ *
+ * Maps Fumadocs' `--color-fd-*` variables to Pickled's brand palette
+ * so docs.pickled.dev sits in the same brand family as the landing
+ * page at pickled.dev. The docs site is locked dark by applying
+ * `class="dark"` statically on <html> (apps/docs/app/layout.tsx);
+ * only the .dark scope actually wins at runtime. The :root values
+ * are kept as a defensive fallback in case the class is ever
+ * removed by accident.
+ *
+ * Token sources are the pickled.dev landing's
+ * apps/web/src/styles/tokens.css. Values are inlined (not imported)
+ * to avoid coupling the docs Next build to the landing's Vite asset
+ * pipeline. If drift becomes a real problem, extract a shared
+ * `packages/brand-css/` workspace.
+ */
+
+@layer base {
+  :root,
+  .dark {
+    /* Page chrome */
+    --color-fd-background: #0a0a0f;
+    --color-fd-foreground: #ffffff;
+
+    /* Cards, popovers, secondary surfaces */
+    --color-fd-muted: #141420;
+    --color-fd-muted-foreground: #8888a0;
+    --color-fd-card: #141420;
+    --color-fd-card-foreground: #ffffff;
+    --color-fd-popover: #141420;
+    --color-fd-popover-foreground: #ffffff;
+    --color-fd-secondary: #1a1a28;
+    --color-fd-secondary-foreground: #ffffff;
+
+    /* Borders + focus ring */
+    --color-fd-border: #1f1f30;
+    --color-fd-ring: #00e676;
+
+    /* Accent (hover backgrounds for sidebar items, search hits, etc.) */
+    --color-fd-accent: #1a1a28;
+    --color-fd-accent-foreground: #ffffff;
+
+    /* Brand primary (CTAs, active link, highlights) */
+    --color-fd-primary: #00e676;
+    --color-fd-primary-foreground: #0a0a0f;
+  }
+
+  /* Same font families the pickled.dev landing uses. The CSS variables
+   * carrying the next/font face names are set on <html> in
+   * apps/docs/app/layout.tsx. */
+  html {
+    font-family: var(--font-pickled-body), "DM Sans", system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family:
+      var(--font-pickled-heading), "Space Grotesk", system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family:
+      var(--font-pickled-mono), "JetBrains Mono", "Fira Code", monospace;
+  }
+}

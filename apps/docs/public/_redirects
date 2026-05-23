@@ -1,0 +1,6 @@
+# Cloudflare Pages: send the docs root straight to /docs. By default,
+# Pages applies redirects before static asset resolution, so this 301
+# fires even though next build emits an /index.html for the (home)
+# route. The (home) page also runs a client-side router.replace for
+# local dev and as a safety net if this file ever drops out.
+/  /docs  301
