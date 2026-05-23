@@ -122,6 +122,47 @@ Reuses the existing `getScenarioStatus` helper. Each cell is one row; the label 
 
 JSON gains `cell: { interface, source, toolset }` on each `ScenarioResult`. Compare-surfaces' `surfaces[]` becomes one specific axis of the matrix; the broader matrix output uses the same per-cell shape extended with toolset.
 
+## Decision 6: source × toolset semantics
+
+What "source" means inside a cell depends on the cell's toolset. This is the rule:
+
+- **`Tools: none` + source**: pickled **injects** the source content into the agent's prompt context. Same behavior as today's controlled mode. The agent answers from the injected text and cites it via `## Sources`. This is the deterministic baseline.
+- **`Tools: web | context7 | firecrawl | <other tool>` + source**: pickled **constrains** the agent to use that source as the discovery target. The source is named in the prompt ("research how this product works using <source>") but its content is NOT pre-injected. The agent uses its toolset to reach it. The provenance check (Decision 2) confirms whether the agent actually fetched / queried the named source.
+- **`verifiers.sources` are NEVER injected** unless they ALSO appear in the cell's active source. Verifier content loads at run time, surfaces in the report side-by-side for human review, and does not enter the agent's prompt.
+
+Why this rule: it preserves the principle that the agent sees one source per cell (injected when toolset is none, discoverable when toolset can fetch). It prevents the silent leak where a verifier source gets injected and the agent suddenly has more context than the cell declares. And it makes the `(source, toolset)` pairing unambiguous: vendors can read the cell label `[Codex · docs.superdoc.dev · web]` and know exactly what the agent has access to.
+
+Cell-config sketch reflecting this:
+
+```yaml
+docs:
+  sources:
+    docs_site: https://docs.superdoc.dev      # source surface
+    core_src:                                  # verifier (codebase)
+      type: codebase
+      path: "packages/core/src/**/*.ts"
+
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+
+scenarios:
+  - name: "Install SuperDoc"
+    prompt: "How do I install SuperDoc?"
+    matrix:
+      interfaces: [codex]
+      sources: [docs_site]                     # cell's active source
+      toolsets: [none, web]
+    expected:
+      includes: ["bunx", "superdoc"]
+    verifiers:
+      sources: [core_src]                      # human-review only, never injected
+```
+
+In the `[codex · docs_site · none]` cell, pickled injects `docs_site` content as prompt context. In the `[codex · docs_site · web]` cell, pickled does NOT inject; it tells Codex to research the install question using `web` tools and that `docs_site` is the canonical surface. In both cells, `core_src` (verifier) loads at run time and shows up in the report next to Codex's answer; it never reaches Codex.
+
 ## What this proposal does NOT change
 
 - Released cli-v0.10.0 through cli-v0.15.0 behavior. The matrix model is additive.
