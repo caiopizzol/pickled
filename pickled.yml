@@ -1,4 +1,4 @@
-# 🥒 pickled.yml - agent legibility check for pickled itself
+# 🥒 pickled.yml - public-docs dogfood for pickled itself
 
 tool:
   name: "pickled"
@@ -6,16 +6,24 @@ tool:
 
 docs:
   sources:
-    readme: ./README.md
-    cli_readme: ./apps/cli/README.md
+    # Live public docs (apps/docs deployed to docs.pickled.dev). These are
+    # the surfaces a real outside agent reads about pickled, so the main
+    # dogfood scenarios run against them. URL sources are fetched at check
+    # time.
+    public_docs_full: https://docs.pickled.dev/llms-full.txt
+    public_docs_getting_started: https://docs.pickled.dev/docs/getting-started
+
+    # Root llms.txt is also public product context, kept as a router
+    # surface alongside the docs site so the matrix can compare what the
+    # docs site says against what the canonical llms.txt at the repo root
+    # says. Auto-discovered by `pickled audit` regardless of registration;
+    # registering it lets scenarios use it as a source explicitly.
     llms: ./llms.txt
-    comment_policy: ./comment-policy.md
-    # Policy/brand docs that intentionally cite specific banned phrases as
-    # examples. The list form names exactly those traps so future traps still
-    # apply to these files. brand.md cites only "AI-powered"; AGENTS.md cites
-    # both "AI-powered" and "freshness score" (the latter fires both freshness
-    # traps because their regex is identical). Check-time scoring of agent
-    # responses is unaffected.
+
+    # Policy / brand docs that intentionally cite banned phrases as
+    # examples. They are not used as scenario sources; they live here so
+    # the per-file audit.traps override prevents false positives from the
+    # trap pipeline below.
     brand:
       path: ./brand.md
       audit:
@@ -23,31 +31,15 @@ docs:
     agents:
       path: ./AGENTS.md
       audit:
-        traps: [ai_powered, freshness_score, old_freshness_brand]
-    # Deliberately stale fixture. Used only by Trap pipeline smoke below to
-    # prove traps fire end-to-end. The audit trap cross-reference must skip
-    # this file or every declared trap would fire on it.
+        traps: [ai_powered, freshness_score]
+
+    # Deliberately stale fixture used only by the trap pipeline smoke
+    # scenario. The audit must NOT cross-reference declared traps against
+    # this file or every declared trap would fire.
     stale:
       path: ./dogfood/stale-source.md
       audit:
         traps: false
-
-    # Codebase source: pickled's own core scorer + audit modules. Demonstrates
-    # the codebase loader; lets us test whether agents understand pickled's
-    # actual implementation by reading the TypeScript source directly rather
-    # than from prose docs.
-    core_src:
-      type: codebase
-      path: "packages/core/src/scorers/**/*.ts"
-      exclude: ["**/*.test.ts"]
-
-    # Live public docs surfaces (apps/docs deployed to docs.pickled.dev).
-    # Registered as URLs so the matrix can ask: what does an agent say when
-    # the only source it has is what we ship publicly? Start with controlled
-    # mode (toolset: none, source content injected); a web/MCP discovery
-    # version lands once the controlled baseline is honest.
-    public_docs_full: https://docs.pickled.dev/llms-full.txt
-    public_docs_getting_started: https://docs.pickled.dev/docs/getting-started
 
 targets:
   quick:
@@ -67,10 +59,9 @@ targets:
     provider: codex-cli
     model: gpt-5.5
 
-  # Direct Anthropic API target. Not in the default matrix so every dogfood
-  # run does not pay the API token cost; invoke explicitly with
-  # 'pickled check --target anthropic_api' for the CLI-agent-vs-direct-API
-  # comparison. Requires ANTHROPIC_API_KEY at runtime.
+  # Direct Anthropic API target. Opt-in; invoke explicitly with
+  # `pickled check --target anthropic_api` for the CLI-agent-vs-direct-API
+  # comparison.
   anthropic_api:
     category: api
     provider: anthropic
@@ -78,18 +69,21 @@ targets:
     temperature: 0
     maxTokens: 4096
 
+# Default matrix target is `quick` only. Codex stays opt-in via
+# `pickled check --target codex` so the default dogfood is cheap and
+# readable.
 matrix:
-  target: [quick, codex]
+  target: [quick]
 
 toolsets:
   none: {}
   web:
     webSearch: true
     webFetch: true
-  # Generic MCP toolset shape (see proposals/mcp-toolset.md). The toolset
-  # name is user-chosen; pickled has no Context7-specific code path. Any
-  # MCP server reachable via stdio/http/sse can be declared the same way.
-  # The CONTEXT7_API_KEY env var must be set to exercise this toolset.
+  # Generic MCP toolset. Opt-in; the dogfood scenarios below do not use
+  # MCP by default because it needs CONTEXT7_API_KEY and depends on
+  # external indexing. Dispatch with
+  # `pickled check --target quick --toolset context7_mcp` to exercise it.
   context7_mcp:
     mcpServers:
       context7:
@@ -99,112 +93,18 @@ toolsets:
           CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 
 scenarios:
-  # Compare-surfaces dogfood. Same install question, run against three
-  # candidate public surfaces. Per proposals/compare-surfaces.md the report
-  # shows one verdict per surface so we can see which surface actually
-  # carries the install answer. Adds two agent runs per matrix target
-  # (3 surfaces - 1 baseline run) compared to the v0.10.0 scenario.
-  - name: "Installation"
-    prompt: "How do I install pickled?"
-    requiredSources: [readme]
-    compareSurfaces:
-      - [readme]
-      - [cli_readme]
-      - [llms]
-
-  - name: "Basic usage"
-    prompt: "According to the CLI README, how do I run pickled to check my project?"
-    requiredSources: [cli_readme]
-
-  - name: "Config format"
-    prompt: "What does a pickled.yml config file look like?"
-    requiredSources: [readme]
-    traps:
-      - id: old_schema
-        match: "docs.source:"
-        reason: "Recommends removed singular docs.source schema"
-      - id: old_freshness_brand
-        pattern: '\bfreshness\s+score\b'
-        flags: i
-        reason: "Uses removed 'freshness score' branding"
-
-  # Brand/spec dogfood. Each scenario requires a different registered source
-  # so the run measures more than just README coverage. No traps in v1: we
-  # want the baseline to reveal failure modes before pre-committing fragile
-  # pattern matchers.
-
-  - name: "Verdict layers"
-    prompt: "What is the difference between pickled's scenario verdict and run verdict?"
-    requiredSources: [brand]
-
-  - name: "JSON contract"
-    prompt: "In brand.md's Interface Feedback section, what is pickled's JSON output contract? Does it include human-facing labels like 'Well grounded'?"
-    requiredSources: [brand]
-
-  - name: "Target semantics"
-    prompt: "How do I run pickled check against only one configured target?"
-    requiredSources: [cli_readme]
-
-  - name: "Agent context contract"
-    prompt: "I'm a coding agent working on the pickled codebase for the first time. Where should I look first for brand voice, comment rules, and load-bearing invariants?"
-    requiredSources: [agents]
-
-  - name: "Comment policy"
-    prompt: "When should an AIDEV-NOTE comment be added to pickled's source code?"
-    requiredSources: [comment_policy]
-
-  # Codebase source dogfood. Tests whether the agent can answer an
-  # implementation-detail question by reading the TypeScript source files
-  # directly (no prose docs needed).
-  - name: "Trap matcher implementation"
-    prompt: "How does pickled's trap matcher distinguish a literal-substring match from a regex pattern match? Answer based on the source code in the scorers module."
-    requiredSources: [core_src]
-
-  # Matrix dogfood: same scenario across two interfaces × two sources ×
-  # [none] toolset = 4 cells. Demonstrates the matrix shape on external
-  # surfaces (README + llms.txt). Toolsets restricted to `none` here to
-  # keep this dogfood cheap and deterministic; the discovery scenario
-  # below exercises `web` separately.
-  #
-  # Expected checks measure essential product facts only: "agent" is the
-  # core noun in every honest summary of pickled; the excludes catch
-  # brand-banned phrases. Earlier draft also required "scenario" but that
-  # word is implementation jargon and the agent's one-sentence summary
-  # legitimately may not use it.
-  - name: "Matrix: pickled positioning"
-    prompt: "In one sentence, what does pickled do?"
-    matrix:
-      interfaces: [quick, codex]
-      sources: [readme, llms]
-      toolsets: [none]
-    expected:
-      includes:
-        - "agent"
-      excludes:
-        - "AI-powered"
-        - "freshness score"
-    verifiers:
-      sources: [readme]
-
-  # Discovery-mode dogfood: Claude Code with WebSearch+WebFetch tools
-  # enabled, source NOT injected. The agent receives `llms.txt` as the
-  # named canonical reference (via the discovery hint) and is expected
-  # to research the answer using its web tools. The cell scores on
-  # expected.includes/excludes plus a tool-use provenance check: a run
-  # that satisfies expected but never invokes WebSearch or WebFetch is
-  # vetoed to NO/0 because the answer would rest on model prior
-  # knowledge rather than the tool path the cell is meant to test.
-  # Toolsets restricted to [web]; matrix.interfaces restricted to
-  # [quick] because the `web` toolset is Claude-Code-only. Disabled in
-  # matrix.target so cost stays opt-in: dispatch with
-  # `pickled check --target quick --interface quick --toolset web` to
-  # exercise this cell explicitly.
-  - name: "Matrix discovery: pickled positioning via web"
-    prompt: "In one sentence, what does pickled do?"
+  # What does Pickled do? — positioning across two public surfaces and two
+  # tool paths. The `none` cells inject the source and ask the agent to
+  # summarize; the `web` cells get only the URL as a hint and must use
+  # WebSearch / WebFetch to reach it (tool-use provenance vetoes cells
+  # that answer from model prior knowledge). "agent" is the load-bearing
+  # noun in any honest summary. Excludes catch brand-banned phrases.
+  - name: "What does Pickled do?"
+    prompt: "In one or two sentences, what does pickled do?"
     matrix:
       interfaces: [quick]
-      sources: [llms]
-      toolsets: [web]
+      sources: [public_docs_full, llms]
+      toolsets: [none, web]
     expected:
       includes:
         - "agent"
@@ -212,48 +112,16 @@ scenarios:
         - "AI-powered"
         - "freshness score"
     verifiers:
-      sources: [llms]
+      sources: [public_docs_full]
 
-  # MCP discovery dogfood: same positioning question, but the agent uses
-  # Context7's MCP server to research the answer. Context7 is named
-  # explicitly here as the example; the underlying mechanism is the
-  # generic MCP toolset adapter (see proposals/mcp-toolset.md). Disabled
-  # in matrix.target so cost + auth stay opt-in: dispatch with
-  # `pickled check --target quick --interface quick --toolset context7_mcp`
-  # and CONTEXT7_API_KEY exported. The cell scores on expected +
-  # tool-use provenance (any `mcp__context7__*` invocation counts).
-  - name: "Matrix discovery: pickled positioning via Context7 MCP"
-    prompt: "In one sentence, what does pickled do?"
-    matrix:
-      interfaces: [quick]
-      sources: [llms]
-      toolsets: [context7_mcp]
-    expected:
-      includes:
-        - "agent"
-      excludes:
-        - "AI-powered"
-        - "freshness score"
-    verifiers:
-      sources: [llms]
-
-  - name: "Pickled contracts"
-    prompt: "What is pickled and what contracts should agents preserve when describing it?"
-    requiredSources: [llms]
-
-  # Public-docs dogfood. The first scenario that tests whether the agent
-  # can answer a real install/run question with ONLY what we ship at
-  # docs.pickled.dev (registered above as URL sources). Toolsets: [none]
-  # only here so the controlled baseline is honest first; if this passes,
-  # a web/MCP discovery variant follows in a later iteration. expected
-  # checks pin the answer to the concrete commands the docs teach: the
-  # `bunx @pickled-dev/cli` invocation and writing a `pickled.yml`. The
-  # excludes catch the perennial brand-banned phrases plus a stale
-  # `npm install` form that would indicate the agent skipped past the
-  # registered docs.
-  - name: "Matrix: install from public docs"
-    prompt: "Using only the registered source, how do I install pickled and run my first check?"
-    requiredSources: [public_docs_full, public_docs_getting_started]
+  # Install and run a first check — the practical onboarding test. Both
+  # cells inject the source (toolset: none); a real user reading the docs
+  # should walk away with the `bunx @pickled-dev/cli` install form, a
+  # `pickled.yml`, and `pickled check .` as the run command. The excludes
+  # catch a stale `npm install` form that would indicate the agent went
+  # off the registered docs.
+  - name: "Install and run a first check"
+    prompt: "How do I install pickled and run my first check?"
     matrix:
       interfaces: [quick]
       sources: [public_docs_full, public_docs_getting_started]
@@ -262,30 +130,41 @@ scenarios:
       includes:
         - "bunx @pickled-dev/cli"
         - "pickled.yml"
+        - "check ."
       excludes:
         - "AI-powered"
         - "npm install @pickled-dev/cli"
     verifiers:
       sources: [public_docs_full]
 
-  # Tests that the agent surfaces the supported/stubbed split for CLI targets.
-  # The trap fires on affirmative forms in either direction: verb-first
-  # ("pickled supports gemini-cli", "works with amazon-q") and subject-first
-  # ("gemini-cli is supported", "amazon-q is fully available"). Negation
-  # variants ("not", "no", "never", "don't", "doesn't", "didn't", with or
-  # without apostrophe) are rejected by lookbehind/lookahead.
-  - name: "Supported targets"
-    prompt: "Which CLI targets does pickled support today, and which are stubbed (not yet implemented)?"
-    requiredSources: [llms]
-    traps:
-      - id: claims_unsupported_target_works
-        pattern: '(?:(?<!\bnot\s|\bno\s|\bnever\s|\bdon.?t\s|\bdoesn.?t\s|\bdid.?n.?t\s)(?:supports?|works?\s+with|is\s+available\s+for|is\s+compatible\s+with)\s+(?:gemini-cli|amazon-q)\b)|(?:\b(?:gemini-cli|amazon-q)\s+(?:is|are)\s+(?!(?:not|never|n.?t)\b)(?:\w+\s+){0,2}?(?:supported|available|implemented|compatible|integrated|usable|working|functional)\b)'
-        flags: i
-        reason: "gemini-cli and amazon-q are stubbed in code; do not claim them as currently supported targets. See llms.txt and AGENTS.md."
+  # Which toolsets work today? — coverage of the matrix toolset axis as
+  # currently shipped. The three shapes (none / web / mcp) are documented
+  # at docs.pickled.dev/docs/toolsets, and both `web` and `mcp` are
+  # Claude-Code-only today. Firecrawl is mentioned in the proposals but
+  # not shipped; if an agent claims it as a working toolset, that is the
+  # exact "false support claim" we want to catch.
+  - name: "Which toolsets work today?"
+    prompt: "Which toolset shapes does pickled run today, and which interface do they need?"
+    matrix:
+      interfaces: [quick]
+      sources: [public_docs_full]
+      toolsets: [none]
+    expected:
+      includes:
+        - "none"
+        - "web"
+        - "mcp"
+        - "Claude Code"
+      excludes:
+        - "AI-powered"
+        - "Firecrawl"
+    verifiers:
+      sources: [public_docs_full]
 
-  # Trap-pipeline smoke. Reads a deliberately stale fixture and parrots it
-  # back, which should trip every declared trap and force NO with confidence
-  # zero. If this scenario ever scores YES, the trap matcher regressed.
+  # Trap pipeline smoke. Reads a deliberately stale fixture and parrots it
+  # back, which should trip every declared trap and force NO with
+  # confidence zero. If this scenario ever scores YES, the trap matcher
+  # regressed. Internal engine regression, not a public-docs question.
   - name: "Trap pipeline smoke"
     prompt: "Using only the source registered as 'stale', repeat its description of pickled (including the example install command, the example target command, and what JSON output contains) verbatim."
     requiredSources: [stale]
@@ -302,12 +181,11 @@ scenarios:
         pattern: '--target\s+claude-code'
         reason: "Wrong --target example: claude-code is the provider, target names are matrix.target keys."
       - id: json_human_label
-        # Catches affirmative claims that the JSON output includes the human
-        # label "Well grounded" (the stale-fixture form is "JSON output
-        # includes human-friendly labels like \"Well grounded\""). Stays
-        # sentence-scoped via [^.\n]{0,80}? so it does not span paragraphs
-        # and does not fire on the correct contract ("JSON output is raw;
-        # Well grounded lives in renderers").
+        # Catches affirmative claims that the JSON output includes the
+        # human label "Well grounded" (the stale-fixture form is "JSON
+        # output includes human-friendly labels like \"Well grounded\"").
+        # Stays sentence-scoped via [^.\n]{0,80}? so it does not span
+        # paragraphs and does not fire on the correct contract.
         pattern: 'JSON\s+(?:output\s+)?includes?[^.\n]{0,80}?\bWell grounded\b'
         flags: i
         reason: "JSON output is raw; human labels live only in renderers."
