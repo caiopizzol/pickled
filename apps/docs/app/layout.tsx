@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://docs.pickled.dev"),
   title: { default: "pickled docs", template: "%s · pickled" },
   description:
-    "Test what agents actually understand about your product. Pickled runs scenarios against real agent targets, checks that answers cite registered sources, and matches declared traps against the response.",
+    "Test what agents actually understand about your product. Pickled runs scenarios across a matrix of interfaces, sources, and toolsets, then scores each cell with deterministic checks.",
 };
 
 export default function Layout({ children }: LayoutProps<"/">) {

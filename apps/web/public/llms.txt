@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that runs scenarios against real agent targets (Claude Code, Codex CLI, Anthropic API), requires every answer to cite a registered source, and matches declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+Pickled is an open-source CLI that runs scenarios across a matrix of interfaces (Claude Code, Codex CLI, Anthropic API), sources (READMEs, docs URLs, llms.txt, codebase globs), and toolsets (`none` / `web` / `mcp`), then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
 
 ## Install
 
@@ -47,6 +47,16 @@ The scenario verdict determines the label family. Confidence may refine `YES` in
 ## Source contract
 
 Pickled does not magically introspect your product. You declare what counts as truth under `docs.sources` in `pickled.yml`. Anything not registered does not count for scoring. Anything an agent could read can be registered: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. Public or private. URLs or local paths. Loader types: `file` (default), `url`, `codebase` (glob expanded into one logical source; useful for registering whole directories of JSDoc or per-package agent docs).
+
+## Matrix and toolsets
+
+A scenario can expand into one cell per `(interface × source × toolset)` tuple. Each cell scores independently. Three toolset shapes ship today:
+
+- `none`: deterministic baseline. The cell's active source content is injected into the agent's prompt. The citation contract applies if `requiredSources` is declared.
+- `web`: WebSearch + WebFetch on Claude Code. Source is NOT injected; the cell's prompt names the active source as the discovery target. Tool-use provenance is required.
+- `mcp`: any MCP server (`stdio`, `http`, `sse`) on Claude Code. Source is NOT injected; the agent invokes `mcp__<server>__*` tools at inference. Tool-use provenance is required.
+
+Citation contract only applies in `none` cells. Non-`none` cells score on `expected.includes`/`excludes` plus tool-use provenance: a cell that satisfies `expected` but never invokes any of the configured tools is hard-vetoed to `NO` with confidence `0`, because an answer from model prior knowledge cannot testify to the tool path the cell is meant to test.
 
 ## Targets today
 

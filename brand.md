@@ -11,7 +11,7 @@ language: en
 
 ### Overview
 
-Pickled is an open-source CLI that tests whether AI agents actually understand your product. It runs scenarios against real agent targets, requires every answer to cite a registered source, and matches declared stale-pattern traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+Pickled is an open-source CLI that tests whether AI agents actually understand your product. It runs scenarios across a matrix of interfaces, sources, and toolsets, then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
 
 Pickled started as a freshness checker for developer tool docs. It got rewritten when the real problem became clear, and the real problem has three surfaces, not one.
 
@@ -21,7 +21,7 @@ Pickled started as a freshness checker for developer tool docs. It got rewritten
 
 The same product can be legible in one agent surface and illegible in another, because each one gets a different slice. Pickled measures that per surface.
 
-**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources (anything an agent can read). You declare scenarios. You declare traps. The framework runs the scenarios against real agent targets, parses citations out of the answer, matches traps against the response, and emits a deterministic score per surface.
+**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources (anything an agent can read), scenarios (the questions), traps (the stale patterns), and toolsets (the tool paths the agent has). The framework expands each scenario into cells, runs each cell against its configured interface, and scores the answer with deterministic checks: expected substrings, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. Receipts per cell.
 
 **The problem.** Every API-backed product now has multiple readers. Some are people. Some are agents. The agents get different context bundles depending on which surface they live in, and each one fails in characteristic ways:
 
