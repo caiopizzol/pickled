@@ -73,6 +73,35 @@ Future: opt-in MCP audit (`audit.mcpScan: true` per source, with timeouts and ca
 
 **Recommendation:** fail-loud on MCP errors during `check`. Fail-clean on MCP errors during `audit` (because audit skips MCP entirely; see Decision 5).
 
+## Decision 7: env substitution rule
+
+**Recommendation:** support **full-value substitution only**. `FOO: "${FOO}"` reads the env var verbatim into the spawned subprocess's environment. Inline interpolation like `token-${FOO}` is **not** supported in v1. Missing env vars fail loudly at config load with the source id and the missing variable name.
+
+Why: full-value substitution covers the load-bearing case (API keys, tokens) without bringing in the surface area of a templating engine. Inline interpolation is harder to spec (escape rules, partial matches, recursive substitution) and the use cases are weak. If a vendor needs a composed value, they compose it in the shell before invoking pickled.
+
+Behavior:
+- Each value in the source's `env` block is parsed for an exact `"${VAR}"` pattern (whitespace allowed inside braces).
+- If the pattern matches, the literal env var value is substituted. If the env var is missing, throw at load time with `pickled.yml: docs.sources["<id>"].env.<KEY> references missing env var "VAR"`.
+- If the pattern does not match (the value is literal text, or contains an inline template), the value is passed through unchanged. This means a literal `"token-${FOO}"` reaches the subprocess as-is, with the `${FOO}` literal. Documented behavior, not a silent expansion.
+
+## Decision 8: MIME type handling
+
+**Recommendation:** accept **text resources only** in v1. Specifically: MCP resource responses whose `mimeType` field starts with `text/` (e.g., `text/plain`, `text/markdown`, `text/html`). Reject anything else with a clear source-load error.
+
+```
+MCP source [context7]: resource "context7://docs/install" returned mimeType "application/pdf"; v1 supports text/* resources only.
+```
+
+Why: pickled injects source content into the agent's prompt as text. Binary content cannot be meaningfully embedded in a text prompt, and lenient acceptance would silently corrupt scoring. The text/* allowlist is conservative; vendors who want binary support write a follow-up issue with the use case.
+
+Fallback rule: if the MCP server returns no `mimeType` field at all, pickled treats it as `text/plain` and accepts.
+
+## Decision 9: subprocess cwd
+
+**Recommendation:** the MCP server subprocess runs with **`cwd` set to the project root** (the directory containing `pickled.yml`), not whatever shell directory invoked pickled.
+
+Why: matches file and codebase source behavior (both resolve relative paths from the project root). Reproducible regardless of where the operator invokes the CLI from. Documented explicitly so vendors writing MCP servers that read relative paths know what to expect.
+
 In check:
 - MCP server fails to start: the scenario errors with the server stderr captured.
 - Resource fetch returns an error: the scenario errors with the MCP error code and message.
@@ -153,7 +182,7 @@ If the MCP server's install resource is fresh but README is stale, surfaces spli
 
 1. Schema: extend `DocSourceEntry` with `type: mcp` and the MCP-specific fields (`transport`, `command`, `args`, `env`, `resources`). Update loader validation: require `transport: stdio` in v1, require `command`, require non-empty `resources` list of strings.
 2. SDK dependency: add `@modelcontextprotocol/sdk` to `packages/core/package.json` as a direct dependency.
-3. Loader: new branch in `fetchSource` for `type: mcp`. Spawn the MCP server via stdio, list resources to verify the declared URIs exist, fetch each declared URI, close the connection cleanly. Concatenate fetched content with URI headers.
+3. Loader: new branch in `fetchSource` for `type: mcp`. Spawn the MCP server via stdio (cwd = project root per Decision 9, env substituted per Decision 7), read each declared URI directly via `resources/read` (no `list_resources` call - per Decision 3 there is no auto-discovery, so listing has no purpose; a missing resource fails loudly on the read), validate the mimeType per Decision 8, close the connection cleanly. Concatenate fetched content with URI headers.
 4. Audit interaction: extend `scanSourceTraps` to skip MCP sources (mirror the URL skip at `source-traps.ts:54` for the same reasons).
 5. Tests: stdio spawn happy path with mocked subprocess, resource fetch returns content, error on missing resource, error on server failure, content concatenation order is deterministic by URI list order.
 6. Dogfood: optional. We do not run an MCP server in this repo today. Skip the pickled.yml dogfood addition; cover behavior in unit tests only.
@@ -161,7 +190,7 @@ If the MCP server's install resource is fresh but README is stale, surfaces spli
 
 ## Open questions
 
-1. **MCP server subprocess lifecycle.** Spawn once per source, hold the connection across multiple resource fetches, then close? Or one spawn per fetch? Lean toward one spawn per source (fewer subprocess starts). Decide during implementation.
-2. **Resource MIME types.** MCP resources can be text, binary, or other types. v1 should accept `text/*` only and reject others with a clear error. Binary resources are a separate design (they can't be injected into a text prompt anyway).
-3. **`env` substitution.** YAML supports `${ENV_VAR}` substitution in some loaders but not Bun's YAML by default. Decide whether to pre-substitute env vars in the loader (with explicit allow-list) or pass env block raw.
-4. **`Cwd` for the spawned MCP server.** Should the server inherit pickled's cwd, or run in the project root? Probably project root for consistency, but document explicitly.
+1. **MCP server subprocess lifecycle.** Spawn once per source, hold the connection across multiple resource fetches, then close? Or one spawn per fetch? Lean toward one spawn per source (fewer subprocess starts, lower latency for multi-resource sources). Decide during implementation; either choice is invisible to vendors as long as resource content arrives correctly.
+2. ~~**Resource MIME types.**~~ Resolved in Decision 8: text/* only; missing mimeType treated as text/plain; non-text rejected with a clear source-load error.
+3. ~~**`env` substitution.**~~ Resolved in Decision 7: full-value `"${VAR}"` substitution only, no inline interpolation, missing var fails at load.
+4. ~~**`Cwd` for the spawned MCP server.**~~ Resolved in Decision 9: project root (directory containing pickled.yml).
