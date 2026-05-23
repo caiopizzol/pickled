@@ -31,6 +31,37 @@ export interface SurfaceResult {
   allResponses?: ResponseEntry[];
 }
 
+/**
+ * One per-cell evaluation produced by matrix mode. A cell is the tuple
+ * (interface, source, toolset). Carries the scenario's evaluation fields
+ * scoped to that cell. See `proposals/matrix-evaluation.md`.
+ *
+ * v0.16.0: only `toolset = "none"` has runtime behavior (source content is
+ * injected). Non-none toolsets throw at runtime; their adapter implementations
+ * (WebSearch+WebFetch, Context7 MCP, Firecrawl, etc.) land in follow-up
+ * commits.
+ */
+export interface CellResult {
+  cell: {
+    interface: string;
+    source: string | null;
+    toolset: string;
+  };
+  answerable: Answerable;
+  confidence: number;
+  response: string;
+  reason: string;
+  citations: CitationDetails | null;
+  traps: TrapDetails;
+  expected?: {
+    includes: Array<{ value: string; satisfied: boolean }>;
+    excludes: Array<{ value: string; satisfied: boolean }>;
+    satisfied: number;
+    total: number;
+  };
+  allResponses?: ResponseEntry[];
+}
+
 export interface ScenarioResult {
   scenario: Scenario;
   /**
@@ -46,6 +77,8 @@ export interface ScenarioResult {
   traps: TrapDetails | null;
   /** Per-surface evaluations. Present iff scenario.compareSurfaces declared. */
   surfaces?: SurfaceResult[];
+  /** Per-cell evaluations. Present iff scenario.matrix declared. */
+  cells?: CellResult[];
   error?: string;
   target?: {
     target: string;

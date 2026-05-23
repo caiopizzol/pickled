@@ -70,13 +70,37 @@ Default `terminal` format is plain text suited to CI logs. Use `--format markdow
 
 Run agent scenarios against registered sources.
 
-| Option                | Description                                      |
-| --------------------- | ------------------------------------------------ |
-| `--json`              | Output as JSON                                   |
-| `-o, --output <file>` | Save JSON report to file                         |
-| `-v, --verbose`       | Show progress while scenarios run                |
-| `-t, --threshold <n>` | Minimum score percent needed to pass             |
-| `--target <name>`     | Run only the named target (overrides matrix)     |
+| Option                | Description                                                         |
+| --------------------- | ------------------------------------------------------------------- |
+| `--json`              | Output as JSON                                                      |
+| `-o, --output <file>` | Save JSON report to file                                            |
+| `-v, --verbose`       | Show progress while scenarios run                                   |
+| `-t, --threshold <n>` | Minimum score percent needed to pass                                |
+| `--target <name>`     | Run only the named target (overrides matrix)                        |
+| `--scenario <name>`   | Run only the named scenario (CI-matrix-friendly)                    |
+| `--interface <name>`  | Matrix cell filter: run only cells with this interface              |
+| `--source <name>`     | Matrix cell filter: run only cells with this source id              |
+| `--toolset <name>`    | Matrix cell filter: run only cells with this toolset name           |
+
+The cell filters work with `scenario.matrix` declarations. Designed for GitHub Actions matrix usage where each CI job runs one cell:
+
+```yaml
+# .github/workflows/pickled-matrix.yml
+strategy:
+  matrix:
+    interface: [codex, claude_code]
+    source: [docs_site, readme]
+    toolset: [none]
+steps:
+  - run: |
+      pickled check \
+        --interface "${{ matrix.interface }}" \
+        --source "${{ matrix.source }}" \
+        --toolset "${{ matrix.toolset }}" \
+        --output "pickled-report-${{ matrix.interface }}-${{ matrix.source }}-${{ matrix.toolset }}.json"
+```
+
+Each job uploads one receipt; a later job can merge or compare them. Full-matrix runs without filters work too; they just produce one report covering every declared cell.
 
 ## Example Output
 

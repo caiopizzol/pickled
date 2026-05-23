@@ -525,4 +525,178 @@ describe("runCheck compare-surfaces mode", () => {
       expect(report.scenarios[0]!.answerable).toBe("YES");
     });
   });
+
+  test("scenario without requiredSources but with expected: passes on substring hits", async () => {
+    await withTempProject("# README content", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Expected only",
+            prompt: "p",
+            expected: { includes: ["hello", "world"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () =>
+            makeMockTarget("the agent says hello world to you"),
+        },
+      );
+      expect(report.scenarios[0]!.cells).toBeUndefined();
+      expect(report.scenarios[0]!.answerable).toBe("YES");
+    });
+  });
+});
+
+describe("runCheck matrix mode", () => {
+  test("populates cells[] and nulls top-level evaluation fields", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: {
+          a: { category: "cli", provider: "claude-code" },
+          b: { category: "cli", provider: "claude-code" },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Probe",
+            prompt: "what",
+            matrix: { interfaces: ["a", "b"], sources: ["readme"] },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("pickled answer here") },
+      );
+      const r = report.scenarios[0]!;
+      expect(r.cells).toBeDefined();
+      expect(r.cells).toHaveLength(2);
+      expect(r.answerable).toBeNull();
+      expect(r.confidence).toBeNull();
+      expect(r.cells![0]?.cell.interface).toBe("a");
+      expect(r.cells![1]?.cell.interface).toBe("b");
+      expect(r.cells![0]?.cell.toolset).toBe("none");
+      expect(r.cells![0]?.answerable).toBe("YES");
+    });
+  });
+
+  test("non-none toolset throws (only 'none' implemented in v0.16.0)", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true } },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], toolsets: ["web"] },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toContain("not yet implemented");
+    });
+  });
+
+  test("cellFilter.interface skips cells with non-matching interface", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: {
+          a: { category: "cli", provider: "claude-code" },
+          b: { category: "cli", provider: "claude-code" },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Probe",
+            prompt: "?",
+            matrix: { interfaces: ["a", "b"] },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => makeMockTarget("x"),
+          cellFilter: { interface: "a" },
+        },
+      );
+      const cells = report.scenarios[0]!.cells!;
+      expect(cells).toHaveLength(1);
+      expect(cells[0]?.cell.interface).toBe("a");
+    });
+  });
+
+  test("scenarioFilter restricts to named scenarios", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          { name: "Wanted", prompt: "?", expected: { includes: ["x"] } },
+          { name: "Unwanted", prompt: "?", expected: { includes: ["x"] } },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => makeMockTarget("x"),
+          scenarioFilter: ["Wanted"],
+        },
+      );
+      expect(report.scenarios).toHaveLength(1);
+      expect(report.scenarios[0]!.scenario.name).toBe("Wanted");
+    });
+  });
+
+  test("trap firing vetoes a matrix cell to NO/0 regardless of expected hits", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Trap test",
+            prompt: "?",
+            matrix: { interfaces: ["a"] },
+            expected: { includes: ["pickled"] },
+            traps: [{ id: "bad", match: "BANNED", reason: "Stale claim" }],
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () =>
+            makeMockTarget("pickled answer but BANNED phrase"),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+      expect(cell.traps.fired).toHaveLength(1);
+    });
+  });
 });

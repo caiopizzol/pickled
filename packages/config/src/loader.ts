@@ -35,6 +35,19 @@ function validate(config: CheckConfig): void {
     }
   }
 
+  if (config.toolsets) {
+    if (typeof config.toolsets !== "object" || Array.isArray(config.toolsets)) {
+      throw new Error(
+        `pickled.yml: 'toolsets' must be an object mapping name to configuration`,
+      );
+    }
+    for (const [name, ts] of Object.entries(config.toolsets)) {
+      if (typeof ts !== "object" || ts === null || Array.isArray(ts)) {
+        throw new Error(`pickled.yml: toolsets["${name}"] must be an object`);
+      }
+    }
+  }
+
   if (config.targets) {
     for (const [name, target] of Object.entries(config.targets)) {
       if ((target as Record<string, unknown>).systemPrompt !== undefined) {
@@ -90,20 +103,32 @@ function validate(config: CheckConfig): void {
     if (!scenario.name || !scenario.prompt) {
       throw new Error("pickled.yml: every scenario needs 'name' and 'prompt'");
     }
-    if (!Array.isArray(scenario.requiredSources)) {
-      throw new Error(
-        `pickled.yml: scenario "${scenario.name}" is missing 'requiredSources' (use [] to allow any citation)`,
-      );
-    }
-    for (const id of scenario.requiredSources) {
-      if (!sourceIds.has(id)) {
+    if (scenario.requiredSources !== undefined) {
+      if (!Array.isArray(scenario.requiredSources)) {
         throw new Error(
-          `pickled.yml: scenario "${scenario.name}" references unknown source "${id}". Declared sources: ${[...sourceIds].join(", ") || "(none)"}`,
+          `pickled.yml: scenario "${scenario.name}" has non-array 'requiredSources'. Omit the field to skip citation scoring, or set [] for "any cited source counts".`,
         );
+      }
+      for (const id of scenario.requiredSources) {
+        if (!sourceIds.has(id)) {
+          throw new Error(
+            `pickled.yml: scenario "${scenario.name}" references unknown source "${id}". Declared sources: ${[...sourceIds].join(", ") || "(none)"}`,
+          );
+        }
       }
     }
     validateTraps(scenario.name, scenario.traps);
     validateCompareSurfaces(scenario.name, scenario.compareSurfaces, sourceIds);
+    validateScenarioMatrix(
+      scenario.name,
+      scenario.matrix,
+      sourceIds,
+      new Set(Object.keys(config.targets ?? {})),
+      new Set(Object.keys(config.toolsets ?? { none: {} })),
+    );
+    validateExpected(scenario.name, scenario.expected);
+    validateVerifiers(scenario.name, scenario.verifiers, sourceIds);
+    validateActionableContract(scenario);
   }
 
   validateAuditTrapsSuppression(config);
@@ -150,6 +175,146 @@ function validateAuditTrapsSuppression(config: CheckConfig): void {
         );
       }
     }
+  }
+}
+
+function validateScenarioMatrix(
+  scenarioName: string,
+  matrix:
+    | { interfaces?: string[]; sources?: string[]; toolsets?: string[] }
+    | undefined,
+  sourceIds: Set<string>,
+  targetNames: Set<string>,
+  toolsetNames: Set<string>,
+): void {
+  if (matrix === undefined) return;
+  if (typeof matrix !== "object" || Array.isArray(matrix)) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" matrix must be an object with optional interfaces/sources/toolsets arrays`,
+    );
+  }
+  const checkArray = (
+    field: "interfaces" | "sources" | "toolsets",
+    knownNames: Set<string>,
+    label: string,
+  ): void => {
+    const values = matrix[field];
+    if (values === undefined) return;
+    if (!Array.isArray(values)) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" matrix.${field} must be an array of ${label} names`,
+      );
+    }
+    if (values.length === 0) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" matrix.${field} cannot be empty (omit the field to use defaults)`,
+      );
+    }
+    for (const name of values) {
+      if (typeof name !== "string") {
+        throw new Error(
+          `pickled.yml: scenario "${scenarioName}" matrix.${field} entries must be strings`,
+        );
+      }
+      if (!knownNames.has(name)) {
+        throw new Error(
+          `pickled.yml: scenario "${scenarioName}" matrix.${field} references unknown ${label} "${name}". Declared: ${[...knownNames].join(", ") || "(none)"}`,
+        );
+      }
+    }
+  };
+  checkArray("interfaces", targetNames, "target");
+  checkArray("sources", sourceIds, "source");
+  checkArray("toolsets", toolsetNames, "toolset");
+}
+
+function validateExpected(
+  scenarioName: string,
+  expected: { includes?: unknown; excludes?: unknown } | undefined,
+): void {
+  if (expected === undefined) return;
+  if (typeof expected !== "object" || Array.isArray(expected)) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" expected must be an object with optional includes/excludes arrays`,
+    );
+  }
+  const checkStrings = (field: "includes" | "excludes"): void => {
+    const arr = expected[field];
+    if (arr === undefined) return;
+    if (!Array.isArray(arr)) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" expected.${field} must be an array of strings`,
+      );
+    }
+    if (arr.length === 0) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" expected.${field} cannot be empty (omit the field instead)`,
+      );
+    }
+    for (let i = 0; i < arr.length; i++) {
+      if (typeof arr[i] !== "string" || (arr[i] as string).length === 0) {
+        throw new Error(
+          `pickled.yml: scenario "${scenarioName}" expected.${field}[${i}] must be a non-empty string`,
+        );
+      }
+    }
+  };
+  checkStrings("includes");
+  checkStrings("excludes");
+}
+
+function validateVerifiers(
+  scenarioName: string,
+  verifiers: { sources?: unknown } | undefined,
+  sourceIds: Set<string>,
+): void {
+  if (verifiers === undefined) return;
+  if (typeof verifiers !== "object" || Array.isArray(verifiers)) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" verifiers must be an object`,
+    );
+  }
+  const sources = verifiers.sources;
+  if (sources === undefined) return;
+  if (!Array.isArray(sources)) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" verifiers.sources must be an array of source IDs`,
+    );
+  }
+  for (const id of sources) {
+    if (typeof id !== "string") {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" verifiers.sources entries must be strings`,
+      );
+    }
+    if (!sourceIds.has(id)) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" verifiers.sources references unknown source "${id}"`,
+      );
+    }
+  }
+}
+
+function validateActionableContract(scenario: {
+  name: string;
+  requiredSources?: string[];
+  expected?: { includes?: string[]; excludes?: string[] };
+  traps?: Trap[];
+  compareSurfaces?: string[][];
+  matrix?: { interfaces?: string[]; sources?: string[]; toolsets?: string[] };
+}): void {
+  const hasCitation = scenario.requiredSources !== undefined;
+  const hasExpected =
+    scenario.expected !== undefined &&
+    ((scenario.expected.includes !== undefined &&
+      scenario.expected.includes.length > 0) ||
+      (scenario.expected.excludes !== undefined &&
+        scenario.expected.excludes.length > 0));
+  const hasTraps = scenario.traps !== undefined && scenario.traps.length > 0;
+  if (!hasCitation && !hasExpected && !hasTraps) {
+    throw new Error(
+      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources, expected.includes/excludes, or traps. A scenario with nothing to check has no verdict.`,
+    );
   }
 }
 

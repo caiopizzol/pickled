@@ -15,6 +15,14 @@ export interface CheckOptions {
   verbose?: boolean;
   threshold?: string;
   target?: string;
+  /** Matrix cell filter: run only cells with this interface. */
+  interface?: string;
+  /** Matrix cell filter: run only cells with this source id. */
+  source?: string;
+  /** Matrix cell filter: run only cells with this toolset name. */
+  toolset?: string;
+  /** Run only the named scenario. Designed for CI matrix one-job-per-cell. */
+  scenario?: string;
 }
 
 export async function check(
@@ -77,6 +85,16 @@ export async function check(
   }
 
   // 2. Run check
+  const cellFilter =
+    options.interface || options.source || options.toolset
+      ? {
+          interface: options.interface,
+          source: options.source,
+          toolset: options.toolset,
+        }
+      : undefined;
+  const scenarioFilter = options.scenario ? [options.scenario] : undefined;
+
   const report = await runCheck(tool, config, {
     onProgress: verbose
       ? (msg) => {
@@ -85,6 +103,8 @@ export async function check(
           }
         }
       : undefined,
+    cellFilter,
+    scenarioFilter,
   });
 
   // 3. Check threshold

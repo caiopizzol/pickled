@@ -144,6 +144,64 @@ function formatResultLine(result: ScenarioResult): string {
 }
 
 /**
+ * Matrix-mode block per proposals/matrix-evaluation.md. One row per cell;
+ * cell label is `[interface · source · toolset]`. Verifier sources, when
+ * declared on the scenario, surface as a human-review note (NOT graded).
+ */
+function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
+  if (!result.cells) return [];
+  const lines: string[] = [];
+  lines.push(
+    `${indent}${chalk.dim("Matrix cells (interface · source · toolset)")}`,
+  );
+  for (const cell of result.cells) {
+    const status = getScenarioStatus(cell);
+    const color = toneToColor(status.tone);
+    const labelText = `[${cell.cell.interface} · ${cell.cell.source ?? "-"} · ${cell.cell.toolset}]`;
+    const label = chalk.dim(labelText);
+    const statusLine = `${color(status.icon)} ${color(renderStatusLine(status))}`;
+    lines.push(`${indent}${label} ${statusLine}`);
+    lines.push(
+      ...formatDetailFields(
+        {
+          traps: cell.traps,
+          reason: cell.reason,
+          answerable: cell.answerable,
+          citations: cell.citations ?? {
+            cited: [],
+            required: [],
+            missing: [],
+            unknown: [],
+          },
+        },
+        `${indent}  `,
+      ),
+    );
+    if (cell.expected) {
+      const missing = cell.expected.includes
+        .filter((c) => !c.satisfied)
+        .map((c) => `"${c.value}"`);
+      const banned = cell.expected.excludes
+        .filter((c) => !c.satisfied)
+        .map((c) => `"${c.value}"`);
+      if (missing.length > 0) {
+        lines.push(
+          chalk.dim(
+            `${indent}  expected.includes missing: ${missing.join(", ")}`,
+          ),
+        );
+      }
+      if (banned.length > 0) {
+        lines.push(
+          chalk.dim(`${indent}  expected.excludes hit: ${banned.join(", ")}`),
+        );
+      }
+    }
+  }
+  return lines;
+}
+
+/**
  * Compare-mode block per proposals/compare-surfaces.md Decisions 2 and 5.
  * One preamble line names the intersection citation contract; each surface
  * gets its own status line plus indented details. No synthesized top-level
@@ -268,7 +326,9 @@ export function formatCheckReport(
       lines.push(`Scenario: ${scenarioName}`);
 
       for (const result of scenarioResults) {
-        if (result.surfaces) {
+        if (result.cells) {
+          lines.push(...formatMatrixBlock(result, "    "));
+        } else if (result.surfaces) {
           lines.push(...formatCompareBlock(result, "    "));
         } else {
           lines.push(`  ${formatResultLine(result)}`);
@@ -281,7 +341,9 @@ export function formatCheckReport(
   } else {
     for (const result of results) {
       lines.push(`Scenario: ${result.scenario.name}`);
-      if (result.surfaces) {
+      if (result.cells) {
+        lines.push(...formatMatrixBlock(result, "  "));
+      } else if (result.surfaces) {
         lines.push(...formatCompareBlock(result, "  "));
       } else {
         lines.push(`  ${formatResultLine(result)}`);

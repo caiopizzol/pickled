@@ -128,6 +128,50 @@ export interface Trap {
   auditSeverity?: "warning" | "error";
 }
 
+/**
+ * Toolset profile. Names a tool configuration the matrix can iterate over.
+ * `none` is the deterministic baseline cell (pickled injects sources; agent
+ * has no tools). Future entries enable WebSearch+WebFetch, Context7 MCP,
+ * Firecrawl, etc.; in v0.16.0 only `none` has runtime behavior.
+ */
+export interface ToolsetConfig {
+  /** Reserved for future tool flags; `none` is `{}`. */
+  webSearch?: boolean;
+  webFetch?: boolean;
+  mcpServers?: Record<string, McpServerConfig>;
+}
+
+/**
+ * Matrix declaration on a scenario. Expands the scenario into one cell per
+ * (interface × source × toolset) combination. Each cell becomes one
+ * evaluation in the report. See `proposals/matrix-evaluation.md`.
+ */
+export interface ScenarioMatrix {
+  interfaces?: string[];
+  sources?: string[];
+  toolsets?: string[];
+}
+
+/**
+ * Deterministic substring checks the cell must satisfy. Each entry is a
+ * literal substring of the agent's response. v0.16.0 supports strings only;
+ * a regex shape may follow.
+ */
+export interface ExpectedChecks {
+  includes?: string[];
+  excludes?: string[];
+}
+
+/**
+ * Verifier sources are loaded at run time and surfaced side-by-side in the
+ * report for HUMAN review only. They are never injected into the agent's
+ * prompt unless they also appear in the cell's active source. They are
+ * never LLM-judged.
+ */
+export interface VerifierConfig {
+  sources?: string[];
+}
+
 // Scenario - a test case
 export interface Scenario {
   name: string;
@@ -136,10 +180,14 @@ export interface Scenario {
   context?: string; // Reference to named context
 
   /**
-   * Source IDs (from docs.sources) the answer must cite. Use [] to allow
-   * any registered source as a valid citation without requiring a specific one.
+   * Source IDs (from docs.sources) the answer must cite. Use `[]` to allow
+   * any registered source as a valid citation without requiring a specific
+   * one. Omit entirely to skip citation scoring (matrix scenarios that
+   * score on `expected` or `provenance` instead). At least one of
+   * `requiredSources`, `expected`, `traps`, or `compareSurfaces` must be
+   * declared on the scenario.
    */
-  requiredSources: string[];
+  requiredSources?: string[];
 
   /**
    * Optional traps. Each is a deterministic stale-answer detector; firing
@@ -155,6 +203,27 @@ export interface Scenario {
    * `null` when this is set. See `proposals/compare-surfaces.md`.
    */
   compareSurfaces?: string[][];
+
+  /**
+   * Matrix declaration. When set, the scenario runs once per cell formed
+   * by (interfaces × sources × toolsets). Per-cell results live in
+   * `ScenarioResult.cells[]`; top-level evaluation fields are `null`.
+   * See `proposals/matrix-evaluation.md`.
+   */
+  matrix?: ScenarioMatrix;
+
+  /**
+   * Deterministic substring checks applied to the agent's response.
+   * Contributes to per-cell scoring alongside traps and citation scoring.
+   */
+  expected?: ExpectedChecks;
+
+  /**
+   * Verifier configuration. Sources listed here are loaded at run time and
+   * surfaced side-by-side in the report for human review. Never injected
+   * into the agent's prompt; never LLM-judged.
+   */
+  verifiers?: VerifierConfig;
 }
 
 export type DocSourceType = "url" | "file" | "codebase";
@@ -275,6 +344,15 @@ export interface CheckConfig {
 
   // Matrix for running all scenarios across multiple targets/contexts - future
   matrix?: MatrixConfig;
+
+  /**
+   * Named toolset profiles for the matrix evaluation `toolset` axis.
+   * `none` is reserved as the deterministic baseline (no tools); other
+   * profiles enable WebSearch+WebFetch, MCP servers, etc. In v0.16.0 only
+   * `none` has runtime behavior; declared non-none profiles are recognized
+   * by the loader but their tool adapters land in follow-up commits.
+   */
+  toolsets?: Record<string, ToolsetConfig>;
 
   // Scenarios to run
   scenarios: Scenario[];

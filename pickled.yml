@@ -135,6 +135,23 @@ scenarios:
     prompt: "How does pickled's trap matcher distinguish a literal-substring match from a regex pattern match? Answer based on the source code in the scorers module."
     requiredSources: [core_src]
 
+  # Matrix dogfood (v0.16.0): same scenario across two interfaces × two
+  # sources × [none] toolset = 4 cells. Demonstrates the matrix shape on
+  # external surfaces (README + llms.txt). Toolsets restricted to `none`
+  # until tool-enabled adapters ship in follow-up commits.
+  - name: "Matrix: pickled positioning"
+    prompt: "In one sentence, what does pickled do?"
+    matrix:
+      interfaces: [quick, codex]
+      sources: [readme, llms]
+      toolsets: [none]
+    expected:
+      includes:
+        - "agent"
+        - "scenario"
+      excludes:
+        - "AI-powered"
+
   - name: "Pickled contracts"
     prompt: "What is pickled and what contracts should agents preserve when describing it?"
     requiredSources: [llms]

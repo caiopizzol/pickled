@@ -51,6 +51,22 @@ program
     "--target <name>",
     "Run only the named target (overrides matrix.target)",
   )
+  .option(
+    "--scenario <name>",
+    "Run only the named scenario (for CI matrix one-job-per-cell usage)",
+  )
+  .option(
+    "--interface <name>",
+    "Matrix cell filter: run only cells with this interface (used with scenario.matrix)",
+  )
+  .option(
+    "--source <name>",
+    "Matrix cell filter: run only cells with this source id",
+  )
+  .option(
+    "--toolset <name>",
+    "Matrix cell filter: run only cells with this toolset name",
+  )
   .action(check);
 
 await program.parseAsync();

@@ -19,14 +19,18 @@ export type {
   DocSourceEntry,
   DocSourceType,
   DocsConfig,
+  ExpectedChecks,
   IdeProvider,
   MatrixConfig,
   McpServerConfig,
   NormalizedDocSource,
   ResolvedDocSource,
   Scenario,
+  ScenarioMatrix,
   Target,
   TargetCategory,
+  ToolsetConfig,
   Trap,
+  VerifierConfig,
 } from "./types.js";
 export { normalizeDocSource } from "./types.js";
