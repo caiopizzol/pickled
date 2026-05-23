@@ -498,10 +498,12 @@ function buildReport(
  * into one cell per (interface × source × toolset), applies CLI cell
  * filters, and emits one CellResult per surviving cell.
  *
- * Runtime support today: `toolset = "none"` (deterministic baseline) and
- * the `web` shape (`webSearch`/`webFetch` flags) on Claude Code. Other
- * toolsets throw "not yet implemented" so vendors are not misled by
- * silent no-ops; adapters land per release.
+ * Runtime support today: `toolset = "none"` (deterministic baseline),
+ * the `web` shape (`webSearch`/`webFetch` flags), and the `mcp` shape
+ * (`mcpServers` map), both on Claude Code. Toolsets with no recognized
+ * shape, mixed shapes (web flags + mcpServers), or non-claude-code
+ * interfaces throw with a clear per-cell error so misconfigurations
+ * are not masked by silent no-ops; further adapters land per release.
  */
 async function runMatrixScenario(
   scenario: Scenario,

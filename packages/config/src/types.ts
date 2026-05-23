@@ -131,9 +131,11 @@ export interface Trap {
 /**
  * Toolset profile. Names a tool configuration the matrix can iterate over.
  * `none` is the deterministic baseline cell (pickled injects sources; agent
- * has no tools). The `web` shape (`webSearch`/`webFetch` flags) runs on
- * Claude Code today. Other shapes (Context7 MCP, Firecrawl, native API
- * search) are recognized by the loader; their adapters land per release.
+ * has no tools). The `web` shape (`webSearch`/`webFetch` flags) and the
+ * `mcp` shape (`mcpServers` map) run on Claude Code today; pickled has no
+ * server-specific knowledge (Context7 is a dogfood example, not a special
+ * case). Other shapes (Firecrawl, native API search) are recognized by the
+ * loader; their adapters land per release.
  */
 export interface ToolsetConfig {
   /** Reserved for future tool flags; `none` is `{}`. */
