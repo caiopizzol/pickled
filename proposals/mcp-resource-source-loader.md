@@ -67,6 +67,8 @@ This matches the existing URL loader's behavior (fetched on every check). Same t
 
 Why: audit must be local and deterministic. Fetching MCP resources during audit would require spawning the MCP server subprocess (or hitting a remote endpoint) on every PR. That adds latency, network/process dependencies, and flake risk to a workflow that today is fast and fully local.
 
+Important interaction with Decision 7: `pickled audit` calls `loadConfig` before deciding which sources to skip. Load-time MCP env validation is *syntax only*; missing env vars only fail when the source is actually fetched. This means an MCP source declared with `env: { CONTEXT7_API_KEY: "${CONTEXT7_API_KEY}" }` does not require the secret to be set for `pickled audit` to pass on CI - only `pickled check` runs needing that source need the secret.
+
 Future: opt-in MCP audit (`audit.mcpScan: true` per source, with timeouts and cache) once the local rule has shipped and vendors ask for the coverage. Listed alongside the URL-scan follow-up under issue #5's notes.
 
 ## Decision 6: error handling
@@ -75,14 +77,22 @@ Future: opt-in MCP audit (`audit.mcpScan: true` per source, with timeouts and ca
 
 ## Decision 7: env substitution rule
 
-**Recommendation:** support **full-value substitution only**. `FOO: "${FOO}"` reads the env var verbatim into the spawned subprocess's environment. Inline interpolation like `token-${FOO}` is **not** supported in v1. Missing env vars fail loudly at config load with the source id and the missing variable name.
+**Recommendation:** support **full-value substitution only**. `FOO: "${FOO}"` reads the env var verbatim into the spawned subprocess's environment. Inline interpolation like `token-${FOO}` is **not** supported in v1.
 
 Why: full-value substitution covers the load-bearing case (API keys, tokens) without bringing in the surface area of a templating engine. Inline interpolation is harder to spec (escape rules, partial matches, recursive substitution) and the use cases are weak. If a vendor needs a composed value, they compose it in the shell before invoking pickled.
 
+**Validation timing - split into two phases to preserve the audit contract (see Decision 5):**
+
+- **Load time** (in the loader): validate `env` *syntax* only. Each value must be either literal text or a well-formed full-value `"${VAR}"` template. Malformed templates (e.g., `"${"`, `"${}"`, `"${VAR-with-dash}"` if the rule rejects non-identifier names) fail at load with `pickled.yml: docs.sources["<id>"].env.<KEY> has malformed template "<value>"`. **Missing env vars are NOT checked at load.** `loadConfig` succeeds even when `CONTEXT7_API_KEY` is unset in the environment.
+- **Fetch time** (in the MCP loader, only when the source is about to be fetched): resolve each templated value against `process.env`. If the variable is unset, throw `MCP source "<id>": env "<KEY>" references missing env var "VAR"`. This becomes a per-source fetch error in `pickled check` and sets `ScenarioResult.error` for the affected scenario.
+
+Why the split: `pickled audit` calls `loadConfig` (see `source-traps.ts:39`) before deciding which sources to skip. If load-time validation requires `${CONTEXT7_API_KEY}` to be set, audit fails on CI runners that don't have MCP secrets - even though Decision 5 says audit skips MCP entirely. Splitting validation keeps Decision 5's contract intact: audit can load any pickled.yml that *parses correctly*, and only `check` runs against MCP sources need the secrets present.
+
 Behavior:
-- Each value in the source's `env` block is parsed for an exact `"${VAR}"` pattern (whitespace allowed inside braces).
-- If the pattern matches, the literal env var value is substituted. If the env var is missing, throw at load time with `pickled.yml: docs.sources["<id>"].env.<KEY> references missing env var "VAR"`.
-- If the pattern does not match (the value is literal text, or contains an inline template), the value is passed through unchanged. This means a literal `"token-${FOO}"` reaches the subprocess as-is, with the `${FOO}` literal. Documented behavior, not a silent expansion.
+- Each value in the source's `env` block is parsed for an exact `"${VAR}"` pattern (whitespace allowed inside braces; `VAR` must match `[A-Z_][A-Z0-9_]*`).
+- At load: syntax check only. Malformed template throws; valid template (whether or not the env var exists) passes.
+- At MCP fetch: substitute the env var. Missing var throws as a per-source error.
+- If the value is literal text (no `${...}` pattern), it passes through unchanged at both load and fetch. A literal `"token-${FOO}"` reaches the subprocess as-is, with the `${FOO}` literal. Documented behavior, not a silent expansion.
 
 ## Decision 8: MIME type handling
 
@@ -184,7 +194,7 @@ If the MCP server's install resource is fresh but README is stale, surfaces spli
 2. SDK dependency: add `@modelcontextprotocol/sdk` to `packages/core/package.json` as a direct dependency.
 3. Loader: new branch in `fetchSource` for `type: mcp`. Spawn the MCP server via stdio (cwd = project root per Decision 9, env substituted per Decision 7), read each declared URI directly via `resources/read` (no `list_resources` call - per Decision 3 there is no auto-discovery, so listing has no purpose; a missing resource fails loudly on the read), validate the mimeType per Decision 8, close the connection cleanly. Concatenate fetched content with URI headers.
 4. Audit interaction: extend `scanSourceTraps` to skip MCP sources (mirror the URL skip at `source-traps.ts:54` for the same reasons).
-5. Tests: stdio spawn happy path with mocked subprocess, resource fetch returns content, error on missing resource, error on server failure, content concatenation order is deterministic by URI list order.
+5. Tests: mock the `@modelcontextprotocol/sdk` client/transport boundary, not subprocess JSON-RPC. The implementation should use the SDK's stdio transport rather than hand-rolling the wire protocol, and the tests inject a mock client that returns canned `resources/read` responses. Coverage: happy path returns content, missing resource throws with URI in message, mimeType not in text/* throws with the rejected mimeType in message, missing env var at fetch time throws with the source id and variable name (Decision 7), load-time syntax check rejects malformed templates without needing env vars set, content concatenation order is deterministic by URI list order. A real-MCP-server fixture is optional and not required for v1.
 6. Dogfood: optional. We do not run an MCP server in this repo today. Skip the pickled.yml dogfood addition; cover behavior in unit tests only.
 7. Docs: extend `apps/cli/README.md` Sources section with the MCP shape and the resource-only-not-tools constraint. Update `llms.txt` Source contract sentence with `mcp` in the loader types list.
 
