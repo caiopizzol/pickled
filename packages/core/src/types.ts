@@ -36,10 +36,10 @@ export interface SurfaceResult {
  * (interface, source, toolset). Carries the scenario's evaluation fields
  * scoped to that cell. See `proposals/matrix-evaluation.md`.
  *
- * v0.16.0: only `toolset = "none"` has runtime behavior (source content is
- * injected). Non-none toolsets throw at runtime; their adapter implementations
- * (WebSearch+WebFetch, Context7 MCP, Firecrawl, etc.) land in follow-up
- * commits.
+ * Runtime support today: `toolset = "none"` (source injected) and the
+ * `web` shape (`webSearch`/`webFetch` flags) on Claude Code (source not
+ * injected; agent uses tools). Other toolsets throw until their adapters
+ * (Context7 MCP, Firecrawl, native API search) land per release.
  */
 export interface CellResult {
   cell: {

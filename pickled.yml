@@ -141,10 +141,11 @@ scenarios:
     prompt: "How does pickled's trap matcher distinguish a literal-substring match from a regex pattern match? Answer based on the source code in the scorers module."
     requiredSources: [core_src]
 
-  # Matrix dogfood (v0.16.0): same scenario across two interfaces × two
-  # sources × [none] toolset = 4 cells. Demonstrates the matrix shape on
-  # external surfaces (README + llms.txt). Toolsets restricted to `none`
-  # until tool-enabled adapters ship in follow-up commits.
+  # Matrix dogfood: same scenario across two interfaces × two sources ×
+  # [none] toolset = 4 cells. Demonstrates the matrix shape on external
+  # surfaces (README + llms.txt). Toolsets restricted to `none` here to
+  # keep this dogfood cheap and deterministic; the discovery scenario
+  # below exercises `web` separately.
   #
   # Expected checks measure essential product facts only: "agent" is the
   # core noun in every honest summary of pickled; the excludes catch
@@ -166,10 +167,10 @@ scenarios:
     verifiers:
       sources: [readme]
 
-  # Discovery-mode dogfood (v0.16.x): Claude Code with WebSearch+WebFetch
-  # tools enabled, source NOT injected. The agent should reach the README
-  # URL via its tools. Toolsets restricted to [web]; matrix.interfaces
-  # restricted to [quick] because web toolset is Claude-Code-only in v0.16.x.
+  # Discovery-mode dogfood: Claude Code with WebSearch+WebFetch tools
+  # enabled, source NOT injected. The agent should reach the README URL
+  # via its tools. Toolsets restricted to [web]; matrix.interfaces
+  # restricted to [quick] because the `web` toolset is Claude-Code-only.
   # Disabled in matrix.target so cost stays opt-in: dispatch with
   # `pickled check --target quick --interface quick --toolset web` to
   # exercise this cell explicitly.

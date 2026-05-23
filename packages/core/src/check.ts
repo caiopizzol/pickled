@@ -498,9 +498,10 @@ function buildReport(
  * into one cell per (interface × source × toolset), applies CLI cell
  * filters, and emits one CellResult per surviving cell.
  *
- * v0.16.0: only `toolset = "none"` has runtime behavior. Non-none toolsets
- * throw "not yet implemented" so vendors are not misled by silent no-ops.
- * Adapter implementations land in follow-up commits.
+ * Runtime support today: `toolset = "none"` (deterministic baseline) and
+ * the `web` shape (`webSearch`/`webFetch` flags) on Claude Code. Other
+ * toolsets throw "not yet implemented" so vendors are not misled by
+ * silent no-ops; adapters land per release.
  */
 async function runMatrixScenario(
   scenario: Scenario,
@@ -541,7 +542,7 @@ async function runMatrixScenario(
         if (cellFilter.toolset && cellFilter.toolset !== toolsetName) {
           continue;
         }
-        // Toolset resolution. v0.16.x supports two toolset shapes:
+        // Toolset resolution. Two toolset shapes run today:
         // - "none": deterministic baseline. Source is injected. Citation
         //   contract applies if requiredSources is declared.
         // - Any toolset with `webSearch`/`webFetch` flags ON Claude Code:
@@ -566,7 +567,7 @@ async function runMatrixScenario(
         if (toolsetName !== "none") {
           if (!wantsWeb) {
             throw new Error(
-              `Toolset "${toolsetName}" is declared but not yet implemented. v0.16.x supports "none" and Claude-Code web toolsets (webSearch/webFetch). Other adapters (Context7 MCP, Firecrawl, native API search) land in follow-up commits.`,
+              `Toolset "${toolsetName}" is declared but not yet implemented. Supported today: "none" and Claude-Code web toolsets (webSearch/webFetch). Other adapters (Context7 MCP, Firecrawl, native API search) land per release.`,
             );
           }
           if (baseTargetConfig.provider !== "claude-code") {
@@ -651,10 +652,13 @@ async function runMatrixScenario(
             onProgress: options.onProgress,
           });
         } catch (err) {
-          // Per-cell error containment: a failing cell becomes one NO cell
-          // with its own (interface, source, toolset) label intact. Earlier
-          // versions let one thrown cell collapse the whole matrix scenario
-          // into a generic error result that lost cell context.
+          // Per-cell runtime-error containment: a target that throws during
+          // its run becomes one NO cell with its (interface, source,
+          // toolset) label intact. Earlier versions let one thrown cell
+          // collapse the whole matrix scenario into a generic error result
+          // that lost cell context. Note: toolset/interface validation
+          // throws above this point still bubble to the scenario-level
+          // error (those are config errors, not target errors).
           cells.push({
             cell: {
               interface: interfaceName,
@@ -676,7 +680,8 @@ async function runMatrixScenario(
         }
 
         // Score: trap (universal veto) > citation (if requiredSources) +
-        // expected (if expected.includes/excludes). Combine.
+        // expected (if expected.includes/excludes) + tool-use provenance
+        // (non-none cells only). Combine.
         const trapDetails = scoreTraps({
           response: runResult.response,
           traps: scenario.traps ?? [],
@@ -698,6 +703,24 @@ async function runMatrixScenario(
                 response: runResult.response,
                 expected: scenario.expected,
               })
+            : null;
+
+        // Tool-use provenance check. A non-none cell exists to prove the
+        // agent reached the answer via the configured toolset; if it
+        // answered without invoking any of the expected tools, the cell
+        // is not evidence the toolset works (the model answered from
+        // prior knowledge). Composes as a scoring part: YES if any
+        // configured tool was used, NO otherwise. Skipped when the cell
+        // has no configured tools (`allowedForCell` empty), which only
+        // happens for `none` cells today.
+        const toolUseDetail =
+          toolsetName !== "none" && allowedForCell.length > 0
+            ? {
+                expected: allowedForCell,
+                used: (runResult.toolsUsed ?? []).filter((t) =>
+                  allowedForCell.includes(t),
+                ),
+              }
             : null;
 
         let answerable: Answerable;
@@ -751,6 +774,18 @@ async function runMatrixScenario(
               expectedNotes.length > 0
                 ? expectedNotes.join("; ")
                 : `expected checks satisfied (${expectedDetail.satisfied}/${expectedDetail.total})`,
+            );
+          }
+          if (toolUseDetail) {
+            const satisfied = toolUseDetail.used.length > 0;
+            parts.push({
+              answerable: satisfied ? "YES" : "NO",
+              confidence: satisfied ? 100 : 0,
+            });
+            reasons.push(
+              satisfied
+                ? `tool use verified (${toolUseDetail.used.join(", ")})`
+                : `toolset "${toolsetName}" configured but none of [${toolUseDetail.expected.join(", ")}] were used (answer rests on model prior knowledge)`,
             );
           }
           if (parts.length === 0) {

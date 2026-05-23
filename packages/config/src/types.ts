@@ -131,8 +131,9 @@ export interface Trap {
 /**
  * Toolset profile. Names a tool configuration the matrix can iterate over.
  * `none` is the deterministic baseline cell (pickled injects sources; agent
- * has no tools). Future entries enable WebSearch+WebFetch, Context7 MCP,
- * Firecrawl, etc.; in v0.16.0 only `none` has runtime behavior.
+ * has no tools). The `web` shape (`webSearch`/`webFetch` flags) runs on
+ * Claude Code today. Other shapes (Context7 MCP, Firecrawl, native API
+ * search) are recognized by the loader; their adapters land per release.
  */
 export interface ToolsetConfig {
   /** Reserved for future tool flags; `none` is `{}`. */
@@ -154,8 +155,8 @@ export interface ScenarioMatrix {
 
 /**
  * Deterministic substring checks the cell must satisfy. Each entry is a
- * literal substring of the agent's response. v0.16.0 supports strings only;
- * a regex shape may follow.
+ * literal substring of the agent's response. Strings only today; a regex
+ * shape may follow.
  */
 export interface ExpectedChecks {
   includes?: string[];
@@ -347,10 +348,10 @@ export interface CheckConfig {
 
   /**
    * Named toolset profiles for the matrix evaluation `toolset` axis.
-   * `none` is reserved as the deterministic baseline (no tools); other
-   * profiles enable WebSearch+WebFetch, MCP servers, etc. In v0.16.0 only
-   * `none` has runtime behavior; declared non-none profiles are recognized
-   * by the loader but their tool adapters land in follow-up commits.
+   * `none` is reserved as the deterministic baseline (no tools); the `web`
+   * shape (`webSearch`/`webFetch` flags) runs on Claude Code today. Other
+   * profiles (MCP servers, third-party crawlers) are recognized by the
+   * loader; their tool adapters land per release.
    */
   toolsets?: Record<string, ToolsetConfig>;
 

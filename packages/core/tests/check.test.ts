@@ -796,6 +796,189 @@ describe("runCheck matrix mode", () => {
     });
   });
 
+  test("web cell with no expected tools used: downgrades to NO with provenance reason", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true, webFetch: true } },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "No-tool-use probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "prior-knowledge",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled is a thing I just happen to know about",
+                allResponses: [{ type: "final", text: "pickled..." }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBeLessThan(100);
+      expect(cell.reason).toMatch(/configured but none of \[/);
+      expect(cell.reason).toMatch(/prior knowledge/);
+      expect(cell.toolsUsed).toEqual([]);
+    });
+  });
+
+  test("web cell that uses one of the configured tools: passes provenance check", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true, webFetch: true } },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "One-tool probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "one-tool",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled answer from search",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: ["WebSearch"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("YES");
+      expect(cell.reason).toMatch(/tool use verified \(WebSearch\)/);
+    });
+  });
+
+  test("web cell that only used unrelated tools: downgraded as if no tool was used", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true, webFetch: true } },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Unrelated-tool probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "unrelated-tool",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled answer",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: ["Bash"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.reason).toMatch(/configured but none of \[/);
+      expect(cell.toolsUsed).toEqual(["Bash"]);
+    });
+  });
+
+  test("none cell with empty toolsUsed: provenance check does NOT fire", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "None probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], toolsets: ["none"] },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("pickled answer") },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("YES");
+      expect(cell.reason).not.toMatch(/configured but none of/);
+    });
+  });
+
   test("trap firing vetoes a matrix cell to NO/0 regardless of expected hits", async () => {
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {

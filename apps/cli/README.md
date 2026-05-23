@@ -164,7 +164,7 @@ URL sources are NOT scanned by the audit's trap cross-reference in v1; they are 
 
 ## Toolsets
 
-Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. v0.16.x ships two:
+Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. Two profiles ship today:
 
 - **`none`** (the deterministic baseline). Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared. Same scoring shape as non-matrix scenarios.
 - **`web`** on Claude Code only. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target ("the canonical source for this question is at ..."). Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes`.
