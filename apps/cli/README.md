@@ -76,11 +76,13 @@ Run agent scenarios against registered sources.
 | `-o, --output <file>` | Save JSON report to file                                            |
 | `-v, --verbose`       | Show progress while scenarios run                                   |
 | `-t, --threshold <n>` | Minimum score percent needed to pass                                |
-| `--target <name>`     | Run only the named target (overrides matrix)                        |
+| `--target <name>`     | Restrict to the named target. Overrides `matrix.target` for non-matrix scenarios; for matrix scenarios, also acts as `--interface` unless that flag is explicitly set. |
 | `--scenario <name>`   | Run only the named scenario (CI-matrix-friendly)                    |
-| `--interface <name>`  | Matrix cell filter: run only cells with this interface              |
+| `--interface <name>`  | Matrix cell filter: run only cells with this interface. Takes precedence over `--target` for matrix cells. |
 | `--source <name>`     | Matrix cell filter: run only cells with this source id              |
 | `--toolset <name>`    | Matrix cell filter: run only cells with this toolset name           |
+
+`--target` and `--interface` are related but distinct: `--target` is the legacy flag that narrows the top-level `matrix.target` axis (used before per-scenario `scenario.matrix.interfaces` shipped in v0.16.0). When `--target` is the only flag passed, the CLI also applies it as `--interface` so matrix scenarios narrow consistently. Pass `--interface` explicitly to override.
 
 The cell filters work with `scenario.matrix` declarations. Designed for GitHub Actions matrix usage where each CI job runs one cell:
 

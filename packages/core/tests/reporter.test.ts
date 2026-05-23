@@ -108,6 +108,55 @@ describe("formatCheckJSON", () => {
       expect(parsed.scenarios[0].citations.cited).toEqual(["readme"]);
     }
   });
+
+  test("strips verifierSamples content in non-verbose mode", () => {
+    const base = makeReport();
+    const first = base.scenarios[0];
+    if (!first) throw new Error("makeReport should produce a scenario");
+    const reportWithVerifier: CheckReport = {
+      ...base,
+      scenarios: [
+        {
+          ...first,
+          verifierSamples: [
+            {
+              id: "readme",
+              name: "README.md",
+              content: "SECRET CONTENT IN VERIFIER",
+            },
+          ],
+        },
+      ],
+    };
+    const slim = formatCheckJSON(reportWithVerifier);
+    expect(slim).not.toContain("SECRET CONTENT IN VERIFIER");
+    const parsed = JSON.parse(slim);
+    expect(parsed.scenarios[0].verifierSamples[0].content).toBe("");
+    expect(parsed.scenarios[0].verifierSamples[0].id).toBe("readme");
+  });
+
+  test("verbose mode preserves verifierSamples content", () => {
+    const base = makeReport();
+    const first = base.scenarios[0];
+    if (!first) throw new Error("makeReport should produce a scenario");
+    const reportWithVerifier: CheckReport = {
+      ...base,
+      scenarios: [
+        {
+          ...first,
+          verifierSamples: [
+            {
+              id: "readme",
+              name: "README.md",
+              content: "SECRET CONTENT IN VERIFIER",
+            },
+          ],
+        },
+      ],
+    };
+    const verbose = formatCheckJSON(reportWithVerifier, { verbose: true });
+    expect(verbose).toContain("SECRET CONTENT IN VERIFIER");
+  });
 });
 
 describe("formatCheckReport", () => {

@@ -386,7 +386,15 @@ export interface FormatJSONOptions {
 
 /**
  * Format report as JSON. By default omits source content and per-message
- * transcripts to keep output small; pass `verbose: true` for the full payload.
+ * transcripts to keep output small and prevent leaking source text in CI
+ * artifacts; pass `verbose: true` for the full payload.
+ *
+ * Strips in non-verbose mode:
+ * - top-level docs[].content
+ * - scenario.allResponses (transcript)
+ * - scenario.verifierSamples[].content (verifier source text)
+ * - scenario.cells[].allResponses (per-cell transcript)
+ * - scenario.surfaces[].allResponses (per-surface transcript)
  */
 export function formatCheckJSON(
   report: CheckReport,
@@ -399,9 +407,25 @@ export function formatCheckJSON(
     ...report,
     docs: report.docs.map((d) => ({ ...d, content: "" })),
     scenarios: report.scenarios.map((s) => {
-      const { allResponses, ...rest } = s;
+      const { allResponses, verifierSamples, cells, surfaces, ...rest } = s;
       void allResponses;
-      return rest;
+      return {
+        ...rest,
+        verifierSamples: verifierSamples?.map((v) => ({
+          ...v,
+          content: "",
+        })),
+        cells: cells?.map((c) => {
+          const { allResponses: cellAll, ...cellRest } = c;
+          void cellAll;
+          return cellRest;
+        }),
+        surfaces: surfaces?.map((s2) => {
+          const { allResponses: surfAll, ...surfRest } = s2;
+          void surfAll;
+          return surfRest;
+        }),
+      };
     }),
   };
   return JSON.stringify(slim, null, 2);
