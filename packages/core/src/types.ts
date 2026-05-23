@@ -59,6 +59,15 @@ export interface CellResult {
     satisfied: number;
     total: number;
   };
+  /**
+   * Tools the agent invoked during the cell run, captured by the target
+   * adapter from the underlying agent's tool_use events. Empty for `none`
+   * cells; populated for cells with tool-enabled toolsets (e.g., `web`).
+   * Provenance evidence the cell can be inspected against.
+   */
+  toolsUsed?: string[];
+  /** Set when the cell run threw; answerable will be NO, confidence 0. */
+  error?: string;
   allResponses?: ResponseEntry[];
 }
 

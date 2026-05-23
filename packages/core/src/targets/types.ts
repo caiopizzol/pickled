@@ -26,10 +26,21 @@ export interface RunOptions {
   tool: import("../types.js").ToolInfo;
   cwd: string;
   context?: ResolvedContext;
-  /** Documentation sources to inject into the target prompt. */
+  /** Documentation sources to inject into the target prompt. Empty for
+   *  discovery cells. */
   docs: ResolvedDocSource[];
-  /** Source IDs the scenario requires the answer to cite. */
+  /** Source IDs the scenario requires the answer to cite. Empty for
+   *  discovery cells (no citation contract). */
   requiredSources: string[];
+  /**
+   * Discovery-mode hint. Set by the matrix runner for cells with a non-none
+   * toolset. When present, the adapter uses the discovery system prompt
+   * instead of the citation prompt: source content is not injected; the
+   * agent uses its tools to research, with `sourceHint` named as the
+   * canonical reference (URL or human-readable name). When undefined,
+   * normal citation mode applies.
+   */
+  discovery?: { sourceHint: string | null };
   onProgress?: (msg: string) => void;
 }
 

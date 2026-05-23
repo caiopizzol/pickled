@@ -579,6 +579,10 @@ async function runMatrixScenario(
         // Build the effective per-cell target config. For web toolsets,
         // OVERRIDE allowedTools to exactly the requested web tools so the
         // cell is a controlled experiment (no Read/Edit/Write from defaults).
+        // Web cells also need more turns than controlled cells because the
+        // agent typically does search -> fetch -> reason -> respond. We bump
+        // maxTurns to 15 for web cells unless the target already declares a
+        // higher value (vendor knows their workload).
         const allowedForCell: string[] = [];
         if (toolsetConfig?.webSearch) allowedForCell.push("WebSearch");
         if (toolsetConfig?.webFetch) allowedForCell.push("WebFetch");
@@ -590,6 +594,7 @@ async function runMatrixScenario(
                 allowedTools: allowedForCell,
                 disallowedTools: [],
                 mcpServers: toolsetConfig?.mcpServers,
+                maxTurns: Math.max(baseTargetConfig.maxTurns ?? 0, 15),
               };
 
         const target = options.targetFactory
@@ -626,14 +631,49 @@ async function runMatrixScenario(
           isInjecting,
         );
 
-        const runResult = await target.run(effectivePrompt, {
-          tool,
-          cwd: tool.path,
-          context: contextConfig,
-          docs: cellDocs,
-          requiredSources: requiredInCell,
-          onProgress: options.onProgress,
-        });
+        // Discovery hint: for non-none cells with a named source, the URL
+        // (for URL sources) or readable name reaches the adapter via the
+        // RunOptions.discovery field so the adapter swaps in the discovery
+        // system prompt. None-toolset cells leave this undefined.
+        const discoveryHint = isInjecting
+          ? undefined
+          : { sourceHint: buildDiscoveryHint(sourceName, docs) };
+
+        let runResult: Awaited<ReturnType<typeof target.run>>;
+        try {
+          runResult = await target.run(effectivePrompt, {
+            tool,
+            cwd: tool.path,
+            context: contextConfig,
+            docs: cellDocs,
+            requiredSources: requiredInCell,
+            discovery: discoveryHint,
+            onProgress: options.onProgress,
+          });
+        } catch (err) {
+          // Per-cell error containment: a failing cell becomes one NO cell
+          // with its own (interface, source, toolset) label intact. Earlier
+          // versions let one thrown cell collapse the whole matrix scenario
+          // into a generic error result that lost cell context.
+          cells.push({
+            cell: {
+              interface: interfaceName,
+              source: sourceName,
+              toolset: toolsetName,
+            },
+            answerable: "NO",
+            confidence: 0,
+            response: "",
+            reason: `Error in cell: ${err instanceof Error ? err.message : String(err)}`,
+            citations: null,
+            traps: {
+              fired: [],
+              avoided: (scenario.traps ?? []).map((t) => t.id),
+            },
+            error: err instanceof Error ? err.message : String(err),
+          });
+          continue;
+        }
 
         // Score: trap (universal veto) > citation (if requiredSources) +
         // expected (if expected.includes/excludes). Combine.
@@ -757,6 +797,7 @@ async function runMatrixScenario(
                 total: expectedDetail.total,
               }
             : undefined,
+          toolsUsed: runResult.toolsUsed,
           allResponses: runResult.allResponses,
         });
 
@@ -825,4 +866,22 @@ function buildCellPrompt(
       ? `The canonical source for this question is the documentation at ${source.source}. Use your available tools to research it.`
       : `The canonical source for this question is "${source.name}" (registered locally as ${source.id}). Use your available tools to research from authoritative sources.`;
   return `${basePrompt}\n\n${hint}`;
+}
+
+/**
+ * Resolve a discovery hint string from the cell's active source. Returns
+ * the URL for URL sources (the agent can WebFetch it directly), or the
+ * human-readable name for file sources (the agent uses WebSearch to find
+ * the canonical equivalent on the public web), or null when no source is
+ * declared for the cell.
+ */
+function buildDiscoveryHint(
+  sourceName: string | null,
+  docs: ResolvedDocSource[],
+): string | null {
+  if (sourceName === null) return null;
+  const source = docs.find((d) => d.id === sourceName);
+  if (!source) return null;
+  if (source.type === "url") return source.source;
+  return source.name;
 }

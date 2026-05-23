@@ -6,6 +6,7 @@ import {
   DEFAULT_DISALLOWED_TOOLS,
 } from "@pickled-dev/config";
 import { buildCitationPrompt } from "../citation-prompt.js";
+import { buildDiscoveryPrompt } from "../discovery-prompt.js";
 import type {
   ResponseEntry,
   RunOptions,
@@ -26,11 +27,17 @@ export class ClaudeCodeTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, cwd, context, docs, requiredSources } = options;
+    const { tool, cwd, context, docs, requiredSources, discovery } = options;
     const toolsUsed: string[] = [];
     const sources: string[] = [];
 
-    const systemPrompt = buildCitationPrompt(tool, docs, requiredSources);
+    // Discovery-mode cells (matrix runner sets options.discovery) get a
+    // different system prompt: no injected sources, agent uses its tools
+    // to research, optional canonical-source hint. Otherwise build the
+    // standard citation prompt that injects docs and demands a Sources block.
+    const systemPrompt = discovery
+      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
+      : buildCitationPrompt(tool, docs, requiredSources);
 
     const agentOptions: ClaudeAgentOptions = {
       cwd,

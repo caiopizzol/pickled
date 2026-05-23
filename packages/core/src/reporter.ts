@@ -197,6 +197,9 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
         );
       }
     }
+    if (cell.toolsUsed && cell.toolsUsed.length > 0) {
+      lines.push(chalk.dim(`${indent}  tools: ${cell.toolsUsed.join(", ")}`));
+    }
   }
   if (result.verifierSamples && result.verifierSamples.length > 0) {
     lines.push(
