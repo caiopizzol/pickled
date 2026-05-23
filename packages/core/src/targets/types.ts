@@ -41,6 +41,16 @@ export interface RunOptions {
    * normal citation mode applies.
    */
   discovery?: { sourceHint: string | null };
+  /**
+   * Restrict the SDK's built-in tool set for this run. The Claude Agent
+   * SDK's `tools` option ([] disables all built-ins; a string array
+   * scopes to those built-ins; preset uses defaults). Matrix runner sets
+   * this for non-none cells so the agent cannot fall back to Read/Bash
+   * and bypass the configured tool path the cell is meant to test.
+   * Adapters that ignore this field (Codex, Anthropic API) treat all
+   * non-none toolsets as unsupported elsewhere.
+   */
+  restrictBuiltinTools?: string[];
   onProgress?: (msg: string) => void;
 }
 

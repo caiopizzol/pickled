@@ -21,7 +21,7 @@ The blocker is the runtime gate at `check.ts:567-572` that rejects non-web tools
 
 1. **Recognition.** A toolset is the MCP shape iff `mcpServers` is present and non-empty. A toolset is the web shape iff `webSearch === true` or `webFetch === true`. Both shapes together in one toolset is an error (declare two separate toolsets); the cell runner cannot honestly attribute provenance to a mixed shape.
 
-2. **Allowed tools.** For an MCP cell, pickled overrides `allowedTools` to exactly the configured server wildcards: `[mcp__<server1>__*, mcp__<server2>__*, ...]` (one per declared server). This isolates the cell from the target's default tools (no Read/Edit/Bash leakage), the same principle web cells already follow. The Claude Agent SDK accepts these wildcards per its MCP docs.
+2. **Allowed tools.** For an MCP cell, pickled sets the SDK's `tools: []` (built-ins disabled) AND `allowedTools: [mcp__<server1>__*, mcp__<server2>__*, ...]` (auto-permission for the configured server wildcards). The two-option dance is required because the SDK's `allowedTools` is an auto-permission list, not an availability restriction; without `tools: []` the agent can still call any built-in (Read/Bash/Glob), bypassing the configured MCP path. Web cells follow the same shape: `tools: ["WebSearch", "WebFetch"]` plus the matching `allowedTools`.
 
 3. **Provenance.** A tool invocation counts toward provenance iff its name starts with `mcp__<server>__` for any configured server. Web stays exact-match (`WebSearch`, `WebFetch`). Provenance failure (no qualifying tool was invoked) is a hard veto with the same shape as trap firing: `answerable = NO`, `confidence = 0`, diagnostics retained in the reason. This rule was locked in cli-v0.17.2 for web cells; it generalizes here.
 

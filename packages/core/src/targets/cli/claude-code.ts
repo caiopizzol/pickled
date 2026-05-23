@@ -27,7 +27,15 @@ export class ClaudeCodeTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, cwd, context, docs, requiredSources, discovery } = options;
+    const {
+      tool,
+      cwd,
+      context,
+      docs,
+      requiredSources,
+      discovery,
+      restrictBuiltinTools,
+    } = options;
     const toolsUsed: string[] = [];
     const sources: string[] = [];
 
@@ -59,6 +67,17 @@ export class ClaudeCodeTarget implements TargetRunner {
         this.config.mcpServers) as ClaudeAgentOptions["mcpServers"],
       settingSources: [],
     };
+
+    // SDK `tools` controls which built-in tools are available; without
+    // restricting it, allowedTools is just an auto-permission list and the
+    // agent can still call any built-in (Read/Bash/Glob), bypassing the
+    // configured tool path. Matrix runner sets restrictBuiltinTools for
+    // non-none cells. Empty array = no built-ins (MCP cells, where the
+    // tools come from mcpServers). Non-empty = scope to those built-ins
+    // (web cells: WebSearch/WebFetch).
+    if (restrictBuiltinTools !== undefined) {
+      agentOptions.tools = restrictBuiltinTools;
+    }
 
     const allResponses: ResponseEntry[] = [];
     let lastAssistantText = "";

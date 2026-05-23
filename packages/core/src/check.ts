@@ -604,15 +604,27 @@ async function runMatrixScenario(
         // Web: exact-name match (WebSearch/WebFetch). MCP: prefix match
         // on `mcp__<server>__` because individual MCP tool names come
         // from the server (e.g., `mcp__context7__resolve-library-id`).
+        // Three lists for the cell:
+        // - allowedForCell: the SDK's auto-permission list (passed as
+        //   `allowedTools`). This bypasses permission prompts but does
+        //   NOT restrict tool availability on its own.
+        // - builtinToolsForCell: the SDK's built-in tool restriction
+        //   (passed as `tools`). This is what actually scopes the cell
+        //   to the intended path. Empty for MCP cells (built-ins
+        //   disabled; MCP tools come from mcpServers).
+        // - toolMatchers: provenance predicates over invoked tool names.
         const allowedForCell: string[] = [];
+        const builtinToolsForCell: string[] = [];
         const toolMatchers: Array<(t: string) => boolean> = [];
         if (wantsWeb) {
           if (toolsetConfig?.webSearch) {
             allowedForCell.push("WebSearch");
+            builtinToolsForCell.push("WebSearch");
             toolMatchers.push((t) => t === "WebSearch");
           }
           if (toolsetConfig?.webFetch) {
             allowedForCell.push("WebFetch");
+            builtinToolsForCell.push("WebFetch");
             toolMatchers.push((t) => t === "WebFetch");
           }
         }
@@ -684,6 +696,8 @@ async function runMatrixScenario(
             docs: cellDocs,
             requiredSources: requiredInCell,
             discovery: discoveryHint,
+            restrictBuiltinTools:
+              toolsetName === "none" ? undefined : builtinToolsForCell,
             onProgress: options.onProgress,
           });
         } catch (err) {

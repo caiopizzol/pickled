@@ -595,6 +595,7 @@ describe("runCheck matrix mode", () => {
       // passed in (allowedTools should be the web tools, no Read/Edit/etc).
       const captured: {
         allowedTools: string[] | undefined;
+        restrictBuiltinTools: string[] | undefined;
         docsCount: number;
       }[] = [];
       const config: CheckConfig = {
@@ -629,6 +630,7 @@ describe("runCheck matrix mode", () => {
             async run(_p, opts) {
               captured.push({
                 allowedTools: cfg?.allowedTools,
+                restrictBuiltinTools: opts.restrictBuiltinTools,
                 docsCount: opts.docs.length,
               });
               return {
@@ -650,9 +652,15 @@ describe("runCheck matrix mode", () => {
       expect(report.scenarios[0]!.cells).toHaveLength(1);
       expect(report.scenarios[0]!.cells![0]?.cell.toolset).toBe("web");
       expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
-      // allowedTools overridden to exactly the web tools.
+      // allowedTools (SDK auto-permission list) carries the web tools.
       expect(captured).toHaveLength(1);
       expect(captured[0]?.allowedTools).toEqual(["WebSearch", "WebFetch"]);
+      // restrictBuiltinTools (SDK `tools` option) scopes built-ins to
+      // ONLY the web tools so Read/Glob/Bash cannot leak as a fallback.
+      expect(captured[0]?.restrictBuiltinTools).toEqual([
+        "WebSearch",
+        "WebFetch",
+      ]);
       // Source NOT injected (cellDocs is empty when discovery mode).
       expect(captured[0]?.docsCount).toBe(0);
     });
@@ -1025,6 +1033,7 @@ describe("runCheck matrix mode", () => {
     await withTempProject("# README", async (path) => {
       const captured: {
         allowedTools: string[] | undefined;
+        restrictBuiltinTools: string[] | undefined;
         mcpServers: unknown;
         docsCount: number;
       }[] = [];
@@ -1064,6 +1073,7 @@ describe("runCheck matrix mode", () => {
             async run(_p, opts) {
               captured.push({
                 allowedTools: cfg?.allowedTools,
+                restrictBuiltinTools: opts.restrictBuiltinTools,
                 mcpServers: cfg?.mcpServers,
                 docsCount: opts.docs.length,
               });
@@ -1088,6 +1098,11 @@ describe("runCheck matrix mode", () => {
       expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
       expect(captured).toHaveLength(1);
       expect(captured[0]?.allowedTools).toEqual(["mcp__docs__*"]);
+      // restrictBuiltinTools = [] disables all built-ins (Read, Glob,
+      // Bash, ...) so the agent cannot fall back to local filesystem.
+      // The MCP tools come from the SDK's mcpServers option, not from
+      // the built-in tool set.
+      expect(captured[0]?.restrictBuiltinTools).toEqual([]);
       expect(captured[0]?.mcpServers).toEqual({
         docs: { type: "http", url: "https://example.com/mcp" },
       });
