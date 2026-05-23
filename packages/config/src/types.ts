@@ -157,7 +157,7 @@ export interface Scenario {
   compareSurfaces?: string[][];
 }
 
-export type DocSourceType = "url" | "file" | "mcp" | "codebase";
+export type DocSourceType = "url" | "file" | "codebase";
 
 export interface DocSource {
   content: string;
