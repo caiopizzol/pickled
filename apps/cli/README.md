@@ -191,6 +191,8 @@ toolsets:
 
 Mixing `webSearch`/`webFetch` and `mcpServers` in the same toolset is rejected: declare separate toolsets so provenance can be attributed to one tool path.
 
+String values in `pickled.yml` that match `${UPPER_SNAKE_CASE}` are replaced with the corresponding `process.env` entry at load time, so secrets (MCP auth headers, API keys) stay out of the config file. Missing env vars become empty strings so the failure surfaces at the call site (e.g., a 401 from the MCP server) rather than at config load. Bun auto-loads `.env`, so the conventional dotfile works.
+
 Then reference them per scenario:
 
 ```yaml

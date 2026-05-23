@@ -17,8 +17,34 @@ export async function loadConfig(dir: string): Promise<CheckConfig> {
     throw new Error(`Failed to parse pickled.yml: ${error}`);
   }
 
+  parsed = expandEnvVars(parsed) as CheckConfig;
+
   validate(parsed);
   return parsed;
+}
+
+// Substitute `${VAR}` patterns in any string value with `process.env.VAR`.
+// Scoped to UPPER_SNAKE_CASE names so we don't accidentally rewrite real
+// YAML strings (e.g., template literals, regex placeholders). Missing env
+// vars become empty strings so the failure surfaces at the actual call
+// site (e.g., a 401 from an MCP server) rather than at load time, which
+// would block unrelated runs whenever a single optional secret is unset.
+// Bun auto-loads `.env` into process.env, so this works with the conventional
+// dotfile.
+const ENV_VAR_RE = /\$\{([A-Z_][A-Z0-9_]*)\}/g;
+export function expandEnvVars(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.replace(ENV_VAR_RE, (_match, name) => process.env[name] ?? "");
+  }
+  if (Array.isArray(value)) return value.map(expandEnvVars);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = expandEnvVars(v);
+    }
+    return out;
+  }
+  return value;
 }
 
 function validate(config: CheckConfig): void {

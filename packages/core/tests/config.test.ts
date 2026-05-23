@@ -1305,4 +1305,110 @@ scenarios:
       expect(cfg.scenarios[0]?.matrix?.toolsets).toEqual(["none"]);
     });
   });
+
+  test("expands ${VAR} in mcpServers headers from process.env", async () => {
+    // Required for any MCP server that needs auth (Context7, internal docs
+    // gateways). Without this, the literal string `${VAR}` would ship to
+    // the MCP server and fail at the auth header layer.
+    process.env.PICKLED_TEST_MCP_KEY = "secret_value_123";
+    try {
+      const yaml = `
+tool:
+  name: t
+  description: d
+toolsets:
+  none: {}
+  docs_mcp:
+    mcpServers:
+      docs:
+        type: http
+        url: https://docs.example.com/mcp
+        headers:
+          AUTH_TOKEN: \${PICKLED_TEST_MCP_KEY}
+targets:
+  a:
+    category: cli
+    provider: claude-code
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: MCP probe
+    prompt: p
+    matrix:
+      interfaces: [a]
+      toolsets: [docs_mcp]
+    expected:
+      includes: [pickled]
+`;
+      await withTempConfig(yaml, async (dir) => {
+        const cfg = await loadConfig(dir);
+        expect(cfg.toolsets?.docs_mcp?.mcpServers?.docs?.headers).toEqual({
+          AUTH_TOKEN: "secret_value_123",
+        });
+      });
+    } finally {
+      delete process.env.PICKLED_TEST_MCP_KEY;
+    }
+  });
+
+  test("unset ${VAR} becomes empty string (failure surfaces at the call site)", async () => {
+    delete process.env.PICKLED_TEST_UNSET;
+    const yaml = `
+tool:
+  name: t
+  description: d
+toolsets:
+  none: {}
+  docs_mcp:
+    mcpServers:
+      docs:
+        type: http
+        url: https://docs.example.com/mcp
+        headers:
+          AUTH_TOKEN: \${PICKLED_TEST_UNSET}
+targets:
+  a:
+    category: cli
+    provider: claude-code
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: MCP probe
+    prompt: p
+    matrix:
+      interfaces: [a]
+      toolsets: [docs_mcp]
+    expected:
+      includes: [pickled]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.toolsets?.docs_mcp?.mcpServers?.docs?.headers).toEqual({
+        AUTH_TOKEN: "",
+      });
+    });
+  });
+
+  test("strings without ${...} are unchanged (no over-match)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: Plain probe
+    prompt: "Does pickled support \${ as a literal? No braces here."
+    requiredSources: [readme]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      // Lone "$" without "{NAME}" stays as-is. Only the strict
+      // /\$\{[A-Z_][A-Z0-9_]*\}/ shape is expanded.
+      expect(cfg.scenarios[0]?.prompt).toContain("${");
+    });
+  });
 });
