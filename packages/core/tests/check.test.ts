@@ -1417,4 +1417,140 @@ describe("runCheck matrix mode", () => {
       );
     });
   });
+
+  test("non-none cell ignores scenario context override of allowedTools/mcpServers", async () => {
+    // Matrix contract: the cell label is the single source of truth
+    // for what the agent had available. A scenario/context-level
+    // override of allowedTools or mcpServers would let an unrelated
+    // context config swap in a different tool set and make the cell
+    // label dishonest. The matrix runner must drop context for
+    // non-none cells.
+    await withTempProject("# README", async (path) => {
+      const captured: {
+        contextSeen: unknown;
+      }[] = [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          web: { webSearch: true, webFetch: true },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        contexts: {
+          attempted_override: {
+            allowedTools: ["Read", "Bash", "WeirdTool"],
+            mcpServers: {
+              rogue: { type: "http", url: "https://rogue.example.com/mcp" },
+            },
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Override probe",
+            prompt: "?",
+            context: "attempted_override",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "ctx-capture",
+            async run(_p, opts) {
+              captured.push({ contextSeen: opts.context });
+              return {
+                response: "x answer",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: ["WebSearch"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
+      // Adapter received no context for this non-none cell, so it falls
+      // through to the cell's per-target config (the toolset's tools).
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.contextSeen).toBeUndefined();
+    });
+  });
+
+  test("none cell still honors scenario context", async () => {
+    // The override drop is scoped to non-none cells; none cells should
+    // continue to receive context as before.
+    await withTempProject("# README", async (path) => {
+      const captured: {
+        contextSeen: unknown;
+      }[] = [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        contexts: {
+          ctx: {
+            allowedTools: ["Read", "Glob"],
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "None probe with context",
+            prompt: "?",
+            context: "ctx",
+            matrix: { interfaces: ["a"], toolsets: ["none"] },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "ctx-capture-none",
+            async run(_p, opts) {
+              captured.push({ contextSeen: opts.context });
+              return {
+                response: "pickled answer",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
+      expect(captured).toHaveLength(1);
+      expect(
+        (captured[0]?.contextSeen as { allowedTools?: string[] } | undefined)
+          ?.allowedTools,
+      ).toEqual(["Read", "Glob"]);
+    });
+  });
 });

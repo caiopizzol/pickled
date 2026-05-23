@@ -689,10 +689,19 @@ async function runMatrixScenario(
 
         let runResult: Awaited<ReturnType<typeof target.run>>;
         try {
+          // For non-none cells, the toolset declaration is the single
+          // source of truth for the cell's available tools and MCP
+          // servers. Passing a scenario/context-level override here
+          // would let the adapter's `context?.X ?? this.config.X`
+          // precedence path swap in a different tool set, breaking the
+          // matrix contract that the cell label honestly describes
+          // what the agent had available. None cells still get context.
+          const cellContext =
+            toolsetName === "none" ? contextConfig : undefined;
           runResult = await target.run(effectivePrompt, {
             tool,
             cwd: tool.path,
-            context: contextConfig,
+            context: cellContext,
             docs: cellDocs,
             requiredSources: requiredInCell,
             discovery: discoveryHint,
