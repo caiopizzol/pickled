@@ -542,14 +542,17 @@ async function runMatrixScenario(
         if (cellFilter.toolset && cellFilter.toolset !== toolsetName) {
           continue;
         }
-        // Toolset resolution. Two toolset shapes run today:
+        // Toolset resolution. Three toolset shapes run today:
         // - "none": deterministic baseline. Source is injected. Citation
         //   contract applies if requiredSources is declared.
-        // - Any toolset with `webSearch`/`webFetch` flags ON Claude Code:
-        //   tools enabled, source NOT injected, source becomes a discovery
-        //   hint in the prompt. Citation contract is skipped for the cell.
-        // Other named toolsets (MCP, Firecrawl, API-native search) throw
-        // until their adapters land.
+        // - web: `webSearch`/`webFetch` flags on Claude Code. Tools
+        //   enabled, source NOT injected, citation contract skipped.
+        // - mcp: `mcpServers` map on Claude Code. The configured MCP
+        //   servers are passed through to the Agent SDK; allowedTools
+        //   is overridden to `mcp__<server>__*` wildcards so default
+        //   Read/Edit/Bash don't leak. Source NOT injected.
+        // Mixed shapes (web+mcp in one toolset) are rejected because
+        // pickled cannot attribute provenance honestly across both.
         const toolsetConfig =
           toolsetName === "none"
             ? null
@@ -558,6 +561,11 @@ async function runMatrixScenario(
           toolsetName !== "none" &&
           (toolsetConfig?.webSearch === true ||
             toolsetConfig?.webFetch === true);
+        const mcpServerNames =
+          toolsetName !== "none" && toolsetConfig?.mcpServers
+            ? Object.keys(toolsetConfig.mcpServers)
+            : [];
+        const wantsMcp = mcpServerNames.length > 0;
 
         const { config: baseTargetConfig } = resolveTarget(
           interfaceName,
@@ -565,28 +573,53 @@ async function runMatrixScenario(
         );
 
         if (toolsetName !== "none") {
-          if (!wantsWeb) {
+          if (wantsWeb && wantsMcp) {
             throw new Error(
-              `Toolset "${toolsetName}" is declared but not yet implemented. Supported today: "none" and Claude-Code web toolsets (webSearch/webFetch). Other adapters (Context7 MCP, Firecrawl, native API search) land per release.`,
+              `Toolset "${toolsetName}" mixes webSearch/webFetch with mcpServers; declare separate toolsets per shape so provenance can be attributed to one tool path.`,
+            );
+          }
+          if (!wantsWeb && !wantsMcp) {
+            throw new Error(
+              `Toolset "${toolsetName}" is declared but defines no runtime shape. Supported today: "none", web (webSearch/webFetch flags), MCP (mcpServers map). Other adapters (Firecrawl, native API search) land per release.`,
             );
           }
           if (baseTargetConfig.provider !== "claude-code") {
             throw new Error(
-              `Toolset "${toolsetName}" (web) is implemented only on the claude-code interface. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
+              `Toolset "${toolsetName}" is implemented only on the claude-code interface. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
             );
           }
         }
 
-        // Build the effective per-cell target config. For web toolsets,
-        // OVERRIDE allowedTools to exactly the requested web tools so the
-        // cell is a controlled experiment (no Read/Edit/Write from defaults).
-        // Web cells also need more turns than controlled cells because the
-        // agent typically does search -> fetch -> reason -> respond. We bump
-        // maxTurns to 15 for web cells unless the target already declares a
-        // higher value (vendor knows their workload).
+        // Build the effective per-cell target config. For non-none
+        // toolsets, OVERRIDE allowedTools so the cell is a controlled
+        // experiment (no Read/Edit/Write/Bash from defaults). Non-none
+        // cells also need more turns because the agent typically does
+        // discover -> fetch -> reason -> respond. Bump maxTurns to 15
+        // unless the target already declares a higher value.
+        //
+        // Provenance match list (mirrors allowedForCell): the cell passes
+        // provenance iff at least one configured tool was actually used.
+        // Web: exact-name match (WebSearch/WebFetch). MCP: prefix match
+        // on `mcp__<server>__` because individual MCP tool names come
+        // from the server (e.g., `mcp__context7__resolve-library-id`).
         const allowedForCell: string[] = [];
-        if (toolsetConfig?.webSearch) allowedForCell.push("WebSearch");
-        if (toolsetConfig?.webFetch) allowedForCell.push("WebFetch");
+        const toolMatchers: Array<(t: string) => boolean> = [];
+        if (wantsWeb) {
+          if (toolsetConfig?.webSearch) {
+            allowedForCell.push("WebSearch");
+            toolMatchers.push((t) => t === "WebSearch");
+          }
+          if (toolsetConfig?.webFetch) {
+            allowedForCell.push("WebFetch");
+            toolMatchers.push((t) => t === "WebFetch");
+          }
+        }
+        if (wantsMcp) {
+          for (const s of mcpServerNames) {
+            allowedForCell.push(`mcp__${s}__*`);
+            toolMatchers.push((t) => t.startsWith(`mcp__${s}__`));
+          }
+        }
         const targetConfig =
           toolsetName === "none"
             ? baseTargetConfig
@@ -594,7 +627,7 @@ async function runMatrixScenario(
                 ...baseTargetConfig,
                 allowedTools: allowedForCell,
                 disallowedTools: [],
-                mcpServers: toolsetConfig?.mcpServers,
+                mcpServers: wantsMcp ? toolsetConfig?.mcpServers : undefined,
                 maxTurns: Math.max(baseTargetConfig.maxTurns ?? 0, 15),
               };
 
@@ -715,11 +748,11 @@ async function runMatrixScenario(
         // configured tools (`allowedForCell` empty), which only happens
         // for `none` cells today.
         const toolUseDetail =
-          toolsetName !== "none" && allowedForCell.length > 0
+          toolsetName !== "none" && toolMatchers.length > 0
             ? {
                 expected: allowedForCell,
                 used: (runResult.toolsUsed ?? []).filter((t) =>
-                  allowedForCell.includes(t),
+                  toolMatchers.some((m) => m(t)),
                 ),
               }
             : null;

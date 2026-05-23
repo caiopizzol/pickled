@@ -687,18 +687,20 @@ describe("runCheck matrix mode", () => {
     });
   });
 
-  test("non-web custom toolset still throws not-implemented", async () => {
+  test("toolset with no recognized shape (empty body) throws a clear error", async () => {
+    // Empty toolset (no webSearch/webFetch flags, no mcpServers) has no
+    // runtime shape; the runner cannot pick a tool path for it.
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {
         tool: { name: "t", description: "d" },
-        toolsets: { none: {}, mcp_thing: {} },
+        toolsets: { none: {}, mystery: {} },
         targets: { a: { category: "cli", provider: "claude-code" } },
         docs: { sources: { readme: "./README.md" } },
         scenarios: [
           {
-            name: "MCP probe",
+            name: "Mystery probe",
             prompt: "?",
-            matrix: { interfaces: ["a"], toolsets: ["mcp_thing"] },
+            matrix: { interfaces: ["a"], toolsets: ["mystery"] },
             expected: { includes: ["x"] },
           },
         ],
@@ -708,7 +710,7 @@ describe("runCheck matrix mode", () => {
         config,
         { targetFactory: () => makeMockTarget("x") },
       );
-      expect(report.scenarios[0]!.error).toMatch(/not yet implemented/);
+      expect(report.scenarios[0]!.error).toMatch(/no runtime shape/);
     });
   });
 
@@ -1016,6 +1018,388 @@ describe("runCheck matrix mode", () => {
       expect(cell.answerable).toBe("NO");
       expect(cell.confidence).toBe(0);
       expect(cell.traps.fired).toHaveLength(1);
+    });
+  });
+
+  test("mcp cell: passes scoped allowedTools and mcpServers, does NOT inject source", async () => {
+    await withTempProject("# README", async (path) => {
+      const captured: {
+        allowedTools: string[] | undefined;
+        mcpServers: unknown;
+        docsCount: number;
+      }[] = [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "MCP discovery probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["docs_mcp"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: (_name, cfg) => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "captured",
+            async run(_p, opts) {
+              captured.push({
+                allowedTools: cfg?.allowedTools,
+                mcpServers: cfg?.mcpServers,
+                docsCount: opts.docs.length,
+              });
+              return {
+                response: "x answer via MCP",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: ["mcp__docs__get-library-docs"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(report.scenarios[0]!.cells).toHaveLength(1);
+      expect(report.scenarios[0]!.cells![0]?.cell.toolset).toBe("docs_mcp");
+      expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.allowedTools).toEqual(["mcp__docs__*"]);
+      expect(captured[0]?.mcpServers).toEqual({
+        docs: { type: "http", url: "https://example.com/mcp" },
+      });
+      expect(captured[0]?.docsCount).toBe(0);
+    });
+  });
+
+  test("mcp cell: prefix-matches mcp__<server>__* for provenance", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "MCP provenance probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["docs_mcp"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "mcp-mock",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled answer from MCP",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: ["mcp__docs__resolve-library-id"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("YES");
+      expect(cell.reason).toMatch(/tool use verified/);
+      expect(cell.reason).toMatch(/mcp__docs__resolve-library-id/);
+    });
+  });
+
+  test("mcp cell with no mcp tool used: hard-veto NO/0 with provenance reason", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "MCP no-use probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["docs_mcp"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "no-mcp-call",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled answer from model prior knowledge",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+      expect(cell.reason).toMatch(/Provenance failed/);
+      expect(cell.reason).toMatch(/mcp__docs__\*/);
+    });
+  });
+
+  test("mcp cell: only unrelated tool used counts as no provenance", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "MCP unrelated-tool probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["docs_mcp"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "unrelated",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled answer",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: ["mcp__other__tool"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+      expect(cell.reason).toMatch(/Provenance failed/);
+    });
+  });
+
+  test("mcp cell with multiple servers: any one server's tool counts", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          two_mcp: {
+            mcpServers: {
+              a_srv: { type: "http", url: "https://a.example.com/mcp" },
+              b_srv: { type: "http", url: "https://b.example.com/mcp" },
+            },
+          },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Two-server probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["two_mcp"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "two-mock",
+            async run(): Promise<TargetResult> {
+              return {
+                response: "pickled answer from b_srv",
+                allResponses: [{ type: "final", text: "pickled" }],
+                toolsUsed: ["mcp__b_srv__fetch"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("YES");
+      expect(cell.reason).toMatch(/tool use verified \(mcp__b_srv__fetch\)/);
+    });
+  });
+
+  test("mixed-shape toolset (web flags + mcpServers) is rejected", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          mixed: {
+            webSearch: true,
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Mixed probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], toolsets: ["mixed"] },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toMatch(
+        /mixes webSearch\/webFetch with mcpServers/,
+      );
+    });
+  });
+
+  test("mcp toolset on non-claude-code interface throws clearly", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: {
+          a: { category: "cli", provider: "codex-cli", model: "gpt-5.5" },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Wrong-interface MCP probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], toolsets: ["docs_mcp"] },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toMatch(
+        /implemented only on the claude-code interface/,
+      );
     });
   });
 });

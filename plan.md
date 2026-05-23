@@ -36,10 +36,10 @@ Move an item from this file back into a tracked issue when it becomes the next c
 
 ## Parked: toolset adapters
 
-The matrix evaluation proposal lists `none / web / context7 / firecrawl` as planned toolset profiles. The schema slot for `toolsets` shipped in `cli-v0.16.0`; the `none` baseline shipped then too; `web` on Claude Code shipped in `cli-v0.17.0`. The remaining adapter implementations are each their own work:
+The matrix evaluation proposal lists `none / web / mcp / firecrawl` as planned toolset profiles. The schema slot for `toolsets` shipped in `cli-v0.16.0`; the `none` baseline shipped then too; `web` on Claude Code shipped in `cli-v0.17.0`; the generic MCP live-toolset adapter shipped in `cli-v0.18.0`. The remaining adapter implementations are each their own work:
 
-- ~~**WebSearch + WebFetch on Claude Code.**~~ Shipped in `cli-v0.17.0` (toolset profile `web` with `webSearch: true` / `webFetch: true` flags). Discovery-system prompt + per-cell `toolsUsed` capture + per-cell error containment hardened in `cli-v0.17.1`.
-- **Context7 MCP as live tool.** Distinct from the controlled MCP resource case (parked above). Agent calls Context7 tools (`resolve-library-id`, `get-library-docs`) during inference. Next on critic's recommendation because it tests a genuinely different developer path than another web-search mechanism.
+- ~~**WebSearch + WebFetch on Claude Code.**~~ Shipped in `cli-v0.17.0` (toolset profile `web` with `webSearch: true` / `webFetch: true` flags). Discovery-system prompt + per-cell `toolsUsed` capture + per-cell error containment hardened in `cli-v0.17.1`. Tool-use provenance + hard veto + non-none-contract validation hardened in `cli-v0.17.2`.
+- ~~**MCP as live tool.**~~ Shipped in `cli-v0.18.0` as a generic adapter (`ToolsetConfig.mcpServers`). Any MCP server reachable via `stdio` / `http` / `sse` can be declared; pickled overrides `allowedTools` to `mcp__<server>__*` wildcards and treats any invocation of `mcp__<server>__*` as provenance. Context7 ships as the dogfood example, not a special case. Design locked in `proposals/mcp-toolset.md`.
 - **Firecrawl as toolset.** Web-crawl-as-tool. New mechanism.
 - **Anthropic API native `web_search_20250305` tool.** Server-side search; distinct from Claude Code's client-side WebSearch. Different citation/provenance shape.
 - **OpenAI Responses API web_search.** Same shape as Anthropic native; OpenAI-specific.

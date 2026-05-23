@@ -78,6 +78,17 @@ toolsets:
   web:
     webSearch: true
     webFetch: true
+  # Generic MCP toolset shape (see proposals/mcp-toolset.md). The toolset
+  # name is user-chosen; pickled has no Context7-specific code path. Any
+  # MCP server reachable via stdio/http/sse can be declared the same way.
+  # The CONTEXT7_API_KEY env var must be set to exercise this toolset.
+  context7_mcp:
+    mcpServers:
+      context7:
+        type: http
+        url: https://mcp.context7.com/mcp
+        headers:
+          CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 
 scenarios:
   # Compare-surfaces dogfood. Same install question, run against three
@@ -186,6 +197,29 @@ scenarios:
       interfaces: [quick]
       sources: [llms]
       toolsets: [web]
+    expected:
+      includes:
+        - "agent"
+      excludes:
+        - "AI-powered"
+        - "freshness score"
+    verifiers:
+      sources: [llms]
+
+  # MCP discovery dogfood: same positioning question, but the agent uses
+  # Context7's MCP server to research the answer. Context7 is named
+  # explicitly here as the example; the underlying mechanism is the
+  # generic MCP toolset adapter (see proposals/mcp-toolset.md). Disabled
+  # in matrix.target so cost + auth stay opt-in: dispatch with
+  # `pickled check --target quick --interface quick --toolset context7_mcp`
+  # and CONTEXT7_API_KEY exported. The cell scores on expected +
+  # tool-use provenance (any `mcp__context7__*` invocation counts).
+  - name: "Matrix discovery: pickled positioning via Context7 MCP"
+    prompt: "In one sentence, what does pickled do?"
+    matrix:
+      interfaces: [quick]
+      sources: [llms]
+      toolsets: [context7_mcp]
     expected:
       includes:
         - "agent"

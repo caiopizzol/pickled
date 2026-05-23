@@ -164,10 +164,13 @@ URL sources are NOT scanned by the audit's trap cross-reference in v1; they are 
 
 ## Toolsets
 
-Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. Two profiles ship today:
+Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. Three shapes ship today:
 
 - **`none`** (the deterministic baseline). Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared. Same scoring shape as non-matrix scenarios.
-- **`web`** on Claude Code only. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target ("the canonical source for this question is at ..."). Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes` + tool-use provenance. Tool-use provenance is a hard veto: a cell that does not invoke at least one of the configured web tools is forced to `NO` with confidence `0`, because an answer pulled from model prior knowledge cannot testify to the tool path the cell is meant to test.
+- **`web`** on Claude Code only. Set `webSearch: true` and/or `webFetch: true`. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target. Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes` + tool-use provenance.
+- **`mcp`** on Claude Code only. Declare `mcpServers` (a map of server name to `McpServerConfig` with `stdio`, `http`, or `sse` transport). Maps to `allowedTools: ["mcp__<server>__*", ...]` on the cell's Claude Code target so default Read/Edit/Bash do not leak. The configured MCP servers are passed through to the Agent SDK; tool-use provenance accepts any invocation of `mcp__<server>__*` for any configured server.
+
+Tool-use provenance (web and MCP) is a hard veto. A cell that does not invoke at least one of the configured tools is forced to `NO` with confidence `0`, because an answer pulled from model prior knowledge cannot testify to the tool path the cell is meant to test.
 
 Declare profiles at the top level of `pickled.yml`:
 
@@ -177,7 +180,16 @@ toolsets:
   web:
     webSearch: true
     webFetch: true
+  context7_mcp:
+    mcpServers:
+      context7:
+        type: http
+        url: https://mcp.context7.com/mcp
+        headers:
+          CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 ```
+
+Mixing `webSearch`/`webFetch` and `mcpServers` in the same toolset is rejected: declare separate toolsets so provenance can be attributed to one tool path.
 
 Then reference them per scenario:
 
@@ -187,14 +199,14 @@ scenarios:
     matrix:
       interfaces: [quick]
       sources: [llms]
-      toolsets: [none, web]
+      toolsets: [none, web, context7_mcp]
     expected:
       includes: ["bunx pickled"]
 ```
 
-That scenario produces 2 cells: `[quick · llms · none]` (injected) and `[quick · llms · web]` (discovered via tools).
+That scenario produces 3 cells: `[quick · llms · none]` (injected), `[quick · llms · web]` (discovered via web tools), `[quick · llms · context7_mcp]` (discovered via Context7 MCP).
 
-Custom toolset names that have no recognized adapter throw a clear "not yet implemented" error per cell. Web toolset on a non-Claude-Code interface throws "implemented only on the claude-code interface" so the misconfiguration is obvious.
+Toolsets that declare neither web flags nor `mcpServers`, and toolsets on a non-Claude-Code interface, throw clear errors per cell so the misconfiguration is obvious.
 
 ## Targets
 
