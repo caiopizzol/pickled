@@ -41,6 +41,14 @@ docs:
       path: "packages/core/src/scorers/**/*.ts"
       exclude: ["**/*.test.ts"]
 
+    # Live public docs surfaces (apps/docs deployed to docs.pickled.dev).
+    # Registered as URLs so the matrix can ask: what does an agent say when
+    # the only source it has is what we ship publicly? Start with controlled
+    # mode (toolset: none, source content injected); a web/MCP discovery
+    # version lands once the controlled baseline is honest.
+    public_docs_full: https://docs.pickled.dev/llms-full.txt
+    public_docs_getting_started: https://docs.pickled.dev/docs/getting-started
+
 targets:
   quick:
     category: cli
@@ -232,6 +240,33 @@ scenarios:
   - name: "Pickled contracts"
     prompt: "What is pickled and what contracts should agents preserve when describing it?"
     requiredSources: [llms]
+
+  # Public-docs dogfood. The first scenario that tests whether the agent
+  # can answer a real install/run question with ONLY what we ship at
+  # docs.pickled.dev (registered above as URL sources). Toolsets: [none]
+  # only here so the controlled baseline is honest first; if this passes,
+  # a web/MCP discovery variant follows in a later iteration. expected
+  # checks pin the answer to the concrete commands the docs teach: the
+  # `bunx @pickled-dev/cli` invocation and writing a `pickled.yml`. The
+  # excludes catch the perennial brand-banned phrases plus a stale
+  # `npm install` form that would indicate the agent skipped past the
+  # registered docs.
+  - name: "Matrix: install from public docs"
+    prompt: "Using only the registered source, how do I install pickled and run my first check?"
+    requiredSources: [public_docs_full, public_docs_getting_started]
+    matrix:
+      interfaces: [quick]
+      sources: [public_docs_full, public_docs_getting_started]
+      toolsets: [none]
+    expected:
+      includes:
+        - "bunx @pickled-dev/cli"
+        - "pickled.yml"
+      excludes:
+        - "AI-powered"
+        - "npm install @pickled-dev/cli"
+    verifiers:
+      sources: [public_docs_full]
 
   # Tests that the agent surfaces the supported/stubbed split for CLI targets.
   # The trap fires on affirmative forms in either direction: verb-first

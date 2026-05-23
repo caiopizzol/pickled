@@ -1,6 +1,6 @@
 # docs
 
-Pickled's public documentation site. Static Next.js + Fumadocs UI, deployed to Cloudflare Pages at `docs.pickled.dev` (once the custom domain is wired).
+Pickled's public documentation site. Static Next.js + Fumadocs UI, deployed to Cloudflare Pages and served at [`docs.pickled.dev`](https://docs.pickled.dev) (stable Pages URL: `pickled-docs.pages.dev`).
 
 The site exposes:
 
