@@ -107,7 +107,9 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 The second case is not secondary. It is where prompt surface becomes product-critical, and it is the bridge between pickled and benchmarks like comment-bench and agents-md-bench.
 
-**Base message.** Pickled measures whether AI agents can ground their answers in your declared sources, across the surfaces they reach your product through, and trip on the stale patterns you've already moved past.
+**Base message.** Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.
+
+This is the one-sentence description used as the lead line in `README.md`, `apps/cli/README.md`, and the homepage hero subtitle. Keep it verbatim across surfaces so the npm page, the GitHub repo overview, and any external write-up all read the same. When the product story shifts (new axis, new signal, new scoring rule), update this line first and propagate; do not let READMEs drift from it.
 
 **Synthesizing phrase.** Pickled exists to keep products legible after agents enter the room.
 
