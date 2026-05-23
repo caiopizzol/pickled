@@ -198,6 +198,17 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
       }
     }
   }
+  if (result.verifierSamples && result.verifierSamples.length > 0) {
+    lines.push(
+      `${indent}${chalk.dim("Verifier samples (human review; never LLM-judged)")}`,
+    );
+    for (const sample of result.verifierSamples) {
+      const snippet = sample.content.slice(0, 200).replace(/\s+/g, " ").trim();
+      const ellipsis = sample.content.length > 200 ? "..." : "";
+      lines.push(chalk.dim(`${indent}  [${sample.id}] ${sample.name}`));
+      lines.push(chalk.dim(`${indent}    ${snippet}${ellipsis}`));
+    }
+  }
   return lines;
 }
 

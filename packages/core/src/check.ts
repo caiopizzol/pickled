@@ -705,6 +705,11 @@ async function runMatrixScenario(
     }
   }
 
+  // Verifier samples: load registered sources named in scenario.verifiers.sources
+  // and attach for human-side comparison in the report. Never injected into
+  // the agent's prompt; never LLM-judged.
+  const verifierSamples = collectVerifierSamples(scenario, docs);
+
   return {
     scenario,
     answerable: null,
@@ -714,7 +719,24 @@ async function runMatrixScenario(
     citations: null,
     traps: null,
     cells,
+    verifierSamples,
     target: metadata,
     context: { name: contextName },
   };
+}
+
+function collectVerifierSamples(
+  scenario: Scenario,
+  docs: ResolvedDocSource[],
+): Array<{ id: string; name: string; content: string }> | undefined {
+  const ids = scenario.verifiers?.sources;
+  if (!ids || ids.length === 0) return undefined;
+  const byId = new Map(docs.map((d) => [d.id, d] as const));
+  const samples: Array<{ id: string; name: string; content: string }> = [];
+  for (const id of ids) {
+    const d = byId.get(id);
+    if (!d) continue;
+    samples.push({ id: d.id, name: d.name, content: d.content });
+  }
+  return samples.length > 0 ? samples : undefined;
 }

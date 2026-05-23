@@ -49,7 +49,7 @@ program
   )
   .option(
     "--target <name>",
-    "Run only the named target (overrides matrix.target)",
+    "Restrict to the named target. Overrides matrix.target for non-matrix scenarios; for matrix scenarios, also filters cells by interface unless --interface is explicitly set.",
   )
   .option(
     "--scenario <name>",
@@ -57,7 +57,7 @@ program
   )
   .option(
     "--interface <name>",
-    "Matrix cell filter: run only cells with this interface (used with scenario.matrix)",
+    "Matrix cell filter: run only cells with this interface. Takes precedence over --target for matrix cells.",
   )
   .option(
     "--source <name>",

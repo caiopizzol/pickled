@@ -85,10 +85,17 @@ export async function check(
   }
 
   // 2. Run check
+  // --target bridges to cellFilter.interface for matrix scenarios when
+  // --interface is not also set. Keeps "pickled check --target codex"
+  // doing the intuitive thing across both non-matrix and matrix scenarios:
+  // narrow the top-level matrix.target (via overrideTarget above) AND
+  // narrow matrix.interfaces to the same name. Explicit --interface wins
+  // if both are passed.
+  const effectiveInterfaceFilter = options.interface ?? options.target;
   const cellFilter =
-    options.interface || options.source || options.toolset
+    effectiveInterfaceFilter || options.source || options.toolset
       ? {
-          interface: options.interface,
+          interface: effectiveInterfaceFilter,
           source: options.source,
           toolset: options.toolset,
         }

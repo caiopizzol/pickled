@@ -79,6 +79,13 @@ export interface ScenarioResult {
   surfaces?: SurfaceResult[];
   /** Per-cell evaluations. Present iff scenario.matrix declared. */
   cells?: CellResult[];
+  /**
+   * Verifier source snapshots surfaced for human review. Present iff
+   * scenario.verifiers.sources is declared and the referenced sources
+   * loaded successfully. NEVER LLM-judged; NEVER injected into the agent's
+   * prompt unless also listed as the cell's active source.
+   */
+  verifierSamples?: Array<{ id: string; name: string; content: string }>;
   error?: string;
   target?: {
     target: string;

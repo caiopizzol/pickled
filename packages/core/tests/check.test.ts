@@ -669,6 +669,35 @@ describe("runCheck matrix mode", () => {
     });
   });
 
+  test("verifier sources are loaded and attached to ScenarioResult.verifierSamples", async () => {
+    await withTempProject("# README essential content", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Verifier visible",
+            prompt: "?",
+            matrix: { interfaces: ["a"] },
+            expected: { includes: ["x"] },
+            verifiers: { sources: ["readme"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x answer") },
+      );
+      const r = report.scenarios[0]!;
+      expect(r.verifierSamples).toBeDefined();
+      expect(r.verifierSamples).toHaveLength(1);
+      expect(r.verifierSamples![0]?.id).toBe("readme");
+      expect(r.verifierSamples![0]?.content).toContain("essential content");
+    });
+  });
+
   test("trap firing vetoes a matrix cell to NO/0 regardless of expected hits", async () => {
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {
