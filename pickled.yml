@@ -73,6 +73,12 @@ targets:
 matrix:
   target: [quick, codex]
 
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+
 scenarios:
   # Compare-surfaces dogfood. Same install question, run against three
   # candidate public surfaces. Per proposals/compare-surfaces.md the report
@@ -159,6 +165,28 @@ scenarios:
         - "freshness score"
     verifiers:
       sources: [readme]
+
+  # Discovery-mode dogfood (v0.16.x): Claude Code with WebSearch+WebFetch
+  # tools enabled, source NOT injected. The agent should reach the README
+  # URL via its tools. Toolsets restricted to [web]; matrix.interfaces
+  # restricted to [quick] because web toolset is Claude-Code-only in v0.16.x.
+  # Disabled in matrix.target so cost stays opt-in: dispatch with
+  # `pickled check --target quick --interface quick --toolset web` to
+  # exercise this cell explicitly.
+  - name: "Matrix discovery: pickled positioning via web"
+    prompt: "In one sentence, what does pickled do?"
+    matrix:
+      interfaces: [quick]
+      sources: [llms]
+      toolsets: [web]
+    expected:
+      includes:
+        - "agent"
+      excludes:
+        - "AI-powered"
+        - "freshness score"
+    verifiers:
+      sources: [llms]
 
   - name: "Pickled contracts"
     prompt: "What is pickled and what contracts should agents preserve when describing it?"

@@ -541,32 +541,92 @@ async function runMatrixScenario(
         if (cellFilter.toolset && cellFilter.toolset !== toolsetName) {
           continue;
         }
-        if (toolsetName !== "none") {
-          throw new Error(
-            `Toolset "${toolsetName}" is declared but not yet implemented in this CLI version. v0.16.0 supports only "none" (the deterministic baseline cell). Tool-enabled adapters (WebSearch+WebFetch, Context7 MCP, Firecrawl, native API search) land in follow-up commits.`,
-          );
-        }
+        // Toolset resolution. v0.16.x supports two toolset shapes:
+        // - "none": deterministic baseline. Source is injected. Citation
+        //   contract applies if requiredSources is declared.
+        // - Any toolset with `webSearch`/`webFetch` flags ON Claude Code:
+        //   tools enabled, source NOT injected, source becomes a discovery
+        //   hint in the prompt. Citation contract is skipped for the cell.
+        // Other named toolsets (MCP, Firecrawl, API-native search) throw
+        // until their adapters land.
+        const toolsetConfig =
+          toolsetName === "none"
+            ? null
+            : (config.toolsets?.[toolsetName] ?? null);
+        const wantsWeb =
+          toolsetName !== "none" &&
+          (toolsetConfig?.webSearch === true ||
+            toolsetConfig?.webFetch === true);
 
-        const { config: targetConfig } = resolveTarget(
+        const { config: baseTargetConfig } = resolveTarget(
           interfaceName,
           config.targets,
         );
+
+        if (toolsetName !== "none") {
+          if (!wantsWeb) {
+            throw new Error(
+              `Toolset "${toolsetName}" is declared but not yet implemented. v0.16.x supports "none" and Claude-Code web toolsets (webSearch/webFetch). Other adapters (Context7 MCP, Firecrawl, native API search) land in follow-up commits.`,
+            );
+          }
+          if (baseTargetConfig.provider !== "claude-code") {
+            throw new Error(
+              `Toolset "${toolsetName}" (web) is implemented only on the claude-code interface. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
+            );
+          }
+        }
+
+        // Build the effective per-cell target config. For web toolsets,
+        // OVERRIDE allowedTools to exactly the requested web tools so the
+        // cell is a controlled experiment (no Read/Edit/Write from defaults).
+        const allowedForCell: string[] = [];
+        if (toolsetConfig?.webSearch) allowedForCell.push("WebSearch");
+        if (toolsetConfig?.webFetch) allowedForCell.push("WebFetch");
+        const targetConfig =
+          toolsetName === "none"
+            ? baseTargetConfig
+            : {
+                ...baseTargetConfig,
+                allowedTools: allowedForCell,
+                disallowedTools: [],
+                mcpServers: toolsetConfig?.mcpServers,
+              };
+
         const target = options.targetFactory
           ? options.targetFactory(interfaceName, targetConfig)
           : createTarget(interfaceName, targetConfig);
 
         // Source × Toolset semantics (matrix proposal Decision 6):
-        // Tools: none + source -> inject the source content.
-        // Verifiers.sources are loaded into the registry but never injected
-        // unless they are also the active source.
-        const cellDocs =
-          sourceName === null ? docs : docs.filter((d) => d.id === sourceName);
-        const surfaceIds =
-          sourceName === null ? docs.map((d) => d.id) : [sourceName];
+        // - Tools: none + source -> inject the source content.
+        // - Tools: <web> + source -> do NOT inject; rewrite prompt to name
+        //   the source as the discovery target. Agent reaches it via tools.
+        // - Verifiers.sources are loaded but never injected.
+        const isInjecting = toolsetName === "none";
+        const cellDocs = isInjecting
+          ? sourceName === null
+            ? docs
+            : docs.filter((d) => d.id === sourceName)
+          : [];
+        const surfaceIds = isInjecting
+          ? sourceName === null
+            ? docs.map((d) => d.id)
+            : [sourceName]
+          : [];
         const required = scenario.requiredSources ?? [];
-        const requiredInCell = required.filter((id) => surfaceIds.includes(id));
+        // Citation contract applies only in controlled mode (toolset: none).
+        // Discovery mode cells rely on traps + expected.
+        const requiredInCell = isInjecting
+          ? required.filter((id) => surfaceIds.includes(id))
+          : [];
 
-        const runResult = await target.run(scenario.prompt, {
+        const effectivePrompt = buildCellPrompt(
+          scenario.prompt,
+          sourceName,
+          docs,
+          isInjecting,
+        );
+
+        const runResult = await target.run(effectivePrompt, {
           tool,
           cwd: tool.path,
           context: contextConfig,
@@ -584,7 +644,7 @@ async function runMatrixScenario(
         const trapFired = trapDetails.fired.length > 0;
 
         const citationScore =
-          scenario.requiredSources !== undefined
+          scenario.requiredSources !== undefined && isInjecting
             ? scoreCitations({
                 response: runResult.response,
                 requiredSources: requiredInCell,
@@ -739,4 +799,30 @@ function collectVerifierSamples(
     samples.push({ id: d.id, name: d.name, content: d.content });
   }
   return samples.length > 0 ? samples : undefined;
+}
+
+/**
+ * Build the per-cell prompt. Controlled-mode cells (toolset: none) use the
+ * scenario's prompt verbatim because the citation prompt (built by the
+ * target adapter) injects the source content. Discovery-mode cells
+ * (toolset: web with WebSearch/WebFetch on Claude Code) prepend a hint
+ * naming the canonical source the agent should research with its tools.
+ * The agent is free to use other discovery paths too; the hint just
+ * surfaces the cell's declared source.
+ */
+function buildCellPrompt(
+  basePrompt: string,
+  sourceName: string | null,
+  docs: ResolvedDocSource[],
+  isInjecting: boolean,
+): string {
+  if (isInjecting) return basePrompt;
+  if (sourceName === null) return basePrompt;
+  const source = docs.find((d) => d.id === sourceName);
+  if (!source) return basePrompt;
+  const hint =
+    source.type === "url"
+      ? `The canonical source for this question is the documentation at ${source.source}. Use your available tools to research it.`
+      : `The canonical source for this question is "${source.name}" (registered locally as ${source.id}). Use your available tools to research from authoritative sources.`;
+  return `${basePrompt}\n\n${hint}`;
 }

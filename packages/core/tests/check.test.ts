@@ -589,16 +589,87 @@ describe("runCheck matrix mode", () => {
     });
   });
 
-  test("non-none toolset throws (only 'none' implemented in v0.16.0)", async () => {
+  test("web toolset on Claude Code: passes WebSearch+WebFetch to the cell target, does NOT inject source", async () => {
     await withTempProject("# README", async (path) => {
+      // Capture the per-cell target config so we can verify what the runner
+      // passed in (allowedTools should be the web tools, no Read/Edit/etc).
+      const captured: {
+        allowedTools: string[] | undefined;
+        docsCount: number;
+      }[] = [];
       const config: CheckConfig = {
         tool: { name: "t", description: "d" },
-        toolsets: { none: {}, web: { webSearch: true } },
+        toolsets: {
+          none: {},
+          web: { webSearch: true, webFetch: true },
+        },
         targets: { a: { category: "cli", provider: "claude-code" } },
         docs: { sources: { readme: "./README.md" } },
         scenarios: [
           {
-            name: "Probe",
+            name: "Discovery probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: (_name, cfg) => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "captured",
+            async run(_p, opts) {
+              captured.push({
+                allowedTools: cfg?.allowedTools,
+                docsCount: opts.docs.length,
+              });
+              return {
+                response: "x answer from web research",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: ["WebFetch"],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(report.scenarios[0]!.cells).toHaveLength(1);
+      expect(report.scenarios[0]!.cells![0]?.cell.toolset).toBe("web");
+      expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
+      // allowedTools overridden to exactly the web tools.
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.allowedTools).toEqual(["WebSearch", "WebFetch"]);
+      // Source NOT injected (cellDocs is empty when discovery mode).
+      expect(captured[0]?.docsCount).toBe(0);
+    });
+  });
+
+  test("web toolset on non-Claude-Code interface throws clearly", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true } },
+        targets: {
+          a: { category: "cli", provider: "codex-cli", model: "gpt-5.5" },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Wrong-interface probe",
             prompt: "?",
             matrix: { interfaces: ["a"], toolsets: ["web"] },
             expected: { includes: ["x"] },
@@ -610,7 +681,34 @@ describe("runCheck matrix mode", () => {
         config,
         { targetFactory: () => makeMockTarget("x") },
       );
-      expect(report.scenarios[0]!.error).toContain("not yet implemented");
+      expect(report.scenarios[0]!.error).toMatch(
+        /implemented only on the claude-code interface/,
+      );
+    });
+  });
+
+  test("non-web custom toolset still throws not-implemented", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, mcp_thing: {} },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "MCP probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], toolsets: ["mcp_thing"] },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toMatch(/not yet implemented/);
     });
   });
 

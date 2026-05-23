@@ -162,6 +162,40 @@ Codebase loader safety defaults: skips directories (`onlyFiles`), does not follo
 
 URL sources are NOT scanned by the audit's trap cross-reference in v1; they are fetched only during `pickled check`.
 
+## Toolsets
+
+Matrix mode (`scenario.matrix.toolsets`) iterates each scenario across named toolset profiles. v0.16.x ships two:
+
+- **`none`** (the deterministic baseline). Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared. Same scoring shape as non-matrix scenarios.
+- **`web`** on Claude Code only. Maps to `allowedTools: ["WebSearch", "WebFetch"]` on the cell's Claude Code target. Source is NOT injected; the cell's prompt is rewritten to name the active source as the discovery target ("the canonical source for this question is at ..."). Citation contract is skipped; the cell scores on traps + `expected.includes`/`excludes`.
+
+Declare profiles at the top level of `pickled.yml`:
+
+```yaml
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+```
+
+Then reference them per scenario:
+
+```yaml
+scenarios:
+  - name: "Install"
+    matrix:
+      interfaces: [quick]
+      sources: [llms]
+      toolsets: [none, web]
+    expected:
+      includes: ["bunx pickled"]
+```
+
+That scenario produces 2 cells: `[quick · llms · none]` (injected) and `[quick · llms · web]` (discovered via tools).
+
+Custom toolset names that have no recognized adapter throw a clear "not yet implemented" error per cell. Web toolset on a non-Claude-Code interface throws "implemented only on the claude-code interface" so the misconfiguration is obvious.
+
 ## Targets
 
 Pickled ships three target shapes today. Each target is a distinct surface that exercises the agent differently; results are comparable but not identical.
