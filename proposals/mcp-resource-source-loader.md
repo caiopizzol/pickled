@@ -1,7 +1,7 @@
 # Proposal: MCP-resource-as-source loader (v1)
 
-**Status:** draft, no implementation
-**Motivated by:** issue #6 under the #5 source-loader-expansion tracker. The codebase loader (cli-v0.15.0) covered code-resident knowledge. MCP servers are the next surface vendors expose: Context7, Mintlify-style docs servers, custom enterprise MCP endpoints. Pickled cannot register that content today. `DocSourceType` at `packages/config/src/types.ts:144` declares `"mcp"` as a valid type; the loader at `packages/core/src/sources.ts:62` does not implement it.
+**Status:** draft, no implementation, **demoted in priority** as of `proposals/discovery-mode-scoring.md`. This proposal solves the *controlled* MCP resource case: pickled fetches MCP resources ahead of time and injects them as registered source text. That is the right design for vendors who publish MCP resources and want to test how agents read them as static context. It is NOT the design for testing live MCP tool use (agent calls `resolve-library-id`/`get-library-docs` during inference, the way developers actually use Context7). Live MCP tool use is covered by the discovery-mode scoring proposal; this proposal stays valid for its specific case but is not the next thing the GEO-for-DX thesis needs.
+**Motivated by:** issue #6 under the #5 source-loader-expansion tracker. The codebase loader (cli-v0.15.0) covered code-resident knowledge. MCP servers are the next *controlled-mode* source surface: a vendor publishing their own MCP server's resources for static context registration. `DocSourceType` at `packages/config/src/types.ts:144` declares `"mcp"` as a valid type; the loader at `packages/core/src/sources.ts:62` does not implement it.
 **Decision needed:** scope (resources vs tools), schema shape, transport choice, fetch timing, caching, audit interaction, error handling.
 
 ## Problem
