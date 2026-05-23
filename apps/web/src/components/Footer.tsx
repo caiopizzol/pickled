@@ -7,7 +7,7 @@ interface FooterLink {
 }
 
 const footerLinks: FooterLink[] = [
-  { label: "Docs", href: "https://github.com/caiopizzol/pickled#quick-start" },
+  { label: "Docs", href: "https://docs.pickled.dev/docs" },
   { label: "GitHub", href: "https://github.com/caiopizzol/pickled" },
 ];
 

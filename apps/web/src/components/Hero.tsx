@@ -15,10 +15,9 @@ export function Hero() {
             <span className="hero-lede-hook">
               For products developers and agents read.
             </span>{" "}
-            An open-source CLI that runs scenarios against real agent targets,
-            requires every answer to cite a registered source, and matches
-            declared traps against the response. Scoring is deterministic by
-            contract. No LLM grades another LLM.
+            An open-source CLI that runs scenarios across real interfaces,
+            sources, and tool paths, then scores each cell with deterministic
+            checks. No LLM grades another LLM.
           </p>
           <div className="hero-actions">
             <Button as="a" href="#start" variant="primary" size="lg">

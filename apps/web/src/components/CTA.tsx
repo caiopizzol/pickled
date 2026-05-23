@@ -6,8 +6,8 @@ export function CTA() {
     <section className="cta section-divider" id="start">
       <div className="container">
         <h2>
-          Find out what AI <span className="text-gradient">thinks</span> your
-          product does.
+          Find out what <span className="text-gradient">agents</span> say about
+          your product.
         </h2>
         <p className="cta-lede">
           Open source. MIT. Install in 30 seconds. See your first score in two
@@ -20,7 +20,7 @@ export function CTA() {
         <div className="cta-actions">
           <Button
             as="a"
-            href="https://github.com/caiopizzol/pickled#quick-start"
+            href="https://docs.pickled.dev/docs/getting-started"
             variant="primary"
             size="lg"
           >
