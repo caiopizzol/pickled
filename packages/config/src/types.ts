@@ -184,9 +184,11 @@ export interface Scenario {
    * Source IDs (from docs.sources) the answer must cite. Use `[]` to allow
    * any registered source as a valid citation without requiring a specific
    * one. Omit entirely to skip citation scoring (matrix scenarios that
-   * score on `expected` or `provenance` instead). At least one of
+   * score on `expected` or `traps` instead). At least one of
    * `requiredSources`, `expected`, `traps`, or `compareSurfaces` must be
-   * declared on the scenario.
+   * declared on the scenario. Non-none matrix cells skip citation scoring
+   * because the source is not injected, so they need `expected` or `traps`
+   * regardless of whether `requiredSources` is also set.
    */
   requiredSources?: string[];
 
