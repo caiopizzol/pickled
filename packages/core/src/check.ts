@@ -547,14 +547,21 @@ async function runMatrixScenario(
         // Toolset resolution. Three toolset shapes run today:
         // - "none": deterministic baseline. Source is injected. Citation
         //   contract applies if requiredSources is declared.
-        // - web: `webSearch`/`webFetch` flags on Claude Code. Tools
-        //   enabled, source NOT injected, citation contract skipped.
-        // - mcp: `mcpServers` map on Claude Code. The configured MCP
-        //   servers are passed through to the Agent SDK; allowedTools
-        //   is overridden to `mcp__<server>__*` wildcards so default
-        //   Read/Edit/Bash don't leak. Source NOT injected.
+        // - web: `webSearch`/`webFetch` flags on Claude Code. The SDK's
+        //   built-in tool set is scoped via `tools: [WebSearch, ...]`
+        //   so default Read/Edit/Bash cannot leak; allowedTools carries
+        //   the same names to skip permission prompts. Source NOT
+        //   injected; citation contract skipped.
+        // - mcp: `mcpServers` map on Claude Code. The SDK's built-in
+        //   tool set is disabled (`tools: []`); MCP tools come from
+        //   `mcpServers` and are auto-permitted via
+        //   `allowedTools: [mcp__<server>__*, ...]`. Source NOT injected.
         // Mixed shapes (web+mcp in one toolset) are rejected because
         // pickled cannot attribute provenance honestly across both.
+        // The SDK's `tools` option (not `allowedTools`) is what actually
+        // restricts availability; allowedTools alone is just a
+        // permission-prompt bypass list. See `restrictBuiltinTools` on
+        // RunOptions for the field that carries `tools` to the adapter.
         const toolsetConfig =
           toolsetName === "none"
             ? null
