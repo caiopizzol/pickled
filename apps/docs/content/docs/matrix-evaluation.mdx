@@ -1,0 +1,52 @@
+---
+title: Matrix evaluation
+description: Test what agents say about your product across interfaces, sources, and tool paths in one config.
+---
+
+A matrix scenario expands into one cell per `(interface × source × toolset)` tuple. Each cell runs independently and scores against its own contract, so the report shows where the agent does well and where it does not. The design lives in `proposals/matrix-evaluation.md` in the repo.
+
+## Declare a matrix
+
+```yaml
+scenarios:
+  - name: Install
+    prompt: How do I install my-product?
+    matrix:
+      interfaces: [quick, codex]
+      sources: [readme, llms]
+      toolsets: [none, web]
+    expected:
+      includes: ["bunx my-product"]
+```
+
+That scenario produces eight cells. Each cell label is `[interface · source · toolset]`.
+
+## Three toolset shapes
+
+- **`none`** is the deterministic baseline. Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared.
+- **`web`** runs on Claude Code. The cell's built-in tool set is scoped to `[WebSearch, WebFetch]` so the agent cannot fall back to local filesystem. Source is NOT injected; the cell scores on `expected.includes`/`excludes` plus tool-use provenance.
+- **`mcp`** runs on Claude Code. The configured MCP servers are passed through; `tools: []` disables built-ins; `allowedTools: ["mcp__<server>__*"]` is the auto-permission list. Provenance accepts any invocation of `mcp__<server>__*`.
+
+See [Toolsets](/docs/toolsets) for the full shape of each profile.
+
+## Scoring
+
+Three signals compose per cell:
+
+1. **Trap firing** is a universal veto. Any matched trap forces `NO` with confidence `0`.
+2. **Citation** (in `none` cells with `requiredSources`) or **expected substrings** (in any cell with `expected.includes`/`excludes`) compose with worst-verdict + average-confidence.
+3. **Tool-use provenance** (in non-`none` cells): a cell that does not invoke at least one of the configured tools is hard-vetoed to `NO`, regardless of substance. An answer pulled from model prior knowledge cannot testify to the tool path the cell is meant to test.
+
+## Filter cells in CI
+
+The CLI accepts cell filters so a GitHub Actions matrix job can run exactly one cell at a time:
+
+```bash
+pickled check . \
+  --interface quick \
+  --source readme \
+  --toolset web \
+  --scenario "Install"
+```
+
+See [GitHub Actions](/docs/github-actions) for a full matrix workflow.

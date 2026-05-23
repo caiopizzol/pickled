@@ -1,0 +1,124 @@
+---
+title: pickled.yml reference
+description: Every field the loader accepts, with the rules each one enforces.
+---
+
+The full schema lives in `packages/config/src/types.ts`. This page covers the fields you reach for first.
+
+## `tool`
+
+```yaml
+tool:
+  name: my-product
+  description: short one-liner about what your product does
+```
+
+Both fields are required. They flow into the system prompt so the agent knows what it is being asked about.
+
+## `docs.sources`
+
+A map of source ID to source definition.
+
+```yaml
+docs:
+  sources:
+    readme: ./README.md
+    llms: ./llms.txt
+    docs_url: https://example.com/docs
+    core_src:
+      type: codebase
+      path: "packages/core/src/**/*.ts"
+      exclude: ["**/*.test.ts"]
+    docs_with_overrides:
+      path: ./AGENTS.md
+      audit:
+        traps: [ai_powered, freshness_score]
+```
+
+Source values can be:
+
+- A path string (local file).
+- A URL string (fetched at check time).
+- An object with `type: "codebase"` (codebase loader: glob over the local repo).
+- An object with `path` + `audit` (per-source audit overrides).
+
+## `targets`
+
+Named target configurations the matrix can iterate over.
+
+```yaml
+targets:
+  quick:
+    category: cli
+    provider: claude-code
+    model: claude-haiku-4-5
+    maxTurns: 5
+  thorough:
+    category: cli
+    provider: claude-code
+    model: sonnet
+    maxTurns: 15
+  anthropic_api:
+    category: api
+    provider: anthropic
+    model: claude-haiku-4-5
+    temperature: 0
+    maxTokens: 4096
+```
+
+API targets reject CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`) at load time. Pin the model explicitly: aliases like `haiku` can resolve to different versions across SDK upgrades and break reproducibility.
+
+## `toolsets`
+
+Named toolset profiles. See [Toolsets](/docs/toolsets) for shapes.
+
+```yaml
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+  docs_mcp:
+    mcpServers:
+      docs:
+        type: http
+        url: https://docs.example.com/mcp
+        headers:
+          AUTH_TOKEN: ${AUTH_TOKEN}
+```
+
+## `scenarios`
+
+A scenario needs `name`, `prompt`, and at least one of: `requiredSources`, `expected`, or `traps`. Matrix scenarios with any non-`none` toolset also need `expected` or `traps` (non-`none` cells skip the citation contract).
+
+```yaml
+scenarios:
+  - name: Install
+    prompt: How do I install my-product?
+    requiredSources: [readme]
+    matrix:
+      interfaces: [quick]
+      sources: [readme, llms]
+      toolsets: [none]
+    expected:
+      includes: ["bunx my-product"]
+      excludes: ["AI-powered", "seamless"]
+    traps:
+      - id: old_install_path
+        match: "npm install my-product-cli"
+        reason: package was renamed in 1.0
+```
+
+`traps` are deterministic stale-answer detectors. Firing any trap forces the cell to `NO` with confidence `0`.
+
+## Env-var expansion
+
+String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding `process.env` entry at load. Missing env vars become empty strings so the failure surfaces at the call site (e.g., a 401 from the MCP server) rather than at config load. Bun auto-loads `.env`.
+
+## What pickled rejects at load
+
+- A scenario with no actionable contract (no `requiredSources`, `expected`, or `traps`).
+- A matrix scenario whose toolsets include a non-`none` profile but the scenario has only `requiredSources` (the citation contract does not apply, so the cell has no scoring path).
+- A toolset that declares both `webSearch`/`webFetch` flags and `mcpServers`.
+- API targets that set CLI-only fields.
+- Unpinned codex-cli models (the CLI's default can change without notice).

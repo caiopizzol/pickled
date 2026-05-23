@@ -1,0 +1,97 @@
+---
+title: GitHub Actions
+description: Run pickled in CI as one job per matrix cell.
+---
+
+Pickled accepts cell filters on the CLI, which lets a GitHub Actions matrix split a scenario into one job per cell. Each job sees only the cell it owns, which gives a clean per-cell status badge.
+
+## A minimal job
+
+```yaml
+name: pickled
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bunx @pickled-dev/cli check . --fail-on error
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+That runs every scenario in `pickled.yml` in one job.
+
+## Split a matrix into separate jobs
+
+When you want each cell to surface as its own check, fan out via the workflow matrix and pass cell filters to the CLI.
+
+```yaml
+jobs:
+  cell:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        interface: [quick]
+        source: [readme, llms]
+        toolset: [none, web]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - name: pickled ${{ matrix.interface }}/${{ matrix.source }}/${{ matrix.toolset }}
+        run: |
+          bunx @pickled-dev/cli check . \
+            --interface ${{ matrix.interface }} \
+            --source ${{ matrix.source }} \
+            --toolset ${{ matrix.toolset }} \
+            --fail-on error
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+That produces four jobs (one per cell), each named after the cell it runs. A PR check page shows them as four independent statuses.
+
+## Audit-only pre-flight
+
+`pickled audit` runs no LLM calls and is cheap. Use it as a pre-flight gate before the agent jobs:
+
+```yaml
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bunx @pickled-dev/cli audit . --fail-on error
+
+  cell:
+    needs: audit
+    runs-on: ubuntu-latest
+    # ... matrix as above
+```
+
+That fails fast on registered-source/trap mismatches before spending tokens on agent runs.
+
+## Secrets
+
+- **`ANTHROPIC_API_KEY`** for Claude Code and Anthropic API targets.
+- **Per-MCP-server secrets** (e.g., `CONTEXT7_API_KEY`) referenced in `pickled.yml` via `${UPPER_SNAKE_CASE}` expansion. Bun auto-loads `.env` locally; in Actions, set them as job-level `env` from `${{ secrets.* }}`.
+
+## Threshold
+
+Set a global threshold to make the run pass or fail on a single score:
+
+```yaml
+threshold: 60
+```
+
+Without a threshold, the report prints `Overall: N / 100` and the workflow always succeeds (it only fails on the `--fail-on` flag, which targets per-scenario verdicts).
