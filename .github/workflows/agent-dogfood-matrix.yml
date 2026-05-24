@@ -108,7 +108,7 @@ jobs:
             source: public_docs_full
             toolset: none
 
-    name: "${{ matrix.scenario }} · ${{ matrix.source }} · ${{ matrix.toolset }}"
+    name: "${{ matrix.scenario }} · ${{ matrix.interface }} · ${{ matrix.source }} · ${{ matrix.toolset }}"
 
     steps:
       - uses: actions/checkout@v6
