@@ -690,7 +690,167 @@ describe("runCheck matrix mode", () => {
         { targetFactory: () => makeMockTarget("x") },
       );
       expect(report.scenarios[0]!.error).toMatch(
-        /implemented on claude-code and anthropic interfaces today/,
+        /implemented on claude-code, anthropic, and openai interfaces today/,
+      );
+    });
+  });
+
+  test("web toolset on the openai interface passes webTools.search to the adapter", async () => {
+    await withTempProject("# README", async (path) => {
+      const captured: { webTools?: { search?: boolean }; docsCount: number }[] =
+        [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true, webFetch: true } },
+        targets: {
+          a: {
+            category: "api",
+            provider: "openai",
+            model: "gpt-5.2",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "OpenAI web cell",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "api",
+            provider: "openai",
+            name: "captured",
+            async run(_p, opts) {
+              captured.push({
+                webTools: opts.webTools,
+                docsCount: opts.docs.length,
+              });
+              return {
+                response: "x answer from openai web research",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: ["web_search"],
+                sources: [],
+                metadata: {
+                  model: "gpt-5.2",
+                  category: "api",
+                  provider: "openai",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(report.scenarios[0]!.cells).toHaveLength(1);
+      expect(report.scenarios[0]!.cells![0]?.cell.toolset).toBe("web");
+      expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.webTools).toEqual({ search: true });
+      expect(captured[0]?.docsCount).toBe(0);
+    });
+  });
+
+  test("web cell on openai that does not invoke web_search hard-vetoes via provenance", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true } },
+        targets: {
+          a: {
+            category: "api",
+            provider: "openai",
+            model: "gpt-5.2",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "OpenAI web cell that skips the tool",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "api",
+            provider: "openai",
+            name: "captured",
+            async run() {
+              return {
+                response: "x answer from model prior knowledge",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "gpt-5.2",
+                  category: "api",
+                  provider: "openai",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+    });
+  });
+
+  test("web toolset on openai with only webFetch:true rejects at config-gate", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, fetchOnly: { webFetch: true } },
+        targets: {
+          a: {
+            category: "api",
+            provider: "openai",
+            model: "gpt-5.2",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Fetch-only probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["fetchOnly"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toMatch(
+        /on openai provider requires webSearch: true/,
       );
     });
   });

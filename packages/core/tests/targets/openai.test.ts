@@ -30,9 +30,21 @@ interface CapturedCreateCall {
   input: string;
   temperature?: number;
   max_output_tokens?: number;
+  tools?: Array<{ type: string }>;
 }
 
-function makeMockClient(output: string): {
+type MockOutputItem =
+  | { type: "message"; content: Array<{ type: string; text: string }> }
+  | {
+      type: "web_search_call";
+      id: string;
+      status: "completed" | "in_progress" | "searching" | "failed";
+    };
+
+function makeMockClient(
+  output: string,
+  outputItems: MockOutputItem[] = [],
+): {
   client: {
     responses: {
       create: (params: CapturedCreateCall) => Promise<unknown>;
@@ -51,7 +63,7 @@ function makeMockClient(output: string): {
           created_at: 0,
           model: params.model,
           output_text: output,
-          output: [],
+          output: outputItems,
           error: null,
           incomplete_details: null,
         };
@@ -162,5 +174,91 @@ describe("OpenAIApiTarget", () => {
       "Answer using ONLY information",
     );
     expect(calls[0]?.instructions).toContain("https://example.com/docs");
+  });
+
+  test("does not pass tools array when webTools is undefined", async () => {
+    const { client, calls } = makeMockClient("ok");
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    await target.run("?", baseRunOptions);
+    expect(calls[0]?.tools).toBeUndefined();
+  });
+
+  test("webTools.search wires the web_search tool into the request", async () => {
+    const { client, calls } = makeMockClient("ok");
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: null },
+    });
+    expect(calls[0]?.tools).toEqual([{ type: "web_search" }]);
+  });
+
+  test("captures web_search_call output items as toolsUsed (provenance signal)", async () => {
+    const { client } = makeMockClient(
+      "Pickled is a CLI for agent legibility.",
+      [
+        { type: "web_search_call", id: "ws_1", status: "completed" },
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: "Pickled is a CLI for agent legibility.",
+            },
+          ],
+        },
+      ],
+    );
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    const result = await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: null },
+    });
+    // Normalized to the provider-agnostic "web_search" string the matrix
+    // runner's matcher expects (same shape the anthropic adapter emits).
+    expect(result.toolsUsed).toEqual(["web_search"]);
+    expect(result.response).toContain("Pickled is a CLI");
+  });
+
+  test("multiple web_search_call items dedupe to a single entry", async () => {
+    const { client } = makeMockClient("ok", [
+      { type: "web_search_call", id: "ws_1", status: "completed" },
+      { type: "web_search_call", id: "ws_2", status: "completed" },
+    ]);
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    const result = await target.run("?", baseRunOptions);
+    expect(result.toolsUsed).toEqual(["web_search"]);
+  });
+
+  test("toolsUsed is empty when output has no web_search_call items", async () => {
+    const { client } = makeMockClient("plain answer", [
+      {
+        type: "message",
+        content: [{ type: "output_text", text: "plain answer" }],
+      },
+    ]);
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    const result = await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: null },
+    });
+    // No web_search_call item means the model answered without
+    // searching. The matrix runner's provenance hard-veto reads empty
+    // toolsUsed for a web cell and forces NO/0; the adapter itself
+    // just reports what it saw.
+    expect(result.toolsUsed).toEqual([]);
   });
 });

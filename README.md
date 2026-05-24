@@ -12,7 +12,7 @@ Four terms:
 
 - **Interface** is which agent runs the scenario: Claude Code, Codex CLI, Anthropic API, OpenAI API.
 - **Source** is what the agent has to read: README, docs URL, `llms.txt`, codebase glob.
-- **Toolset** is what tools the agent has: `none` (controlled, source content injected), `web` (Claude Code `WebSearch`/`WebFetch`, or Anthropic API server-side `web_search`), `mcp` (any MCP server you declare).
+- **Toolset** is what tools the agent has: `none` (controlled, source content injected), `web` (Claude Code `WebSearch`/`WebFetch`, or Anthropic and OpenAI API server-side `web_search`), `mcp` (any MCP server you declare).
 - **Scenario** is the question. A scenario can expand into one cell per `(interface × source × toolset)` tuple.
 
 ## What it checks
@@ -67,7 +67,7 @@ scenarios:
 threshold: 60
 ```
 
-That scenario runs four cells (two sources × two toolsets) and grades each independently. The `none` cells inject the source content into the prompt; the `web` cells leave the source as a discovery hint and require the agent to actually invoke a web tool (`WebSearch`/`WebFetch` on Claude Code, server-side `web_search` on the Anthropic API target) to reach it. Every cell checks `expected.includes` (this example pins `"bunx my-product"`); add `requiredSources` to a `none` cell when you also want a citation contract.
+That scenario runs four cells (two sources × two toolsets) and grades each independently. The `none` cells inject the source content into the prompt; the `web` cells leave the source as a discovery hint and require the agent to actually invoke a web tool (`WebSearch`/`WebFetch` on Claude Code, server-side `web_search` on the Anthropic and OpenAI API targets) to reach it. Every cell checks `expected.includes` (this example pins `"bunx my-product"`); add `requiredSources` to a `none` cell when you also want a citation contract.
 
 ## Read more
 

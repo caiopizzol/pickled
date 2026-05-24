@@ -500,12 +500,13 @@ function buildReport(
  *
  * Runtime support today: `toolset = "none"` (deterministic baseline),
  * the `web` shape (`webSearch`/`webFetch` flags) on Claude Code (client
- * `WebSearch`/`WebFetch`) and on the Anthropic API target (server-side
- * `web_search`), and the `mcp` shape (`mcpServers` map) on Claude Code.
- * Toolsets with no recognized shape, mixed shapes (web flags +
- * mcpServers), or an unsupported provider for the requested shape throw
- * with a clear per-cell error so misconfigurations are not masked by
- * silent no-ops; further adapters land per release.
+ * `WebSearch`/`WebFetch`), the Anthropic API target (server-side
+ * `web_search`), and the OpenAI API target (server-side `web_search`);
+ * the `mcp` shape (`mcpServers` map) on Claude Code. Toolsets with no
+ * recognized shape, mixed shapes (web flags + mcpServers), or an
+ * unsupported provider for the requested shape throw with a clear
+ * per-cell error so misconfigurations are not masked by silent no-ops;
+ * further adapters land per release.
  */
 async function runMatrixScenario(
   scenario: Scenario,
@@ -549,7 +550,7 @@ async function runMatrixScenario(
         // Toolset resolution. Three toolset shapes run today:
         // - "none": deterministic baseline. Source is injected. Citation
         //   contract applies if requiredSources is declared.
-        // - web: `webSearch`/`webFetch` flags. Two wiring paths:
+        // - web: `webSearch`/`webFetch` flags. Three wiring paths:
         //     * Claude Code: scope the SDK's built-in tools via
         //       `tools: [WebSearch, ...]` so default Read/Edit/Bash
         //       cannot leak; allowedTools carries the same names to
@@ -557,7 +558,11 @@ async function runMatrixScenario(
         //     * Anthropic API: pass the server-side `web_search` tool
         //       (`web_search_20250305`) to `messages.create` via the
         //       provider-agnostic webTools intent on RunOptions.
-        //   Source NOT injected; citation contract skipped on either path.
+        //     * OpenAI API: pass the server-side `web_search` tool to
+        //       `responses.create` via the same webTools intent. The
+        //       adapter normalizes `web_search_call` output items into
+        //       the literal `web_search` provenance name.
+        //   Source NOT injected; citation contract skipped on any path.
         // - mcp: `mcpServers` map on Claude Code. The SDK's built-in
         //   tool set is disabled (`tools: []`); MCP tools come from
         //   `mcpServers` and are auto-permitted via
@@ -568,7 +573,7 @@ async function runMatrixScenario(
         // restricts availability; allowedTools alone is just a
         // permission-prompt bypass list. See `restrictBuiltinTools` on
         // RunOptions for the field that carries `tools` to the Claude
-        // Code adapter, and `webTools` for the Anthropic API adapter.
+        // Code adapter, and `webTools` for the server-side web adapters.
         const toolsetConfig =
           toolsetName === "none"
             ? null
@@ -602,9 +607,10 @@ async function runMatrixScenario(
           // Provider gates per toolset shape:
           // - MCP today runs only on claude-code (the generic adapter wires
           //   mcpServers through the Agent SDK). OpenAI MCP lands as #13.
-          // - Web runs on claude-code (client tools WebSearch/WebFetch) and
-          //   on the anthropic API target (server-side web_search). Other
-          //   providers (codex-cli, openai) throw until their adapters land.
+          // - Web runs on claude-code (client tools WebSearch/WebFetch),
+          //   the anthropic API target (server-side web_search), and the
+          //   openai API target (server-side web_search). Other providers
+          //   (codex-cli) throw until their adapters land.
           if (wantsMcp && baseTargetConfig.provider !== "claude-code") {
             throw new Error(
               `Toolset "${toolsetName}" (MCP) is implemented only on the claude-code interface today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
@@ -613,19 +619,26 @@ async function runMatrixScenario(
           if (
             wantsWeb &&
             baseTargetConfig.provider !== "claude-code" &&
-            baseTargetConfig.provider !== "anthropic"
+            baseTargetConfig.provider !== "anthropic" &&
+            baseTargetConfig.provider !== "openai"
           ) {
             throw new Error(
-              `Toolset "${toolsetName}" (web) is implemented on claude-code and anthropic interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
+              `Toolset "${toolsetName}" (web) is implemented on claude-code, anthropic, and openai interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
             );
           }
+          // Server-side web targets (anthropic, openai) expose a single
+          // `web_search` tool; there is no separate fetch primitive on
+          // either API. Require webSearch:true so the cell has a
+          // recognized provenance path; webFetch alone has nothing to
+          // wire on these providers.
           if (
             wantsWeb &&
-            baseTargetConfig.provider === "anthropic" &&
+            (baseTargetConfig.provider === "anthropic" ||
+              baseTargetConfig.provider === "openai") &&
             !toolsetConfig?.webSearch
           ) {
             throw new Error(
-              `Toolset "${toolsetName}" on anthropic provider requires webSearch: true. The Anthropic API exposes a single server-side web tool; declare webSearch to enable it, or split web/fetch behaviour across separate toolsets.`,
+              `Toolset "${toolsetName}" on ${baseTargetConfig.provider} provider requires webSearch: true. The ${baseTargetConfig.provider} API exposes a single server-side web tool; declare webSearch to enable it, or split web/fetch behaviour across separate toolsets.`,
             );
           }
         }
@@ -657,11 +670,17 @@ async function runMatrixScenario(
         const allowedForCell: string[] = [];
         const builtinToolsForCell: string[] = [];
         const toolMatchers: Array<(t: string) => boolean> = [];
-        const isAnthropic = baseTargetConfig.provider === "anthropic";
+        // Server-side web targets share the same provenance shape: one
+        // tool named `web_search`. Adapters normalize their native tool
+        // name (`web_search_20250305` on anthropic, `web_search_call`
+        // output items on openai) into the literal `web_search` string
+        // before reporting it as toolsUsed.
+        const isServerWebTarget =
+          baseTargetConfig.provider === "anthropic" ||
+          baseTargetConfig.provider === "openai";
         if (wantsWeb) {
-          if (isAnthropic) {
-            // webSearch on anthropic maps to the server-side web_search
-            // tool; the loader gate above enforced webSearch:true.
+          if (isServerWebTarget) {
+            // webSearch:true was enforced by the gate above.
             toolMatchers.push((t) => t === "web_search");
           } else {
             if (toolsetConfig?.webSearch) {
@@ -683,7 +702,7 @@ async function runMatrixScenario(
           }
         }
         const targetConfig =
-          toolsetName === "none" || isAnthropic
+          toolsetName === "none" || isServerWebTarget
             ? baseTargetConfig
             : {
                 ...baseTargetConfig,
@@ -762,7 +781,7 @@ async function runMatrixScenario(
             restrictBuiltinTools:
               toolsetName === "none" ? undefined : builtinToolsForCell,
             webTools:
-              wantsWeb && isAnthropic
+              wantsWeb && isServerWebTarget
                 ? { search: toolsetConfig?.webSearch === true }
                 : undefined,
             onProgress: options.onProgress,
@@ -1035,10 +1054,11 @@ function collectVerifierSamples(
  * scenario's prompt verbatim because the citation prompt (built by the
  * target adapter) injects the source content. Discovery-mode cells (any
  * non-none toolset: web on Claude Code via WebSearch/WebFetch, web on
- * the Anthropic API target via server-side web_search, or mcp via the
- * configured MCP server) prepend a hint naming the canonical source the
- * agent should research with its tools. The agent is free to use other
- * discovery paths too; the hint just surfaces the cell's declared source.
+ * the Anthropic or OpenAI API targets via server-side web_search, or mcp
+ * via the configured MCP server) prepend a hint naming the canonical
+ * source the agent should research with its tools. The agent is free to
+ * use other discovery paths too; the hint just surfaces the cell's
+ * declared source.
  */
 function buildCellPrompt(
   basePrompt: string,

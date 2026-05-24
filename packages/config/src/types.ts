@@ -132,12 +132,13 @@ export interface Trap {
  * Toolset profile. Names a tool configuration the matrix can iterate over.
  * `none` is the deterministic baseline cell (pickled injects sources; agent
  * has no tools). The `web` shape (`webSearch`/`webFetch` flags) runs on
- * Claude Code (client `WebSearch`/`WebFetch`) and on the Anthropic API
- * target (server-side `web_search`); the `mcp` shape (`mcpServers` map)
- * runs on Claude Code today. Pickled has no server-specific knowledge
- * (Context7 is a dogfood example, not a special case). Other shapes
- * (Firecrawl, native search on other providers) are recognized by the
- * loader; their adapters land per release.
+ * Claude Code (client `WebSearch`/`WebFetch`), the Anthropic API target
+ * (server-side `web_search`), and the OpenAI API target (server-side
+ * `web_search`); the `mcp` shape (`mcpServers` map) runs on Claude Code
+ * today. Pickled has no server-specific knowledge (Context7 is a dogfood
+ * example, not a special case). Other shapes (Firecrawl, native search
+ * on additional providers) are recognized by the loader; their adapters
+ * land per release.
  */
 export interface ToolsetConfig {
   /** Reserved for future tool flags; `none` is `{}`. */
@@ -355,10 +356,10 @@ export interface CheckConfig {
   /**
    * Named toolset profiles for the matrix evaluation `toolset` axis.
    * `none` is reserved as the deterministic baseline (no tools); the `web`
-   * shape (`webSearch`/`webFetch` flags) runs on Claude Code and on the
-   * Anthropic API target today. Other profiles (MCP servers, third-party
-   * crawlers) are recognized by the loader; their tool adapters land per
-   * release.
+   * shape (`webSearch`/`webFetch` flags) runs on Claude Code, the
+   * Anthropic API target, and the OpenAI API target today. Other profiles
+   * (MCP servers, third-party crawlers) are recognized by the loader;
+   * their tool adapters land per release.
    */
   toolsets?: Record<string, ToolsetConfig>;
 

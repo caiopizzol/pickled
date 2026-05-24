@@ -10,19 +10,23 @@ import type {
 } from "../types.js";
 
 /**
- * OpenAI Responses API target (v1: no-tool baseline). Sends registered
- * sources as controlled context to the Responses API directly. Distinct
- * from CLI targets: no workspace, no Agent SDK orchestration. The model
- * sees the citation prompt as `instructions`, the scenario prompt as
- * `input`, and is expected to return its answer with a `## Sources`
- * section.
+ * OpenAI Responses API target. Sends registered sources as controlled
+ * context to the Responses API directly. Distinct from CLI targets: no
+ * workspace, no Agent SDK orchestration. The model sees the citation
+ * prompt as `instructions`, the scenario prompt as `input`, and is
+ * expected to return its answer with a `## Sources` section.
  *
- * Toolset support today: `none` only. The matrix runner's provider gate
- * rejects `web` and `mcp` cells on the `openai` interface; those land
- * in follow-up issues (#12 web_search, #13 remote MCP). Discovery-mode
- * prompt handling is wired here so a future cell that bypasses the gate
- * (or a future toolset gate-lift) gets the right system prompt without
- * an adapter change.
+ * For matrix `web` cells (`options.webTools.search`), the target passes
+ * the server-side `web_search` tool to `responses.create` and switches
+ * to the discovery prompt (no injected source). Web tool invocations
+ * are extracted from `response.output` items of `type:
+ * 'web_search_call'` and normalized into `toolsUsed: ["web_search"]` so
+ * the matrix runner's tool-use provenance hard-veto fires the same way
+ * it does on Claude Code and the Anthropic API target.
+ *
+ * Toolset support today: `none` and `web`. Remote MCP lands in a
+ * follow-up (#13). Currently uses the canonical `web_search` tool type
+ * (not the dated `web_search_2025_08_26` variant).
  *
  * Requires `OPENAI_API_KEY` in the environment. The model field is
  * required on the target config; the loader enforces this so silent
@@ -43,7 +47,7 @@ export class OpenAIApiTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, docs, requiredSources, discovery } = options;
+    const { tool, docs, requiredSources, discovery, webTools } = options;
 
     if (!this.config.model) {
       // Defense in depth: the loader rejects API targets without a model,
@@ -59,16 +63,22 @@ export class OpenAIApiTarget implements TargetRunner {
       : buildCitationPrompt(tool, docs, requiredSources);
     const client = this.clientFactory();
 
+    const tools = webTools?.search
+      ? [{ type: "web_search" as const }]
+      : undefined;
+
     const response = await client.responses.create({
       model: this.config.model,
       instructions,
       input: prompt,
       temperature: this.config.temperature ?? 0,
       max_output_tokens: this.config.maxTokens ?? 4096,
+      ...(tools ? { tools } : {}),
     });
 
     const responseText =
       typeof response.output_text === "string" ? response.output_text : "";
+    const toolsUsed = extractWebSearchCalls(response.output);
 
     const allResponses: ResponseEntry[] = responseText
       ? [{ type: "final", text: responseText }]
@@ -77,7 +87,7 @@ export class OpenAIApiTarget implements TargetRunner {
     return {
       response: responseText,
       allResponses,
-      toolsUsed: [],
+      toolsUsed,
       sources: [],
       metadata: {
         model: this.config.model,
@@ -87,4 +97,23 @@ export class OpenAIApiTarget implements TargetRunner {
       },
     };
   }
+}
+
+interface OutputItem {
+  type?: string;
+}
+
+function extractWebSearchCalls(output: unknown): string[] {
+  if (!Array.isArray(output)) return [];
+  let saw = false;
+  for (const item of output as OutputItem[]) {
+    if (item?.type === "web_search_call") {
+      saw = true;
+      break;
+    }
+  }
+  // Normalize to the same provenance string the Anthropic adapter emits
+  // (`web_search`) so the matrix runner's matcher logic stays
+  // provider-agnostic.
+  return saw ? ["web_search"] : [];
 }

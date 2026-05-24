@@ -14,7 +14,7 @@ toolsets:
 
 Source content is injected directly into the agent's prompt. The citation contract applies when `requiredSources` is set: the agent must cite at least one of the required source IDs.
 
-## `web` (Claude Code, Anthropic API)
+## `web` (Claude Code, Anthropic API, OpenAI API)
 
 ```yaml
 toolsets:
@@ -29,6 +29,7 @@ The mechanism depends on the interface:
 
 - On Claude Code, the cell scopes the SDK's built-in tools to exactly `[WebSearch, WebFetch]` so Read, Edit, and Bash cannot leak as a fallback.
 - On the Anthropic API target, the cell passes the server-side `web_search` tool to `messages.create` (tool version `web_search_20250305`). The API has no separate fetch tool, so `webFetch: true` is ignored on this provider and `webSearch: true` is required.
+- On the OpenAI API target, the cell passes the `web_search` tool to `responses.create`. The API has no separate fetch tool either; `webSearch: true` is required and `webFetch: true` is a no-op. Provenance reads `web_search_call` output items and normalizes them to the same `web_search` provider-agnostic name.
 
 ## `mcp` (Claude Code, generic)
 
@@ -57,5 +58,5 @@ Declaring both `webSearch`/`webFetch` flags and `mcpServers` on the same toolset
 
 ## Interface restriction
 
-- `web` runs on `claude-code` (client tools) and `anthropic` (server-side `web_search`) today. Codex CLI and OpenAI API targets land per release.
+- `web` runs on `claude-code` (client tools `WebSearch`/`WebFetch`), `anthropic` (server-side `web_search`), and `openai` (server-side `web_search`) today. Codex CLI lands per release.
 - `mcp` runs on `claude-code` only today. OpenAI remote MCP and other providers land per release.
