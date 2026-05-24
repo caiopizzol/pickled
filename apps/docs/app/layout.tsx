@@ -23,7 +23,7 @@ const jetBrainsMono = JetBrains_Mono({
 // Head contract for docs.pickled.dev. Mirrors apps/web/index.html so
 // the two surfaces share the same favicon set, manifest, title
 // grammar (hyphen separator), and brand description. Page-level
-// generateMetadata in app/docs/[[...slug]]/page.tsx sets per-page
+// generateMetadata in app/(docs)/[[...slug]]/page.tsx sets per-page
 // title (via the template) and a self-canonical URL.
 export const metadata: Metadata = {
   metadataBase: new URL("https://docs.pickled.dev"),

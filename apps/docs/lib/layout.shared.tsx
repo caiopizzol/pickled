@@ -25,17 +25,16 @@ export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
       title: <PickledLogo />,
-      // Logo always points to the docs root. The / route on this
-      // domain redirects there too, so the logo and the canonical
-      // entry point agree.
-      url: "/docs",
+      // docs.pickled.dev/ IS the docs root after the URL flatten;
+      // logo points to the subdomain root.
+      url: "/",
     },
     // Same nav vocabulary as apps/web Nav.tsx: text links for Docs,
     // Website, and GitHub. We deliberately drop `githubUrl` (which
     // would render a GitHub ICON in the secondary slot) so all three
     // links share the same visual treatment.
     links: [
-      { text: "Docs", url: "/docs" },
+      { text: "Docs", url: "/" },
       { text: "Website", url: "https://pickled.dev", external: true },
       {
         text: "GitHub",

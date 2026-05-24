@@ -4,7 +4,7 @@
 
 The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check what agents say about your product. No LLM grades another LLM.
 
-Full docs: [docs.pickled.dev/docs](https://docs.pickled.dev/docs).
+Full docs: [docs.pickled.dev](https://docs.pickled.dev/).
 
 ## Install
 
@@ -45,11 +45,11 @@ scenarios:
 threshold: 60
 ```
 
-That gets you a single controlled-mode scenario. To compare across interfaces, sources, or tool paths (web / MCP), add `matrix:` and `toolsets:`. See [Matrix evaluation](https://docs.pickled.dev/docs/matrix-evaluation) and the [`pickled.yml` reference](https://docs.pickled.dev/docs/pickled-yml).
+That gets you a single controlled-mode scenario. To compare across interfaces, sources, or tool paths (web / MCP), add `matrix:` and `toolsets:`. See [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation) and the [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml).
 
 ## Matrix filters in CI
 
-`pickled check` accepts `--interface`, `--source`, and `--toolset` flags so a GitHub Actions matrix can fan out one cell per job. Full workflow examples in [GitHub Actions](https://docs.pickled.dev/docs/github-actions).
+`pickled check` accepts `--interface`, `--source`, and `--toolset` flags so a GitHub Actions matrix can fan out one cell per job. Full workflow examples in [GitHub Actions](https://docs.pickled.dev/github-actions).
 
 ## Current support
 
@@ -62,11 +62,11 @@ That gets you a single controlled-mode scenario. To compare across interfaces, s
 
 ## Read more
 
-- [Getting started](https://docs.pickled.dev/docs/getting-started)
-- [Matrix evaluation](https://docs.pickled.dev/docs/matrix-evaluation)
-- [Toolsets](https://docs.pickled.dev/docs/toolsets)
-- [`pickled.yml` reference](https://docs.pickled.dev/docs/pickled-yml)
-- [GitHub Actions](https://docs.pickled.dev/docs/github-actions)
+- [Getting started](https://docs.pickled.dev/getting-started)
+- [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation)
+- [Toolsets](https://docs.pickled.dev/toolsets)
+- [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
+- [GitHub Actions](https://docs.pickled.dev/github-actions)
 
 ## License
 

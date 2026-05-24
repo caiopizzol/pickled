@@ -1,6 +1,11 @@
-# Cloudflare Pages: send the docs root straight to /docs. By default,
-# Pages applies redirects before static asset resolution, so this 301
-# fires even though next build emits an /index.html for the (home)
-# route. The (home) page also runs a client-side router.replace for
-# local dev and as a safety net if this file ever drops out.
-/  /docs  301
+# Old /docs/* paths were the canonical docs URLs before the URL
+# flatten. They are still live on docs.pickled.dev at the moment of
+# this deploy (dogfood scenarios, prior CI runs, and any in-flight
+# links use them), so this file 301s them to the new flat paths to
+# avoid turning currently working public URLs into 404s. New canonical
+# is the subdomain root; the redirects are one-way (old -> new).
+
+/docs                 /                    301
+/docs/*               /:splat              301
+/llms.mdx/docs/*      /llms.mdx/:splat     301
+/og/docs/*            /og/:splat           301

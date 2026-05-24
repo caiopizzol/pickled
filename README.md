@@ -71,13 +71,13 @@ That scenario runs four cells (two sources × two toolsets) and grades each inde
 
 ## Read more
 
-Full docs: [docs.pickled.dev/docs](https://docs.pickled.dev/docs).
+Full docs: [docs.pickled.dev](https://docs.pickled.dev/).
 
-- [Getting started](https://docs.pickled.dev/docs/getting-started)
-- [Matrix evaluation](https://docs.pickled.dev/docs/matrix-evaluation)
-- [Toolsets](https://docs.pickled.dev/docs/toolsets)
-- [`pickled.yml` reference](https://docs.pickled.dev/docs/pickled-yml)
-- [GitHub Actions](https://docs.pickled.dev/docs/github-actions)
+- [Getting started](https://docs.pickled.dev/getting-started)
+- [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation)
+- [Toolsets](https://docs.pickled.dev/toolsets)
+- [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
+- [GitHub Actions](https://docs.pickled.dev/github-actions)
 
 ## License
 

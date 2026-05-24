@@ -4,10 +4,10 @@ Pickled's public documentation site. Static Next.js + Fumadocs UI, deployed to C
 
 The site exposes:
 
-- `/` and `/docs/*` for humans.
+- `/` and `/<slug>` for humans (e.g. `/getting-started`, `/toolsets`, `/pickled-yml`).
 - `/llms.txt` and `/llms-full.txt` for agents that ingest docs ahead of time.
-- `/llms.mdx/docs/<slug>/content.md` for per-page Markdown fetching.
-- `/og/docs/<slug>/image.png` for Open Graph cards.
+- `/llms.mdx/<slug>/content.md` for per-page Markdown fetching.
+- `/og/<slug>/image.png` for Open Graph cards.
 
 The site doubles as a real public source for the matrix dogfood: scenarios in the root `pickled.yml` can register the deployed URLs and test what agents say about Pickled when the docs are the only source they can read.
 
@@ -25,10 +25,10 @@ bun run --cwd apps/docs deploy    # build + wrangler pages deploy
 - `content/docs/*.mdx` - the docs themselves. Frontmatter follows `pageSchema` from `fumadocs-core/source/schema`.
 - `lib/source.ts` - content source adapter for the Fumadocs loader.
 - `lib/shared.ts` - project-wide config (app name, GitHub repo, route bases).
-- `lib/layout.shared.tsx` - shared layout options for the docs and home sections.
-- `app/(home)/` - landing page route group.
-- `app/docs/` - docs section (sidebar layout + `[[...slug]]` page).
-- `app/llms.txt/route.ts`, `app/llms-full.txt/route.ts`, `app/llms.mdx/docs/[[...slug]]/route.ts` - agent-discovery endpoints generated from the same MDX source.
+- `lib/layout.shared.tsx` - shared layout options (nav, logo, links).
+- `app/(docs)/` - docs section: route group that wraps the `[[...slug]]` page in the Fumadocs sidebar layout. Route group adds no URL segment, so pages live at the subdomain root.
+- `app/llms.txt/route.ts`, `app/llms-full.txt/route.ts`, `app/llms.mdx/[[...slug]]/route.ts` - agent-discovery endpoints generated from the same MDX source.
+- `app/og/[...slug]/route.tsx` - per-page Open Graph image generator.
 - `app/api/search/route.ts` - search index endpoint.
 
 ## Notes

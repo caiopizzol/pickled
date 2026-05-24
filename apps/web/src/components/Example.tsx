@@ -108,7 +108,7 @@ export function Example() {
           </p>
           <Button
             as="a"
-            href="https://docs.pickled.dev/docs/pickled-yml"
+            href="https://docs.pickled.dev/pickled-yml"
             variant="secondary"
           >
             See the full example

@@ -11,7 +11,7 @@ docs:
     # dogfood scenarios run against them. URL sources are fetched at check
     # time.
     public_docs_full: https://docs.pickled.dev/llms-full.txt
-    public_docs_getting_started: https://docs.pickled.dev/docs/getting-started
+    public_docs_getting_started: https://docs.pickled.dev/getting-started
 
     # Root llms.txt is also public product context, kept as a router
     # surface alongside the docs site so the matrix can compare what the
@@ -139,7 +139,7 @@ scenarios:
 
   # Which toolsets work today? — coverage of the matrix toolset axis as
   # currently shipped. The three shapes (none / web / mcp) are documented
-  # at docs.pickled.dev/docs/toolsets, and both `web` and `mcp` are
+  # at docs.pickled.dev/toolsets, and both `web` and `mcp` are
   # Claude-Code-only today. Firecrawl is mentioned in the proposals but
   # not shipped; if an agent claims it as a working toolset, that is the
   # exact "false support claim" we want to catch.

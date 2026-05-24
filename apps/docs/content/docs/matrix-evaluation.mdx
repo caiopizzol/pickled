@@ -27,7 +27,7 @@ That scenario produces eight cells. Each cell label is `[interface · source · 
 - **`web`** runs on Claude Code. The cell's built-in tool set is scoped to `[WebSearch, WebFetch]` so the agent cannot fall back to local filesystem. Source is NOT injected; the cell scores on `expected.includes`/`excludes` plus tool-use provenance.
 - **`mcp`** runs on Claude Code. The configured MCP servers are passed through; `tools: []` disables built-ins; `allowedTools: ["mcp__<server>__*"]` is the auto-permission list. Provenance accepts any invocation of `mcp__<server>__*`.
 
-See [Toolsets](/docs/toolsets) for the full shape of each profile.
+See [Toolsets](/toolsets) for the full shape of each profile.
 
 ## Scoring
 
@@ -49,4 +49,4 @@ pickled check . \
   --scenario "Install"
 ```
 
-See [GitHub Actions](/docs/github-actions) for a full matrix workflow.
+See [GitHub Actions](/github-actions) for a full matrix workflow.

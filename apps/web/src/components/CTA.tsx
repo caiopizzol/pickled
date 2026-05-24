@@ -20,7 +20,7 @@ export function CTA() {
         <div className="cta-actions">
           <Button
             as="a"
-            href="https://docs.pickled.dev/docs/getting-started"
+            href="https://docs.pickled.dev/getting-started"
             variant="primary"
             size="lg"
           >
