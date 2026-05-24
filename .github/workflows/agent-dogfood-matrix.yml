@@ -147,16 +147,22 @@ jobs:
       - name: Build CLI
         run: bun run --cwd apps/cli build
 
-      # Non-blocking by design. A low score on a single cell is signal,
-      # not infra failure. The receipt uploads regardless; reviewers
-      # consult it to attribute the gap.
+      # Non-blocking by design. A low score on a single cell is product
+      # signal, not CI infra failure. We capture pickled's exit code
+      # (non-zero when the cell's score is below the configured
+      # threshold) and always exit 0 from this step so GitHub does not
+      # emit a step-failure annotation that masquerades as a broken
+      # workflow. The verdict lives in the uploaded receipt; the
+      # upload step's if-no-files-found: error still surfaces the
+      # genuinely-broken case where pickled produced no receipt at all
+      # (auth, config, runtime broke).
       - name: pickled check (cell)
         id: check
-        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_DOGFOOD }}
         run: |
+          set +e
           ./apps/cli/dist/index.js check . \
             --scenario "${{ matrix.scenario }}" \
             --interface "${{ matrix.interface }}" \
@@ -164,6 +170,9 @@ jobs:
             --toolset "${{ matrix.toolset }}" \
             --output pickled-report.json \
             --verbose
+          EXIT=$?
+          echo "pickled exited with code $EXIT (low scores are signal, not infra failure; consult the uploaded receipt)"
+          exit 0
 
       - name: Upload receipt
         if: always()
