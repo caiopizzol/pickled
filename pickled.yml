@@ -69,6 +69,19 @@ targets:
     temperature: 0
     maxTokens: 4096
 
+  # Direct OpenAI Responses API target. Sits alongside anthropic_api so
+  # the matrix can run the same scenario across all three current web
+  # mechanisms (claude-code WebSearch/WebFetch, anthropic web_search,
+  # openai web_search). Opt-in via `--target openai_api` for non-matrix
+  # scenarios; matrix scenarios that include it in `matrix.interfaces`
+  # invoke it whenever they run.
+  openai_api:
+    category: api
+    provider: openai
+    model: gpt-5.2
+    temperature: 0
+    maxTokens: 4096
+
 # Default matrix target is `quick` only. Codex stays opt-in via
 # `pickled check --target codex` so the default dogfood is cheap and
 # readable.
@@ -161,9 +174,11 @@ scenarios:
     verifiers:
       sources: [public_docs_full]
 
-  # Model-prior vs discovery vs injected, on TWO interfaces:
+  # Model-prior vs discovery vs injected, on THREE interfaces:
   #   - quick          = Claude Code (Haiku via Agent SDK, client web tools)
   #   - anthropic_api  = Anthropic Messages API (Haiku direct, server-side
+  #                       web_search tool)
+  #   - openai_api     = OpenAI Responses API (gpt-5.2 direct, server-side
   #                       web_search tool)
   #
   # Cells per interface:
@@ -175,18 +190,18 @@ scenarios:
   #   [<int> · public_docs_full · web]   -> directed discovery; URL hint
   #                                          plus web tools
   #
-  # Same scenario, same expected/excludes, two web mechanisms. The
-  # [* · * · web] cells are the cross-provider comparison: a green
-  # [quick · public_docs_full · web] next to a green
-  # [anthropic_api · public_docs_full · web] is one cell each of
-  # client-tool vs server-tool web research, comparable side by side.
-  # Provenance vetoes web cells that answer from prior knowledge
-  # without invoking the configured web tool (WebSearch/WebFetch on
-  # claude-code, web_search on anthropic).
+  # Same scenario, same expected/excludes, three web mechanisms. The
+  # [* · public_docs_full · web] triplet is the cross-provider
+  # comparison: one cell each of client-tool web research (claude-code),
+  # server-tool web research on Anthropic, and server-tool web research
+  # on OpenAI, comparable side by side. Provenance vetoes web cells
+  # that answer from prior knowledge without invoking the configured
+  # web tool (WebSearch/WebFetch on claude-code, web_search on the
+  # API targets).
   - name: "Context availability gradient"
     prompt: "In one or two sentences, what does pickled do?"
     matrix:
-      interfaces: [quick, anthropic_api]
+      interfaces: [quick, anthropic_api, openai_api]
       sources: [none, public_docs_full]
       toolsets: [none, web]
     expected:

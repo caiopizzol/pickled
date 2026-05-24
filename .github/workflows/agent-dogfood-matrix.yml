@@ -2,9 +2,14 @@ name: Agent dogfood (per cell)
 
 # Manual-only fan-out. Runs one job per matrix cell so each cell shows up as
 # its own GitHub status check. Aggregate "all green" or "this exact cell is
-# red" attribution beats one buried report. Same secret + same `quick`
-# target as `agent-dogfood.yml`; this workflow is a sibling, not a
-# replacement.
+# red" attribution beats one buried report. Sibling to `agent-dogfood.yml`,
+# not a replacement.
+#
+# Secrets used:
+# - ANTHROPIC_API_KEY_DOGFOOD (required for `quick` and `anthropic_api` cells)
+# - OPENAI_API_KEY_DOGFOOD     (required for `openai_api` cells)
+# If a secret is missing, the corresponding cells produce error receipts;
+# `continue-on-error: true` keeps the rest of the matrix going.
 #
 # Matrix cells below are hand-mirrored from pickled.yml. If you change the
 # dogfood scenarios in pickled.yml, update this `include:` list to match.
@@ -24,11 +29,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # "Context availability gradient" - [quick, anthropic_api] × [none, public_docs_full] × [none, web]
-          # The [quick · * · web] vs [anthropic_api · * · web] pairs are
-          # the cross-provider demo: same prompt, same checks, two web
-          # mechanisms (client-side WebSearch+WebFetch vs server-side
-          # web_search).
+          # "Context availability gradient" - [quick, anthropic_api, openai_api] × [none, public_docs_full] × [none, web]
+          # The [* · public_docs_full · web] triplet is the
+          # cross-provider demo: same prompt, same checks, three web
+          # mechanisms (client-side WebSearch+WebFetch on Claude Code,
+          # server-side web_search on Anthropic, server-side web_search
+          # on OpenAI).
           - slug: gradient-quick-none-none
             scenario: Context availability gradient
             interface: quick
@@ -67,6 +73,26 @@ jobs:
           - slug: gradient-anth-docs-web
             scenario: Context availability gradient
             interface: anthropic_api
+            source: public_docs_full
+            toolset: web
+          - slug: gradient-oai-none-none
+            scenario: Context availability gradient
+            interface: openai_api
+            source: none
+            toolset: none
+          - slug: gradient-oai-none-web
+            scenario: Context availability gradient
+            interface: openai_api
+            source: none
+            toolset: web
+          - slug: gradient-oai-docs-none
+            scenario: Context availability gradient
+            interface: openai_api
+            source: public_docs_full
+            toolset: none
+          - slug: gradient-oai-docs-web
+            scenario: Context availability gradient
+            interface: openai_api
             source: public_docs_full
             toolset: web
           # "What does Pickled do?" - quick × [public_docs_full, llms] × [none, web]
@@ -129,6 +155,7 @@ jobs:
         continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_DOGFOOD }}
         run: |
           ./apps/cli/dist/index.js check . \
             --scenario "${{ matrix.scenario }}" \
