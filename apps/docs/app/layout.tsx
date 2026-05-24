@@ -20,19 +20,28 @@ const jetBrainsMono = JetBrains_Mono({
   variable: "--font-pickled-mono",
 });
 
-// Public canonical origin for OG/Twitter image resolution.
-// alternates.canonical defaults to "/" here so the docs root resolves
-// to https://docs.pickled.dev/; per-page canonicals are set in
-// app/docs/[[...slug]]/page.tsx so each doc page is self-canonical
-// rather than inheriting the root.
+// Head contract for docs.pickled.dev. Mirrors apps/web/index.html so
+// the two surfaces share the same favicon set, manifest, title
+// grammar (hyphen separator), and brand description. Page-level
+// generateMetadata in app/docs/[[...slug]]/page.tsx sets per-page
+// title (via the template) and a self-canonical URL.
 export const metadata: Metadata = {
   metadataBase: new URL("https://docs.pickled.dev"),
-  title: { default: "pickled docs", template: "%s · pickled" },
+  title: { default: "pickled docs", template: "%s - pickled docs" },
   description:
     "Test what agents actually understand about your product. Pickled runs scenarios across a matrix of interfaces, sources, and toolsets, then scores each cell with deterministic checks.",
   alternates: {
     canonical: "/",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+      { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function Layout({ children }: LayoutProps<"/">) {
