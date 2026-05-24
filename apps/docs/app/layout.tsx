@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Analytics } from "@/components/analytics";
 import { Provider } from "@/components/provider";
 import "./global.css";
 import "./pickled-theme.css";
@@ -20,11 +21,18 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 // Public canonical origin for OG/Twitter image resolution.
+// alternates.canonical defaults to "/" here so the docs root resolves
+// to https://docs.pickled.dev/; per-page canonicals are set in
+// app/docs/[[...slug]]/page.tsx so each doc page is self-canonical
+// rather than inheriting the root.
 export const metadata: Metadata = {
   metadataBase: new URL("https://docs.pickled.dev"),
   title: { default: "pickled docs", template: "%s · pickled" },
   description:
     "Test what agents actually understand about your product. Pickled runs scenarios across a matrix of interfaces, sources, and toolsets, then scores each cell with deterministic checks.",
+  alternates: {
+    canonical: "/",
+  },
 };
 
 export default function Layout({ children }: LayoutProps<"/">) {
@@ -43,6 +51,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
     >
       <body className="flex flex-col min-h-screen">
         <Provider>{children}</Provider>
+        <Analytics />
       </body>
     </html>
   );

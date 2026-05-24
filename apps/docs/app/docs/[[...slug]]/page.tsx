@@ -60,6 +60,11 @@ export async function generateMetadata(
   return {
     title: page.data.title,
     description: page.data.description,
+    // Self-canonical so search engines treat each docs page as the
+    // authoritative URL for its content, not the root layout's "/".
+    alternates: {
+      canonical: page.url,
+    },
     openGraph: {
       images: getPageImage(page).url,
     },
