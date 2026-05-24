@@ -1,0 +1,129 @@
+name: Agent dogfood (per cell)
+
+# Manual-only fan-out. Runs one job per matrix cell so each cell shows up as
+# its own GitHub status check. Aggregate "all green" or "this exact cell is
+# red" attribution beats one buried report. Same secret + same `quick`
+# target as `agent-dogfood.yml`; this workflow is a sibling, not a
+# replacement.
+#
+# Matrix cells below are hand-mirrored from pickled.yml. If you change the
+# dogfood scenarios in pickled.yml, update this `include:` list to match.
+# Drift between the two surfaces is the only failure mode here and it
+# shows up as a missing cell, not a wrong one.
+on:
+  workflow_dispatch:
+
+jobs:
+  cell:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      # One cell failing is signal, not infra failure. Keep the rest of
+      # the matrix going so the receipt grid is complete.
+      fail-fast: false
+      matrix:
+        include:
+          # "Context availability gradient" - quick × [none, public_docs_full] × [none, web]
+          - slug: gradient-none-none
+            scenario: Context availability gradient
+            interface: quick
+            source: none
+            toolset: none
+          - slug: gradient-none-web
+            scenario: Context availability gradient
+            interface: quick
+            source: none
+            toolset: web
+          - slug: gradient-docs-none
+            scenario: Context availability gradient
+            interface: quick
+            source: public_docs_full
+            toolset: none
+          - slug: gradient-docs-web
+            scenario: Context availability gradient
+            interface: quick
+            source: public_docs_full
+            toolset: web
+          # "What does Pickled do?" - quick × [public_docs_full, llms] × [none, web]
+          - slug: positioning-docs-none
+            scenario: What does Pickled do?
+            interface: quick
+            source: public_docs_full
+            toolset: none
+          - slug: positioning-docs-web
+            scenario: What does Pickled do?
+            interface: quick
+            source: public_docs_full
+            toolset: web
+          - slug: positioning-llms-none
+            scenario: What does Pickled do?
+            interface: quick
+            source: llms
+            toolset: none
+          - slug: positioning-llms-web
+            scenario: What does Pickled do?
+            interface: quick
+            source: llms
+            toolset: web
+          # "Install and run a first check" - quick × [public_docs_full, public_docs_getting_started] × [none]
+          - slug: install-docs-none
+            scenario: Install and run a first check
+            interface: quick
+            source: public_docs_full
+            toolset: none
+          - slug: install-getting-started-none
+            scenario: Install and run a first check
+            interface: quick
+            source: public_docs_getting_started
+            toolset: none
+          # "Which toolsets work today?" - quick × [public_docs_full] × [none]
+          - slug: toolsets-docs-none
+            scenario: Which toolsets work today?
+            interface: quick
+            source: public_docs_full
+            toolset: none
+
+    name: "${{ matrix.scenario }} · ${{ matrix.source }} · ${{ matrix.toolset }}"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build CLI
+        run: bun run --cwd apps/cli build
+
+      # Non-blocking by design. A low score on a single cell is signal,
+      # not infra failure. The receipt uploads regardless; reviewers
+      # consult it to attribute the gap.
+      - name: pickled check (cell)
+        id: check
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
+        run: |
+          ./apps/cli/dist/index.js check . \
+            --scenario "${{ matrix.scenario }}" \
+            --interface "${{ matrix.interface }}" \
+            --source "${{ matrix.source }}" \
+            --toolset "${{ matrix.toolset }}" \
+            --output pickled-report.json \
+            --verbose
+
+      - name: Upload receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Slug makes the artifact filename-safe (no spaces, no colons)
+          # and round-trips back to the matrix row when inspecting runs.
+          name: pickled-report-${{ matrix.slug }}
+          path: pickled-report.json
+          # error, not warn: a missing receipt means the cell failed
+          # before producing one (auth/config/runtime broke). A low-score
+          # receipt still exists and uploads cleanly; that's signal, not
+          # infra failure.
+          if-no-files-found: error
