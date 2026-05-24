@@ -52,3 +52,25 @@ pickled check . \
 ```
 
 See [GitHub Actions](/github-actions) for a full matrix workflow.
+
+## Plan, cap, and sample
+
+The matrix can grow expensive fast as you add interfaces and tool paths. Four flags help you stay in control without hand-editing axes:
+
+- `--plan` (dry run): expand the matrix, apply filters and sampling, print the cell list, and exit. Zero model calls. Useful before a paid run to see what would happen.
+- `--max-cells N`: hard cap on cells after filters and sampling. Exits non-zero before any model call if exceeded. Forces you to add filters or sample rather than silently spending on an oversized matrix.
+- `--sample N`: deterministic per-scenario sample. Picks up to N cells per matrix scenario; single-cell (non-matrix) scenarios always run as deterministic anchors.
+- `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` produce the same sample.
+
+```bash
+# See what would run, no model calls
+pickled check . --plan
+
+# Refuse to run a matrix larger than 10 cells
+pickled check . --max-cells 10
+
+# Sample 2 cells per scenario, reproducibly
+pickled check . --sample 2 --seed nightly-2026-05-24
+```
+
+The receipt header (text and JSON) records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what was skipped and rerun the same sample.

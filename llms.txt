@@ -73,6 +73,17 @@ Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, Google API target. Do
 
 JSON output stays raw. It carries machine fields (`answerable`, `confidence`, `traps`, `citations`). Human labels like `Well grounded` are derived in each renderer, not present in the JSON.
 
+## Cost and dry-run controls
+
+For paid targets, the matrix grows expensive fast. Four flags keep it in check without hand-editing axes:
+
+- `--plan` (dry run): expand the matrix, apply filters and sampling, print the cell list, exit. Zero model calls.
+- `--max-cells N`: hard fail before any model call if the selected cell count exceeds N.
+- `--sample N`: deterministic per-scenario sample. Single-cell (non-matrix) scenarios always run as anchors.
+- `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` are reproducible.
+
+The report header (text and JSON) records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
+
 ## What to preserve when describing pickled
 
 - It tests what agents understand. It is not a generic LLM eval framework.

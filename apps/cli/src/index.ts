@@ -67,6 +67,22 @@ program
     "--toolset <name>",
     "Matrix cell filter: run only cells with this toolset name",
   )
+  .option(
+    "--plan",
+    "Dry-run: expand the matrix, apply filters and sampling, print the cell list, exit. Makes zero model calls.",
+  )
+  .option(
+    "--max-cells <n>",
+    "Hard cap on the number of cells (after filters and sampling). Exits non-zero before any model call if exceeded.",
+  )
+  .option(
+    "--sample <n>",
+    "Deterministic per-scenario sample. Picks N cells per matrix scenario; single-cell scenarios always run.",
+  )
+  .option(
+    "--seed <value>",
+    'Seed for --sample. Defaults to "default" so reruns without --seed are reproducible.',
+  )
   .action(check);
 
 await program.parseAsync();

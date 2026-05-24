@@ -51,6 +51,18 @@ That gets you a single controlled-mode scenario. To compare across interfaces, s
 
 `pickled check` accepts `--interface`, `--source`, and `--toolset` flags so a GitHub Actions matrix can fan out one cell per job. Full workflow examples in [GitHub Actions](https://docs.pickled.dev/github-actions).
 
+## Cost controls
+
+For paid model targets, the matrix can expand to hundreds of cells per scenario. Four flags keep that in check without hand-editing axes:
+
+```bash
+pickled check . --plan                              # dry-run: no model calls
+pickled check . --max-cells 10                      # hard fail if > 10 cells
+pickled check . --sample 2 --seed nightly-2026     # deterministic sample per scenario
+```
+
+The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample.
+
 ## Current support
 
 | Axis | Works today |

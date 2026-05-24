@@ -125,6 +125,27 @@ export interface CheckReport {
     unanswered: number;
     score: number;
   };
+  /**
+   * Cell counts and sampling provenance for a run. `expandedCells` is the
+   * count after `--scenario` / `--interface` / `--source` / `--toolset`
+   * filters but before sampling. `selectedCells` is the count after
+   * sampling (equal to `expandedCells` when `--sample` was not passed).
+   * `seed` is recorded only when sampling was active.
+   */
+  plan?: {
+    expandedCells: number;
+    selectedCells: number;
+    seed?: string;
+    /** Per-cell list, included only in dry-run reports (`--plan`). */
+    cells?: Array<{
+      scenario: string;
+      interface?: string;
+      source?: string | null;
+      toolset?: string;
+      target?: string;
+      context?: string;
+    }>;
+  };
 }
 
 export interface ToolInfo {

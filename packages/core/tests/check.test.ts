@@ -2000,3 +2000,187 @@ describe("runCheck matrix mode", () => {
     });
   });
 });
+
+describe("runCheck plan + sample + max-cells", () => {
+  function configWithMatrix(
+    interfaces: string[],
+    sources: string[],
+    toolsets: string[],
+  ): CheckConfig {
+    return {
+      tool: { name: "t", description: "d" },
+      toolsets: { none: {} },
+      targets: Object.fromEntries(
+        interfaces.map((i) => [
+          i,
+          { category: "cli", provider: "claude-code" },
+        ]),
+      ),
+      docs: {
+        sources: Object.fromEntries(sources.map((s) => [s, "./README.md"])),
+      },
+      scenarios: [
+        {
+          name: "Probe",
+          prompt: "?",
+          matrix: { interfaces, sources, toolsets },
+          expected: { includes: ["x"] },
+        },
+      ],
+    };
+  }
+
+  test("plan: true returns a dry-run report with cell list and no adapter calls", async () => {
+    await withTempProject("# README", async (path) => {
+      let runs = 0;
+      const config = configWithMatrix(["a"], ["readme"], ["none"]);
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          plan: true,
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "should-not-run",
+            async run() {
+              runs++;
+              return {
+                response: "",
+                allResponses: [],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "x",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(runs).toBe(0);
+      expect(report.scenarios).toEqual([]);
+      expect(report.plan?.expandedCells).toBe(1);
+      expect(report.plan?.selectedCells).toBe(1);
+      expect(report.plan?.cells?.[0]).toMatchObject({
+        scenario: "Probe",
+        interface: "a",
+        source: "readme",
+        toolset: "none",
+      });
+    });
+  });
+
+  test("sample: N picks N cells per scenario (and the same N every time for the same seed)", async () => {
+    await withTempProject("# README", async (path) => {
+      const config = configWithMatrix(["a", "b", "c"], ["s1", "s2"], ["none"]);
+      // 3 interfaces × 2 sources × 1 toolset = 6 cells in the matrix.
+      // Sample 2 per scenario.
+      const r1 = await runCheck({ name: "t", description: "d", path }, config, {
+        sample: 2,
+        seed: "seed-x",
+        targetFactory: () => makeMockTarget("x"),
+      });
+      const r2 = await runCheck({ name: "t", description: "d", path }, config, {
+        sample: 2,
+        seed: "seed-x",
+        targetFactory: () => makeMockTarget("x"),
+      });
+      expect(r1.plan?.expandedCells).toBe(6);
+      expect(r1.plan?.selectedCells).toBe(2);
+      expect(r1.plan?.seed).toBe("seed-x");
+      expect(r1.scenarios[0]!.cells).toHaveLength(2);
+      // Determinism: same seed picks the same cells in the same order.
+      const r1Cells = r1.scenarios[0]!.cells!.map((c) => c.cell);
+      const r2Cells = r2.scenarios[0]!.cells!.map((c) => c.cell);
+      expect(r1Cells).toEqual(r2Cells);
+    });
+  });
+
+  test("sample: N > matrix size runs every cell (no over-sampling)", async () => {
+    await withTempProject("# README", async (path) => {
+      const config = configWithMatrix(["a"], ["readme"], ["none"]); // 1 cell
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          sample: 99,
+          seed: "seed-x",
+          targetFactory: () => makeMockTarget("x"),
+        },
+      );
+      expect(report.plan?.expandedCells).toBe(1);
+      expect(report.plan?.selectedCells).toBe(1);
+      expect(report.scenarios[0]!.cells).toHaveLength(1);
+    });
+  });
+
+  test("max-cells: total > limit throws before any adapter call", async () => {
+    await withTempProject("# README", async (path) => {
+      let runs = 0;
+      const config = configWithMatrix(["a", "b", "c"], ["s1", "s2"], ["none"]); // 6 cells
+      await expect(
+        runCheck({ name: "t", description: "d", path }, config, {
+          maxCells: 3,
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "should-not-run",
+            async run() {
+              runs++;
+              return {
+                response: "",
+                allResponses: [],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "x",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        }),
+      ).rejects.toThrow(/exceeding --max-cells 3/);
+      expect(runs).toBe(0);
+    });
+  });
+
+  test("max-cells: total <= limit passes; sample counts against the limit", async () => {
+    await withTempProject("# README", async (path) => {
+      const config = configWithMatrix(["a", "b", "c"], ["s1", "s2"], ["none"]); // 6 cells; sample 2 brings it under 3
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          sample: 2,
+          seed: "seed-x",
+          maxCells: 3,
+          targetFactory: () => makeMockTarget("x"),
+        },
+      );
+      expect(report.plan?.selectedCells).toBe(2);
+      expect(report.scenarios[0]!.cells).toHaveLength(2);
+    });
+  });
+
+  test("plan summary is stamped on every report (not just plan-mode)", async () => {
+    await withTempProject("# README", async (path) => {
+      const config = configWithMatrix(["a"], ["readme"], ["none"]);
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.plan?.expandedCells).toBe(1);
+      expect(report.plan?.selectedCells).toBe(1);
+      // No sampling → seed is undefined (not stamped without --sample).
+      expect(report.plan?.seed).toBeUndefined();
+    });
+  });
+});

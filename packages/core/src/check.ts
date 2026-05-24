@@ -4,6 +4,7 @@ import type {
   Scenario,
 } from "@pickled-dev/config";
 import { getScenarioStatus } from "./report-status.js";
+import { sampleCellsPerScenario } from "./sampling.js";
 import {
   type Answerable,
   scoreCitations,
@@ -85,6 +86,157 @@ export interface CheckOptions {
   };
   /** Restrict to scenarios with these names. Empty/omitted = all scenarios. */
   scenarioFilter?: string[];
+  /**
+   * Dry-run mode. Walk the matrix expansion, apply filters and
+   * sampling, then return without invoking any adapter. The returned
+   * report has `scenarios: []` and the `plan` summary populated. Cheap
+   * pre-flight to see exactly what a run would do.
+   */
+  plan?: boolean;
+  /**
+   * Hard cell-count cap. Counted AFTER filters and sampling. If the
+   * remaining cell total exceeds this number, runCheck throws before
+   * any adapter is invoked. The error message names the count and
+   * suggests filters or `--sample`.
+   */
+  maxCells?: number;
+  /**
+   * Deterministic per-scenario sample size. Picks up to N cells per
+   * matrix scenario (single-cell scenarios always run). Reproducible
+   * via `seed`; the default seed is the literal string "default" so
+   * re-runs without `--seed` are reproducible.
+   */
+  sample?: number;
+  /** Seed for `sample`. Defaults to "default" so the same matrix and
+   *  sample size always produce the same cells. */
+  seed?: string;
+}
+
+/**
+ * One concrete cell that the matrix expansion produces. Matrix cells
+ * carry interface/source/toolset; non-matrix (single-target) scenarios
+ * carry target/context. The two shapes are distinguished by `kind`.
+ */
+export interface PlannedCell {
+  scenario: string;
+  kind: "matrix" | "single";
+  interface?: string;
+  source?: string | null;
+  toolset?: string;
+  target?: string;
+  context?: string;
+}
+
+/**
+ * Walk the expanded scenarios and enumerate every concrete cell, applying
+ * the per-axis `cellFilter`. Matrix scenarios fan out into one
+ * `PlannedCell` per surviving (interface × source × toolset) tuple;
+ * non-matrix scenarios become a single `PlannedCell` per (target, context)
+ * combination. The output preserves scenario insertion order so the plan
+ * grid and the run grid match.
+ */
+function planMatrixCells(
+  expanded: ExpandedScenario[],
+  config: CheckConfig,
+  cellFilter: NonNullable<CheckOptions["cellFilter"]>,
+): PlannedCell[] {
+  const cells: PlannedCell[] = [];
+  for (const { scenario, targetName, contextName } of expanded) {
+    if (scenario.matrix && targetName === MATRIX_SENTINEL) {
+      const matrix = scenario.matrix;
+      const defaultInterface = scenario.target ?? "default";
+      const interfaces = matrix.interfaces ?? [defaultInterface];
+      const sourceAxis: Array<string | null> = matrix.sources ?? [null];
+      const toolsets = matrix.toolsets ?? ["none"];
+      for (const interfaceName of interfaces) {
+        if (cellFilter.interface && cellFilter.interface !== interfaceName) {
+          continue;
+        }
+        for (const sourceName of sourceAxis) {
+          if (
+            cellFilter.source !== undefined &&
+            cellFilter.source !== (sourceName ?? "")
+          ) {
+            continue;
+          }
+          for (const toolsetName of toolsets) {
+            if (cellFilter.toolset && cellFilter.toolset !== toolsetName) {
+              continue;
+            }
+            cells.push({
+              scenario: scenario.name,
+              kind: "matrix",
+              interface: interfaceName,
+              source: sourceName,
+              toolset: toolsetName,
+            });
+          }
+        }
+      }
+    } else {
+      // Non-matrix: one cell per (target, context). Per-axis filters
+      // do not apply to non-matrix scenarios (they have no source or
+      // toolset axis); to skip a non-matrix scenario, use
+      // `--scenario` instead.
+      cells.push({
+        scenario: scenario.name,
+        kind: "single",
+        target: targetName,
+        context: contextName,
+      });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Stable identity for a planned cell. Used as the key in the cell-selection
+ * set the matrix runner consults when sampling is active.
+ */
+function plannedCellKey(c: PlannedCell): string {
+  if (c.kind === "matrix") {
+    return `m:${c.scenario}\u0001${c.interface}\u0001${c.source ?? ""}\u0001${c.toolset}`;
+  }
+  return `s:${c.scenario}\u0001${c.target}\u0001${c.context}`;
+}
+
+/**
+ * Build a dry-run report from a planned cell list. No adapter calls,
+ * `scenarios: []`, just the plan summary with the cell list inlined.
+ */
+function buildPlanReport(args: {
+  tool: ToolInfo;
+  docs: ResolvedDocSource[];
+  expandedCells: number;
+  selectedCells: PlannedCell[];
+  seed: string | undefined;
+}): CheckReport {
+  const { tool, docs, expandedCells, selectedCells, seed } = args;
+  return {
+    tool: { name: tool.name, description: tool.description, path: tool.path },
+    docs,
+    scenarios: [],
+    summary: { total: 0, answered: 0, unanswered: 0, score: 0 },
+    plan: {
+      expandedCells,
+      selectedCells: selectedCells.length,
+      seed,
+      cells: selectedCells.map((c) =>
+        c.kind === "matrix"
+          ? {
+              scenario: c.scenario,
+              interface: c.interface,
+              source: c.source,
+              toolset: c.toolset,
+            }
+          : {
+              scenario: c.scenario,
+              target: c.target,
+              context: c.context,
+            },
+      ),
+    },
+  };
 }
 
 export async function runCheck(
@@ -124,6 +276,58 @@ export async function runCheck(
       );
     }
   }
+
+  // Plan + sample + max-cells pre-flight. Walks the matrix expansion
+  // once to enumerate every concrete cell that would run, then
+  // applies sampling and the max-cells gate before any adapter call.
+  const cellFilter = options.cellFilter ?? {};
+  const expandedCells = planMatrixCells(expanded, config, cellFilter);
+  let selectedCells = expandedCells;
+  let usedSeed: string | undefined;
+  if (options.sample !== undefined) {
+    const seed = options.seed ?? "default";
+    // Sample only the matrix cells; single-cell (non-matrix) scenarios
+    // are 1-of-1 already and run unconditionally so the user can rely
+    // on them as deterministic anchors.
+    const matrixCells = expandedCells.filter((c) => c.kind === "matrix");
+    const sampledMatrix = sampleCellsPerScenario(
+      matrixCells,
+      options.sample,
+      seed,
+    );
+    const sampledSet = new Set(sampledMatrix.map(plannedCellKey));
+    selectedCells = expandedCells.filter(
+      (c) => c.kind !== "matrix" || sampledSet.has(plannedCellKey(c)),
+    );
+    usedSeed = seed;
+  }
+
+  if (
+    options.maxCells !== undefined &&
+    selectedCells.length > options.maxCells
+  ) {
+    throw new Error(
+      `Matrix expands to ${selectedCells.length} cells, exceeding --max-cells ${options.maxCells}. Add --interface/--source/--toolset/--scenario filters, or pass --sample N to sample per scenario.`,
+    );
+  }
+
+  if (options.plan) {
+    return buildPlanReport({
+      tool,
+      docs,
+      expandedCells: expandedCells.length,
+      selectedCells,
+      seed: usedSeed,
+    });
+  }
+
+  const matrixCellSelection =
+    options.sample !== undefined
+      ? new Set(
+          selectedCells.filter((c) => c.kind === "matrix").map(plannedCellKey),
+        )
+      : undefined;
+
   let currentScenario = "";
 
   for (const { scenario, targetName, contextName } of expanded) {
@@ -145,6 +349,7 @@ export async function runCheck(
         docs,
         registeredIds,
         options,
+        matrixCellSelection,
       );
       results.push(result);
 
@@ -222,7 +427,17 @@ export async function runCheck(
   }
 
   onProgress?.("");
-  return buildReport(tool, docs, results);
+  const report = buildReport(tool, docs, results);
+  // Stamp the plan summary on every run so the receipt records what was
+  // expanded, what was sampled, and the seed used. `cells` is omitted
+  // outside plan-mode reports; reviewers see counts + seed in the
+  // header and look to `scenarios` for per-cell receipts.
+  report.plan = {
+    expandedCells: expandedCells.length,
+    selectedCells: selectedCells.length,
+    seed: usedSeed,
+  };
+  return report;
 }
 
 function formatRunLabel(targetName: string, contextName: string): string {
@@ -240,6 +455,7 @@ async function runScenario(
   docs: ResolvedDocSource[],
   registeredIds: string[],
   options: CheckOptions,
+  matrixCellSelection?: Set<string>,
 ): Promise<ScenarioResult> {
   // Matrix mode owns its interface axis; runScenario was called via the
   // sentinel from expandMatrix. Dispatch to the matrix branch and skip the
@@ -252,6 +468,7 @@ async function runScenario(
       config,
       docs,
       options,
+      matrixCellSelection,
     );
   }
 
@@ -515,6 +732,7 @@ async function runMatrixScenario(
   config: CheckConfig,
   docs: ResolvedDocSource[],
   options: CheckOptions,
+  matrixCellSelection?: Set<string>,
 ): Promise<ScenarioResult> {
   const { config: contextConfig } = resolveContext(
     contextName,
@@ -546,6 +764,14 @@ async function runMatrixScenario(
       for (const toolsetName of toolsets) {
         if (cellFilter.toolset && cellFilter.toolset !== toolsetName) {
           continue;
+        }
+        // Cell selection from upstream sampling. When `--sample N` is
+        // active, runCheck pre-computes a Set of cells that survived the
+        // sample; cells outside the set are skipped silently here so the
+        // matrix shape stays honest (same axes, fewer cells run).
+        if (matrixCellSelection !== undefined) {
+          const key = `m:${scenario.name}\u0001${interfaceName}\u0001${sourceName ?? ""}\u0001${toolsetName}`;
+          if (!matrixCellSelection.has(key)) continue;
         }
         // Toolset resolution. Three toolset shapes run today:
         // - "none": deterministic baseline. Source is injected. Citation

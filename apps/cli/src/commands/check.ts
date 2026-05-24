@@ -23,6 +23,14 @@ export interface CheckOptions {
   toolset?: string;
   /** Run only the named scenario. Designed for CI matrix one-job-per-cell. */
   scenario?: string;
+  /** Dry-run: expand and report planned cells without running adapters. */
+  plan?: boolean;
+  /** Hard cap on selected cells; exits non-zero before any run if exceeded. */
+  maxCells?: string;
+  /** Deterministic per-scenario sample size. */
+  sample?: string;
+  /** Seed for --sample. */
+  seed?: string;
 }
 
 export async function check(
@@ -110,20 +118,47 @@ export async function check(
       : undefined;
   const scenarioFilter = options.scenario ? [options.scenario] : undefined;
 
-  const report = await runCheck(tool, config, {
-    onProgress: verbose
-      ? (msg) => {
-          if (!json) {
-            log(chalk.dim(`   ${msg}`));
-          }
-        }
-      : undefined,
-    cellFilter,
-    scenarioFilter,
-  });
+  let sampleN: number | undefined;
+  if (options.sample !== undefined) {
+    sampleN = parsePositiveInt(options.sample, "--sample");
+    if (sampleN === null) process.exit(1);
+  }
+  let maxCellsN: number | undefined;
+  if (options.maxCells !== undefined) {
+    maxCellsN = parsePositiveInt(options.maxCells, "--max-cells");
+    if (maxCellsN === null) process.exit(1);
+  }
 
-  // 3. Check threshold
-  const thresholdFailed = threshold > 0 && report.summary.score < threshold;
+  let report: Awaited<ReturnType<typeof runCheck>>;
+  try {
+    report = await runCheck(tool, config, {
+      onProgress: verbose
+        ? (msg) => {
+            if (!json) {
+              log(chalk.dim(`   ${msg}`));
+            }
+          }
+        : undefined,
+      cellFilter,
+      scenarioFilter,
+      plan: options.plan,
+      maxCells: maxCellsN,
+      sample: sampleN,
+      seed: options.seed,
+    });
+  } catch (error) {
+    console.error(chalk.red(error instanceof Error ? error.message : error));
+    process.exit(1);
+  }
+
+  // 3. Check threshold (skipped in plan / dry-run mode: a planning
+  // report has no scenario scores to compare against, and a non-zero
+  // exit there would defeat the purpose of a free pre-flight).
+  const thresholdFailed = shouldFailThreshold({
+    plan: options.plan === true,
+    threshold,
+    score: report.summary.score,
+  });
 
   // 4. Output
   if (output) {
@@ -149,6 +184,20 @@ export async function check(
   }
 }
 
+/**
+ * Whether the run should exit non-zero on threshold. Dry-run (`--plan`)
+ * always passes the threshold gate because the planning report has no
+ * scenario scores; failing here would defeat the free pre-flight.
+ */
+export function shouldFailThreshold(args: {
+  plan: boolean;
+  threshold: number;
+  score: number;
+}): boolean {
+  if (args.plan) return false;
+  return args.threshold > 0 && args.score < args.threshold;
+}
+
 export function resolveThreshold(
   cliValue: string | undefined,
   configValue: unknown,
@@ -159,6 +208,18 @@ export function resolveThreshold(
   }
 
   return parseThresholdValue(cliValue, "--threshold");
+}
+
+function parsePositiveInt(value: string, label: string): number | null {
+  if (!/^\d+$/.test(value)) {
+    console.error(
+      chalk.red(
+        `Invalid ${label} "${value}". Expected a non-negative integer.`,
+      ),
+    );
+    return null;
+  }
+  return Number(value);
 }
 
 function parseThresholdValue(value: unknown, label: string): number {

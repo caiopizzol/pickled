@@ -324,7 +324,47 @@ export function formatCheckReport(
   }
 
   lines.push(`Scenarios: ${chalk.dim(String(summary.total))}`);
+  if (report.plan) {
+    const { expandedCells, selectedCells, seed } = report.plan;
+    const sampled = selectedCells < expandedCells;
+    const cellsLine = sampled
+      ? `Cells: ${chalk.dim(`${selectedCells} of ${expandedCells} (sampled${seed ? `, seed=${seed}` : ""})`)}`
+      : `Cells: ${chalk.dim(String(expandedCells))}`;
+    lines.push(cellsLine);
+  }
   lines.push("");
+
+  // Dry-run reports carry the per-cell plan inline and no scenario results.
+  if (report.plan?.cells && results.length === 0) {
+    lines.push(
+      chalk.bold(
+        `Planned cells (${report.plan.selectedCells} of ${report.plan.expandedCells})`,
+      ),
+    );
+    if (report.plan.cells.length === 0) {
+      lines.push(chalk.dim("  (no cells after filters)"));
+    }
+    let currentScenario = "";
+    for (const c of report.plan.cells) {
+      if (c.scenario !== currentScenario) {
+        currentScenario = c.scenario;
+        lines.push(`  ${c.scenario}`);
+      }
+      const detail =
+        c.interface !== undefined
+          ? `[${c.interface} · ${c.source ?? "-"} · ${c.toolset}]`
+          : `[${c.target}${c.context && c.context !== "default" ? `/${c.context}` : ""}]`;
+      lines.push(`    ${chalk.dim(detail)}`);
+    }
+    lines.push("");
+    lines.push(LINE);
+    lines.push(
+      chalk.dim(
+        `Dry-run: no model calls. Re-run without --plan to execute these cells.`,
+      ),
+    );
+    return lines.join("\n");
+  }
 
   if (hasMatrixResults(results)) {
     const byScenario = new Map<string, ScenarioResult[]>();

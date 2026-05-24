@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { resolveThreshold } from "../src/commands/check.js";
+import {
+  resolveThreshold,
+  shouldFailThreshold,
+} from "../src/commands/check.js";
 
 describe("resolveThreshold", () => {
   test("uses config threshold when CLI option is absent", () => {
@@ -45,6 +48,41 @@ describe("resolveThreshold", () => {
   test("rejects CLI thresholds above 100", () => {
     expect(() => resolveThreshold("101", undefined)).toThrow(
       'Invalid --threshold "101". Expected an integer from 0 to 100.',
+    );
+  });
+});
+
+describe("shouldFailThreshold", () => {
+  test("score below configured threshold fails", () => {
+    expect(shouldFailThreshold({ plan: false, threshold: 60, score: 34 })).toBe(
+      true,
+    );
+  });
+
+  test("score at or above configured threshold passes", () => {
+    expect(shouldFailThreshold({ plan: false, threshold: 60, score: 60 })).toBe(
+      false,
+    );
+    expect(
+      shouldFailThreshold({ plan: false, threshold: 60, score: 100 }),
+    ).toBe(false);
+  });
+
+  test("threshold 0 (unset) always passes regardless of score", () => {
+    expect(shouldFailThreshold({ plan: false, threshold: 0, score: 0 })).toBe(
+      false,
+    );
+  });
+
+  test("plan: true forces pass even when score < threshold (regression for --plan)", () => {
+    // A dry-run report has scenarios: [] and summary.score: 0; the
+    // threshold gate must not apply or `--plan` could not coexist with
+    // a configured `threshold:` in pickled.yml.
+    expect(shouldFailThreshold({ plan: true, threshold: 60, score: 0 })).toBe(
+      false,
+    );
+    expect(shouldFailThreshold({ plan: true, threshold: 100, score: 50 })).toBe(
+      false,
     );
   });
 });
