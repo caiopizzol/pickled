@@ -2,7 +2,7 @@
 
 > Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.
 
-The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check what agents say about your product.
+The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check what agents say about your product. No LLM grades another LLM.
 
 Full docs: [docs.pickled.dev/docs](https://docs.pickled.dev/docs).
 

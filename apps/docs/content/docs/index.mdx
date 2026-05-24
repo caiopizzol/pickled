@@ -3,7 +3,7 @@ title: Pickled
 description: An open-source CLI that tests whether AI agents actually understand a product.
 ---
 
-Pickled is an open-source CLI that runs scenarios against real agent targets (Claude Code, Codex CLI, Anthropic API), checks that answers cite registered sources, and matches declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+Pickled is an open-source CLI that runs scenarios across a matrix of interfaces (Claude Code, Codex CLI, Anthropic API), sources (READMEs, docs URLs, llms.txt, codebase globs), and toolsets (`none` / `web` / `mcp`), then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
 
 ## What pickled tests
 
