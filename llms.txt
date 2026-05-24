@@ -58,6 +58,8 @@ A scenario can expand into one cell per `(interface × source × toolset)` tuple
 
 Citation contract only applies in `none` cells. Non-`none` cells score on `expected.includes`/`excludes` plus tool-use provenance: a cell that satisfies `expected` but never invokes any of the configured tools is hard-vetoed to `NO` with confidence `0`, because an answer from model prior knowledge cannot testify to the tool path the cell is meant to test.
 
+`matrix.sources` accepts a reserved value `none` alongside registered source ids. A `none` cell receives no source content and no canonical-source hint. Combined with `toolset: none` it measures model prior (no source, no tools). Combined with `toolset: web` or `mcp` it measures open discovery (no hint; the agent must reach the answer with its configured tools, and tool-use provenance still vetoes cells that did not invoke any).
+
 ## Targets today
 
 - `claude-code` - Claude Agent SDK

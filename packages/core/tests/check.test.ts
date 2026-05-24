@@ -1553,4 +1553,127 @@ describe("runCheck matrix mode", () => {
       ).toEqual(["Read", "Glob"]);
     });
   });
+
+  test("source 'none' + toolset 'none' = no-context baseline (model prior)", async () => {
+    // The reserved sentinel says "give the agent no source content
+    // and no discovery hint." This is the model-prior baseline: what
+    // does the model already think when asked the scenario question
+    // with zero help?
+    await withTempProject("# README content", async (path) => {
+      const captured: { docsCount: number; promptSeen: string }[] = [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "No-context baseline",
+            prompt: "What is pickled?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["none"],
+              toolsets: ["none"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "model-prior-mock",
+            async run(prompt, opts): Promise<TargetResult> {
+              captured.push({
+                docsCount: opts.docs.length,
+                promptSeen: prompt,
+              });
+              return {
+                response: "pickled is a thing the model already knows about",
+                allResponses: [{ type: "final", text: "pickled..." }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.cell.source).toBe("none");
+      expect(cell.answerable).toBe("YES");
+      // No source content was injected (cellDocs is empty).
+      expect(captured[0]?.docsCount).toBe(0);
+      // Prompt is the bare scenario prompt; no canonical-source hint.
+      expect(captured[0]?.promptSeen).toBe("What is pickled?");
+    });
+  });
+
+  test("source 'none' + toolset 'web' = open discovery (no hint, tool-use still required)", async () => {
+    // No source content, no canonical-URL hint. The agent has web
+    // tools and must find the answer from scratch. Tool-use provenance
+    // still vetoes a cell that answers without invoking any web tool.
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true, webFetch: true } },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Open discovery",
+            prompt: "What is pickled?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["none"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["pickled"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "open-discovery-mock",
+            async run(_p, _o): Promise<TargetResult> {
+              return {
+                response: "pickled answer from prior knowledge",
+                allResponses: [{ type: "final", text: "pickled" }],
+                // Empty toolsUsed simulates the agent answering without
+                // invoking any of the configured web tools.
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.cell.source).toBe("none");
+      expect(cell.cell.toolset).toBe("web");
+      // Tool-use provenance hard-vetoes: web cell, no web tool used.
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+      expect(cell.reason).toMatch(/Provenance failed/);
+    });
+  });
 });

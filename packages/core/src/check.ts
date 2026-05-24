@@ -661,17 +661,23 @@ async function runMatrixScenario(
         // - Tools: <web> + source -> do NOT inject; rewrite prompt to name
         //   the source as the discovery target. Agent reaches it via tools.
         // - Verifiers.sources are loaded but never injected.
+        // - source: "none" -> reserved sentinel for no-context cells.
+        //   Nothing is injected and no discovery hint is offered, even in
+        //   the toolset:none case. This is the model-prior baseline.
         const isInjecting = toolsetName === "none";
-        const cellDocs = isInjecting
-          ? sourceName === null
-            ? docs
-            : docs.filter((d) => d.id === sourceName)
-          : [];
-        const surfaceIds = isInjecting
-          ? sourceName === null
-            ? docs.map((d) => d.id)
-            : [sourceName]
-          : [];
+        const isNoContext = sourceName === "none";
+        const cellDocs =
+          isNoContext || !isInjecting
+            ? []
+            : sourceName === null
+              ? docs
+              : docs.filter((d) => d.id === sourceName);
+        const surfaceIds =
+          isNoContext || !isInjecting
+            ? []
+            : sourceName === null
+              ? docs.map((d) => d.id)
+              : [sourceName];
         const required = scenario.requiredSources ?? [];
         // Citation contract applies only in controlled mode (toolset: none).
         // Discovery mode cells rely on traps + expected.
@@ -995,7 +1001,11 @@ function buildCellPrompt(
   isInjecting: boolean,
 ): string {
   if (isInjecting) return basePrompt;
-  if (sourceName === null) return basePrompt;
+  // sourceName `null` (no matrix.sources axis) or the reserved "none"
+  // sentinel both mean "no canonical source to point at"; the agent
+  // gets the bare scenario prompt and discovers (or doesn't) from
+  // scratch with whatever tools it has.
+  if (sourceName === null || sourceName === "none") return basePrompt;
   const source = docs.find((d) => d.id === sourceName);
   if (!source) return basePrompt;
   const hint =
@@ -1016,7 +1026,7 @@ function buildDiscoveryHint(
   sourceName: string | null,
   docs: ResolvedDocSource[],
 ): string | null {
-  if (sourceName === null) return null;
+  if (sourceName === null || sourceName === "none") return null;
   const source = docs.find((d) => d.id === sourceName);
   if (!source) return null;
   if (source.type === "url") return source.source;

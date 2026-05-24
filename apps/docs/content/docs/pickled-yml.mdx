@@ -111,6 +111,8 @@ scenarios:
 
 `traps` are deterministic stale-answer detectors. Firing any trap forces the cell to `NO` with confidence `0`.
 
+`matrix.sources` accepts the reserved value `none` alongside registered source ids. A `none` cell receives no source content and no canonical-source hint: with `toolset: none` it measures model prior; with `toolset: web` or `mcp` it measures open discovery (the agent must reach the answer with its tools, no hint). `docs.sources` rejects `none` as a key so the sentinel never collides with a real source.
+
 ## Env-var expansion
 
 String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding `process.env` entry at load. Missing env vars become empty strings so the failure surfaces at the call site (e.g., a 401 from the MCP server) rather than at config load. Bun auto-loads `.env`.
@@ -120,5 +122,6 @@ String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding
 - A scenario with no actionable contract (no `requiredSources`, `expected`, or `traps`).
 - A matrix scenario whose toolsets include a non-`none` profile but the scenario has only `requiredSources` (the citation contract does not apply, so the cell has no scoring path).
 - A toolset that declares both `webSearch`/`webFetch` flags and `mcpServers`.
+- A `docs.sources` entry keyed `none` (reserved as the no-context sentinel for `matrix.sources`).
 - API targets that set CLI-only fields.
 - Unpinned codex-cli models (the CLI's default can change without notice).

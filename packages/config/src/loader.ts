@@ -57,6 +57,14 @@ function validate(config: CheckConfig): void {
 
   if (config.docs?.sources) {
     for (const [id, value] of Object.entries(config.docs.sources)) {
+      if (id === "none") {
+        // "none" is the reserved no-context sentinel for matrix.sources;
+        // registering a real source under that ID would silently shadow
+        // the sentinel and produce unexpected cell behavior.
+        throw new Error(
+          `pickled.yml: docs.sources cannot use the reserved id "none". That name represents the no-context matrix cell (model prior with toolset:none, or open discovery with toolset:web). Rename this source.`,
+        );
+      }
       validateDocSourceEntry(id, value);
     }
   }
@@ -250,7 +258,11 @@ function validateScenarioMatrix(
     }
   };
   checkArray("interfaces", targetNames, "target");
-  checkArray("sources", sourceIds, "source");
+  // matrix.sources also accepts the reserved sentinel "none", which is
+  // not a registered source: it represents the "no context" cell
+  // (model prior with toolset:none, or open discovery with toolset:web).
+  // See packages/core/src/check.ts for the runtime semantics.
+  checkArray("sources", new Set([...sourceIds, "none"]), "source");
   checkArray("toolsets", toolsetNames, "toolset");
 }
 

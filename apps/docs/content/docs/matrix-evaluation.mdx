@@ -21,6 +21,8 @@ scenarios:
 
 That scenario produces eight cells. Each cell label is `[interface · source · toolset]`.
 
+`matrix.sources` accepts a reserved value `none` alongside registered source ids. A `none` cell gets no source content and no discovery hint. Combined with `toolset: none` it measures model prior (no source, no tools); combined with `toolset: web` or `toolset: mcp` it measures open discovery where the agent must find the answer from scratch with its configured tools.
+
 ## Three toolset shapes
 
 - **`none`** is the deterministic baseline. Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared.

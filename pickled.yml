@@ -161,6 +161,36 @@ scenarios:
     verifiers:
       sources: [public_docs_full]
 
+  # Model-prior vs discovery vs injected. Four cells covering the
+  # "context availability" gradient on Claude Code:
+  #   [quick · none · none]              -> model prior; no source, no tools
+  #   [quick · none · web]               -> open discovery; agent has web
+  #                                         tools but no canonical hint
+  #   [quick · public_docs_full · none]  -> controlled baseline; source
+  #                                         content injected
+  #   [quick · public_docs_full · web]   -> directed discovery; URL hint
+  #                                         plus web tools
+  #
+  # Expected/excludes are the same as the positioning scenario above so
+  # the cells are directly comparable. Tool-use provenance vetoes the
+  # web cells that answer from prior knowledge without invoking
+  # WebSearch / WebFetch (matters most for the [none · web] cell, which
+  # has no hint at all).
+  - name: "Context availability gradient"
+    prompt: "In one or two sentences, what does pickled do?"
+    matrix:
+      interfaces: [quick]
+      sources: [none, public_docs_full]
+      toolsets: [none, web]
+    expected:
+      includes:
+        - "agent"
+      excludes:
+        - "AI-powered"
+        - "freshness score"
+    verifiers:
+      sources: [public_docs_full]
+
   # Trap pipeline smoke. Reads a deliberately stale fixture and parrots it
   # back, which should trip every declared trap and force NO with
   # confidence zero. If this scenario ever scores YES, the trap matcher

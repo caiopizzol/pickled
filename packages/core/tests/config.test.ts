@@ -1411,4 +1411,54 @@ scenarios:
       expect(cfg.scenarios[0]?.prompt).toContain("${");
     });
   });
+
+  test("rejects 'none' as a docs.sources id (reserved no-context sentinel)", async () => {
+    const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    none: ./README.md
+scenarios:
+  - name: s
+    prompt: p
+    requiredSources: [none]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      await expect(loadConfig(dir)).rejects.toThrow(
+        /docs\.sources cannot use the reserved id "none"/,
+      );
+    });
+  });
+
+  test("accepts 'none' in matrix.sources without it being a registered source", async () => {
+    // "none" is the no-context sentinel; the loader must accept it
+    // alongside registered source ids in the matrix.sources axis.
+    const yaml = `
+tool:
+  name: t
+  description: d
+targets:
+  a:
+    category: cli
+    provider: claude-code
+docs:
+  sources:
+    readme: ./README.md
+scenarios:
+  - name: Baseline + injected
+    prompt: p
+    matrix:
+      interfaces: [a]
+      sources: [none, readme]
+      toolsets: [none]
+    expected:
+      includes: [pickled]
+`;
+    await withTempConfig(yaml, async (dir) => {
+      const cfg = await loadConfig(dir);
+      expect(cfg.scenarios[0]?.matrix?.sources).toEqual(["none", "readme"]);
+    });
+  });
 });
