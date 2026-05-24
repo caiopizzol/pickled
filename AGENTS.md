@@ -46,7 +46,7 @@ A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**` or `package
 - `codex-cli` (Codex CLI binary)
 - `anthropic` (Anthropic API, direct SDK)
 
-API targets call the model directly via `@anthropic-ai/sdk`. No tools, no workspace, no Agent SDK orchestration. Comparable to CLI targets but not identical. Require `ANTHROPIC_API_KEY` and an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets.
+API targets call the model directly via `@anthropic-ai/sdk`. No workspace, no Agent SDK orchestration. The `anthropic` target supports the `none` toolset and the `web` toolset: `web` wires the server-side `web_search` tool (`web_search_20250305`) on `messages.create`; `webFetch` has no Anthropic API equivalent and is a no-op on this provider. Comparable to CLI targets but not identical. Require `ANTHROPIC_API_KEY` and an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets.
 
 Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, OpenAI and Google API targets. Do not claim they work; do not list them in user-facing present tense.
 

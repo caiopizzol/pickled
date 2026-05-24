@@ -499,11 +499,13 @@ function buildReport(
  * filters, and emits one CellResult per surviving cell.
  *
  * Runtime support today: `toolset = "none"` (deterministic baseline),
- * the `web` shape (`webSearch`/`webFetch` flags), and the `mcp` shape
- * (`mcpServers` map), both on Claude Code. Toolsets with no recognized
- * shape, mixed shapes (web flags + mcpServers), or non-claude-code
- * interfaces throw with a clear per-cell error so misconfigurations
- * are not masked by silent no-ops; further adapters land per release.
+ * the `web` shape (`webSearch`/`webFetch` flags) on Claude Code (client
+ * `WebSearch`/`WebFetch`) and on the Anthropic API target (server-side
+ * `web_search`), and the `mcp` shape (`mcpServers` map) on Claude Code.
+ * Toolsets with no recognized shape, mixed shapes (web flags +
+ * mcpServers), or an unsupported provider for the requested shape throw
+ * with a clear per-cell error so misconfigurations are not masked by
+ * silent no-ops; further adapters land per release.
  */
 async function runMatrixScenario(
   scenario: Scenario,
@@ -547,11 +549,15 @@ async function runMatrixScenario(
         // Toolset resolution. Three toolset shapes run today:
         // - "none": deterministic baseline. Source is injected. Citation
         //   contract applies if requiredSources is declared.
-        // - web: `webSearch`/`webFetch` flags on Claude Code. The SDK's
-        //   built-in tool set is scoped via `tools: [WebSearch, ...]`
-        //   so default Read/Edit/Bash cannot leak; allowedTools carries
-        //   the same names to skip permission prompts. Source NOT
-        //   injected; citation contract skipped.
+        // - web: `webSearch`/`webFetch` flags. Two wiring paths:
+        //     * Claude Code: scope the SDK's built-in tools via
+        //       `tools: [WebSearch, ...]` so default Read/Edit/Bash
+        //       cannot leak; allowedTools carries the same names to
+        //       skip permission prompts.
+        //     * Anthropic API: pass the server-side `web_search` tool
+        //       (`web_search_20250305`) to `messages.create` via the
+        //       provider-agnostic webTools intent on RunOptions.
+        //   Source NOT injected; citation contract skipped on either path.
         // - mcp: `mcpServers` map on Claude Code. The SDK's built-in
         //   tool set is disabled (`tools: []`); MCP tools come from
         //   `mcpServers` and are auto-permitted via
@@ -561,7 +567,8 @@ async function runMatrixScenario(
         // The SDK's `tools` option (not `allowedTools`) is what actually
         // restricts availability; allowedTools alone is just a
         // permission-prompt bypass list. See `restrictBuiltinTools` on
-        // RunOptions for the field that carries `tools` to the adapter.
+        // RunOptions for the field that carries `tools` to the Claude
+        // Code adapter, and `webTools` for the Anthropic API adapter.
         const toolsetConfig =
           toolsetName === "none"
             ? null
@@ -1026,11 +1033,12 @@ function collectVerifierSamples(
 /**
  * Build the per-cell prompt. Controlled-mode cells (toolset: none) use the
  * scenario's prompt verbatim because the citation prompt (built by the
- * target adapter) injects the source content. Discovery-mode cells
- * (toolset: web with WebSearch/WebFetch on Claude Code) prepend a hint
- * naming the canonical source the agent should research with its tools.
- * The agent is free to use other discovery paths too; the hint just
- * surfaces the cell's declared source.
+ * target adapter) injects the source content. Discovery-mode cells (any
+ * non-none toolset: web on Claude Code via WebSearch/WebFetch, web on
+ * the Anthropic API target via server-side web_search, or mcp via the
+ * configured MCP server) prepend a hint naming the canonical source the
+ * agent should research with its tools. The agent is free to use other
+ * discovery paths too; the hint just surfaces the cell's declared source.
  */
 function buildCellPrompt(
   basePrompt: string,

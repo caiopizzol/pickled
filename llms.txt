@@ -53,7 +53,7 @@ Pickled does not magically introspect your product. You declare what counts as t
 A scenario can expand into one cell per `(interface × source × toolset)` tuple. Each cell scores independently. Three toolset shapes ship today:
 
 - `none`: deterministic baseline. The cell's active source content is injected into the agent's prompt. The citation contract applies if `requiredSources` is declared.
-- `web`: WebSearch + WebFetch on Claude Code. Source is NOT injected; the cell's prompt names the active source as the discovery target. Tool-use provenance is required.
+- `web`: web research, two mechanisms. On Claude Code the cell scopes the SDK's built-in tools to `[WebSearch, WebFetch]`. On the Anthropic API target the cell passes the server-side `web_search` tool (`web_search_20250305`) to `messages.create`; the API has no separate fetch tool, so `webSearch: true` is required and `webFetch` is a no-op on this provider. Source is NOT injected on either path; the cell's prompt names the active source as the discovery target. Tool-use provenance is required.
 - `mcp`: any MCP server (`stdio`, `http`, `sse`) on Claude Code. Source is NOT injected; the agent invokes `mcp__<server>__*` tools at inference. Tool-use provenance is required.
 
 Citation contract only applies in `none` cells. Non-`none` cells score on `expected.includes`/`excludes` plus tool-use provenance: a cell that satisfies `expected` but never invokes any of the configured tools is hard-vetoed to `NO` with confidence `0`, because an answer from model prior knowledge cannot testify to the tool path the cell is meant to test.
@@ -62,9 +62,9 @@ Citation contract only applies in `none` cells. Non-`none` cells score on `expec
 
 ## Targets today
 
-- `claude-code` - Claude Agent SDK
-- `codex-cli` - Codex CLI binary
-- `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. No tools, no workspace; comparable to CLI targets but not identical.
+- `claude-code` - Claude Agent SDK. Supports `none`, `web`, and `mcp` toolsets.
+- `codex-cli` - Codex CLI binary. Supports `none` only.
+- `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. Supports `none` and `web` (server-side `web_search`); MCP lands per release. No workspace, no Agent SDK orchestration; comparable to CLI targets but not identical.
 
 Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, OpenAI and Google API targets. Do not list these as supported in present tense.
 
