@@ -84,6 +84,14 @@ export async function check(
     }
   }
 
+  let threshold: number;
+  try {
+    threshold = resolveThreshold(options.threshold, config.threshold);
+  } catch (error) {
+    console.error(chalk.red(error instanceof Error ? error.message : error));
+    process.exit(1);
+  }
+
   // 2. Run check
   // --target bridges to cellFilter.interface for matrix scenarios when
   // --interface is not also set. Keeps "pickled check --target codex"
@@ -115,9 +123,6 @@ export async function check(
   });
 
   // 3. Check threshold
-  const threshold = options.threshold
-    ? parseInt(options.threshold, 10)
-    : (config.threshold ?? 0);
   const thresholdFailed = threshold > 0 && report.summary.score < threshold;
 
   // 4. Output
@@ -142,6 +147,40 @@ export async function check(
     }
     process.exit(1);
   }
+}
+
+export function resolveThreshold(
+  cliValue: string | undefined,
+  configValue: unknown,
+): number {
+  if (cliValue === undefined) {
+    if (configValue === undefined) return 0;
+    return parseThresholdValue(configValue, "pickled.yml threshold");
+  }
+
+  return parseThresholdValue(cliValue, "--threshold");
+}
+
+function parseThresholdValue(value: unknown, label: string): number {
+  if (typeof value === "number") {
+    if (Number.isInteger(value) && value >= 0 && value <= 100) return value;
+    throw new Error(
+      `Invalid ${label} "${value}". Expected an integer from 0 to 100.`,
+    );
+  }
+
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const threshold = Number(value);
+    if (threshold <= 100) return threshold;
+  }
+
+  if (typeof value === "string") {
+    throw new Error(
+      `Invalid ${label} "${value}". Expected an integer from 0 to 100.`,
+    );
+  }
+
+  throw new Error(`Invalid ${label}. Expected an integer from 0 to 100.`);
 }
 
 function writeStdout(text: string): Promise<void> {
