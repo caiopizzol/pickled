@@ -45,10 +45,16 @@ A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**` or `package
 - `claude-code` (Claude Agent SDK)
 - `codex-cli` (Codex CLI binary)
 - `anthropic` (Anthropic API, direct SDK)
+- `openai` (OpenAI Responses API, direct SDK)
 
-API targets call the model directly via `@anthropic-ai/sdk`. No workspace, no Agent SDK orchestration. The `anthropic` target supports the `none` toolset and the `web` toolset: `web` wires the server-side `web_search` tool (`web_search_20250305`) on `messages.create`; `webFetch` has no Anthropic API equivalent and is a no-op on this provider. Comparable to CLI targets but not identical. Require `ANTHROPIC_API_KEY` and an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets.
+API targets call the model directly via the provider SDK. No workspace, no Agent SDK orchestration.
 
-Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, OpenAI and Google API targets. Do not claim they work; do not list them in user-facing present tense.
+- `anthropic`: supports the `none` toolset and the `web` toolset. `web` wires the server-side `web_search` tool (`web_search_20250305`) on `messages.create`; `webFetch` has no Anthropic API equivalent and is a no-op on this provider. Requires `ANTHROPIC_API_KEY`.
+- `openai`: v1 supports the `none` toolset only. `web_search` (#12) and remote MCP (#13) land per release. Uses `client.responses.create({instructions, input, ...})`. Requires `OPENAI_API_KEY`.
+
+Both require an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets. Comparable to CLI targets but not identical.
+
+Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, Google API target. Do not claim they work; do not list them in user-facing present tense.
 
 ## Two audiences
 

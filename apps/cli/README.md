@@ -57,7 +57,7 @@ That gets you a single controlled-mode scenario. To compare across interfaces, s
 | --- | --- |
 | Sources | local files, URLs, codebase globs |
 | Toolsets | `none`, `web`, `mcp` |
-| Interfaces | Claude Code, Codex CLI, Anthropic API |
+| Interfaces | Claude Code, Codex CLI, Anthropic API, OpenAI API |
 | Output | terminal, JSON, markdown audit reports |
 
 ## Read more

@@ -10,7 +10,7 @@ Docs can be correct and agents can still answer wrong. Pickled gives you receipt
 
 Four terms:
 
-- **Interface** is which agent runs the scenario: Claude Code, Codex CLI, Anthropic API.
+- **Interface** is which agent runs the scenario: Claude Code, Codex CLI, Anthropic API, OpenAI API.
 - **Source** is what the agent has to read: README, docs URL, `llms.txt`, codebase glob.
 - **Toolset** is what tools the agent has: `none` (controlled, source content injected), `web` (Claude Code `WebSearch`/`WebFetch`, or Anthropic API server-side `web_search`), `mcp` (any MCP server you declare).
 - **Scenario** is the question. A scenario can expand into one cell per `(interface × source × toolset)` tuple.

@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that runs scenarios across a matrix of interfaces (Claude Code, Codex CLI, Anthropic API), sources (READMEs, docs URLs, llms.txt, codebase globs), and toolsets (`none` / `web` / `mcp`), then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
+Pickled is an open-source CLI that runs scenarios across a matrix of interfaces (Claude Code, Codex CLI, Anthropic API, OpenAI API), sources (READMEs, docs URLs, llms.txt, codebase globs), and toolsets (`none` / `web` / `mcp`), then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
 
 ## Install
 
@@ -65,8 +65,9 @@ Citation contract only applies in `none` cells. Non-`none` cells score on `expec
 - `claude-code` - Claude Agent SDK. Supports `none`, `web`, and `mcp` toolsets.
 - `codex-cli` - Codex CLI binary. Supports `none` only.
 - `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. Supports `none` and `web` (server-side `web_search`); MCP lands per release. No workspace, no Agent SDK orchestration; comparable to CLI targets but not identical.
+- `openai` - OpenAI Responses API, direct SDK. Requires `OPENAI_API_KEY`. Supports `none` only today; `web_search` and remote MCP land per release. No workspace, no Agent SDK orchestration.
 
-Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, OpenAI and Google API targets. Do not list these as supported in present tense.
+Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, Google API target. Do not list these as supported in present tense.
 
 ## JSON contract
 

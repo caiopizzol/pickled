@@ -1,6 +1,7 @@
 import type { Context, Target } from "@pickled-dev/config";
 import { DEFAULT_TARGET } from "@pickled-dev/config";
 import { AnthropicApiTarget } from "./api/anthropic.js";
+import { OpenAIApiTarget } from "./api/openai.js";
 import { ClaudeCodeTarget } from "./cli/claude-code.js";
 import { CodexCliTarget } from "./cli/codex.js";
 import type { ResolvedContext, TargetRunner } from "./types.js";
@@ -59,7 +60,7 @@ function createApiTarget(name: string, config: Target): TargetRunner {
     case "anthropic":
       return new AnthropicApiTarget(name, config);
     case "openai":
-      throw new Error(`OpenAI API target not yet implemented. Coming soon!`);
+      return new OpenAIApiTarget(name, config);
     case "google":
       throw new Error(`Google API target not yet implemented. Coming soon!`);
     default:
