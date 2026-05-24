@@ -666,7 +666,7 @@ describe("runCheck matrix mode", () => {
     });
   });
 
-  test("web toolset on non-Claude-Code interface throws clearly", async () => {
+  test("web toolset on an unsupported provider throws clearly", async () => {
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {
         tool: { name: "t", description: "d" },
@@ -690,7 +690,170 @@ describe("runCheck matrix mode", () => {
         { targetFactory: () => makeMockTarget("x") },
       );
       expect(report.scenarios[0]!.error).toMatch(
-        /implemented only on the claude-code interface/,
+        /implemented on claude-code and anthropic interfaces today/,
+      );
+    });
+  });
+
+  test("web toolset on the anthropic interface passes webTools.search to the adapter", async () => {
+    await withTempProject("# README", async (path) => {
+      const captured: { webTools?: { search?: boolean }; docsCount: number }[] =
+        [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true, webFetch: true } },
+        targets: {
+          a: {
+            category: "api",
+            provider: "anthropic",
+            model: "claude-haiku-4-5",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Anthropic API web cell",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "api",
+            provider: "anthropic",
+            name: "captured",
+            async run(_p, opts) {
+              captured.push({
+                webTools: opts.webTools,
+                docsCount: opts.docs.length,
+              });
+              return {
+                response: "x answer from anthropic web research",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: ["web_search"],
+                sources: [],
+                metadata: {
+                  model: "claude-haiku-4-5",
+                  category: "api",
+                  provider: "anthropic",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      expect(report.scenarios[0]!.cells).toHaveLength(1);
+      expect(report.scenarios[0]!.cells![0]?.cell.toolset).toBe("web");
+      expect(report.scenarios[0]!.cells![0]?.answerable).toBe("YES");
+      // webTools.search reaches the adapter so it can wire the
+      // server-side web_search tool. Source is NOT injected (discovery
+      // mode for non-none cells).
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.webTools).toEqual({ search: true });
+      expect(captured[0]?.docsCount).toBe(0);
+    });
+  });
+
+  test("web cell on anthropic that does not invoke web_search hard-vetoes via provenance", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, web: { webSearch: true } },
+        targets: {
+          a: {
+            category: "api",
+            provider: "anthropic",
+            model: "claude-haiku-4-5",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Anthropic web cell that skips the tool",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["web"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "api",
+            provider: "anthropic",
+            name: "captured",
+            async run() {
+              return {
+                response: "x answer from model prior knowledge",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "claude-haiku-4-5",
+                  category: "api",
+                  provider: "anthropic",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+    });
+  });
+
+  test("web toolset on anthropic with only webFetch:true rejects at config-gate", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {}, fetchOnly: { webFetch: true } },
+        targets: {
+          a: {
+            category: "api",
+            provider: "anthropic",
+            model: "claude-haiku-4-5",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Fetch-only probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["fetchOnly"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toMatch(
+        /on anthropic provider requires webSearch: true/,
       );
     });
   });

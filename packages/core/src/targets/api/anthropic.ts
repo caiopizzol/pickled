@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Target, TargetCategory } from "@pickled-dev/config";
 import { buildCitationPrompt } from "../citation-prompt.js";
+import { buildDiscoveryPrompt } from "../discovery-prompt.js";
 import type {
   ResponseEntry,
   RunOptions,
@@ -10,10 +11,17 @@ import type {
 
 /**
  * Anthropic API target. Sends registered sources as controlled context to the
- * Messages API directly. Distinct from the Claude Code CLI target: no tool
- * use, no workspace, no Agent SDK orchestration. The model sees the citation
+ * Messages API directly. Distinct from the Claude Code CLI target: no client
+ * tools, no workspace, no Agent SDK orchestration. The model sees the citation
  * prompt as `system`, the scenario prompt as a single user message, and is
  * expected to return its answer with a `## Sources` section.
+ *
+ * For matrix `web` cells (`options.webTools.search`), the target passes the
+ * server-side `web_search` tool to `messages.create` and switches to the
+ * discovery prompt (no injected source). Server tool invocations are
+ * extracted from `server_tool_use` blocks and reported as `toolsUsed`, so
+ * the matrix runner's tool-use provenance hard-veto fires the same way it
+ * does for client-tool cells.
  *
  * Requires `ANTHROPIC_API_KEY` in the environment. The model field is required
  * on the target config; the loader enforces this so silent defaults cannot
@@ -34,12 +42,11 @@ export class AnthropicApiTarget implements TargetRunner {
   constructor(name: string, config: Target, clientFactory?: () => Anthropic) {
     this.name = name;
     this.config = config;
-    // Lazy factory so tests can inject a mock client without environment setup.
     this.clientFactory = clientFactory ?? (() => new Anthropic());
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, docs, requiredSources } = options;
+    const { tool, docs, requiredSources, discovery, webTools } = options;
 
     if (!this.config.model) {
       // Defense in depth: the loader rejects API targets without a model, but
@@ -50,8 +57,20 @@ export class AnthropicApiTarget implements TargetRunner {
       );
     }
 
-    const systemPrompt = buildCitationPrompt(tool, docs, requiredSources);
+    // Discovery-mode cells (matrix runner sets options.discovery) get a
+    // different system prompt: no injected sources, agent uses its tools
+    // to research, optional canonical-source hint.
+    const systemPrompt = discovery
+      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
+      : buildCitationPrompt(tool, docs, requiredSources);
     const client = this.clientFactory();
+
+    // SDK 0.40 typings predate the `web_search_20250305` server-tool entry,
+    // so we build the tool array as a plain object and cast at the SDK
+    // boundary. The HTTP API accepts the shape regardless of SDK version.
+    const tools = webTools?.search
+      ? [{ type: "web_search_20250305", name: "web_search" }]
+      : undefined;
 
     const message = await client.messages.create({
       model: this.config.model,
@@ -59,9 +78,11 @@ export class AnthropicApiTarget implements TargetRunner {
       temperature: this.config.temperature ?? 0,
       system: systemPrompt,
       messages: [{ role: "user", content: prompt }],
+      ...(tools ? { tools: tools as unknown as never } : {}),
     });
 
     const responseText = extractText(message.content);
+    const toolsUsed = extractServerToolUse(message.content);
 
     const allResponses: ResponseEntry[] = responseText
       ? [{ type: "final", text: responseText }]
@@ -70,7 +91,7 @@ export class AnthropicApiTarget implements TargetRunner {
     return {
       response: responseText,
       allResponses,
-      toolsUsed: [],
+      toolsUsed,
       sources: [],
       metadata: {
         model: this.config.model,
@@ -85,6 +106,7 @@ export class AnthropicApiTarget implements TargetRunner {
 interface MessageContentBlock {
   type: string;
   text?: string;
+  name?: string;
 }
 
 function extractText(content: unknown): string {
@@ -96,4 +118,15 @@ function extractText(content: unknown): string {
     }
   }
   return parts.join("");
+}
+
+function extractServerToolUse(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const seen = new Set<string>();
+  for (const block of content as MessageContentBlock[]) {
+    if (block.type === "server_tool_use" && typeof block.name === "string") {
+      seen.add(block.name);
+    }
+  }
+  return Array.from(seen);
 }

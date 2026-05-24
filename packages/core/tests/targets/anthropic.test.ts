@@ -30,15 +30,29 @@ interface CapturedCreateCall {
   temperature?: number;
   system: string;
   messages: Array<{ role: string; content: string }>;
+  tools?: Array<{ type: string; name: string }>;
 }
 
-function makeMockClient(response: string): {
+type MockContentBlock =
+  | { type: "text"; text: string }
+  | { type: "server_tool_use"; id: string; name: string; input?: unknown }
+  | {
+      type: "web_search_tool_result";
+      tool_use_id: string;
+      content: unknown;
+    };
+
+function makeMockClient(response: string | MockContentBlock[]): {
   client: {
     messages: { create: (params: CapturedCreateCall) => Promise<unknown> };
   };
   calls: CapturedCreateCall[];
 } {
   const calls: CapturedCreateCall[] = [];
+  const content: MockContentBlock[] =
+    typeof response === "string"
+      ? [{ type: "text", text: response }]
+      : response;
   const client = {
     messages: {
       create: async (params: CapturedCreateCall) => {
@@ -48,7 +62,7 @@ function makeMockClient(response: string): {
           type: "message",
           role: "assistant",
           model: params.model,
-          content: [{ type: "text", text: response }],
+          content,
           stop_reason: "end_turn",
           stop_sequence: null,
           usage: { input_tokens: 0, output_tokens: 0 },
@@ -164,5 +178,103 @@ describe("AnthropicApiTarget", () => {
     const result = await target.run("?", baseRunOptions);
     expect(result.response).toBe("");
     expect(result.allResponses).toHaveLength(0);
+  });
+
+  test("does not pass tools array when webTools is undefined", async () => {
+    const { client, calls } = makeMockClient("ok");
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
+    );
+    await target.run("?", baseRunOptions);
+    expect(calls[0]?.tools).toBeUndefined();
+  });
+
+  test("webTools.search wires web_search_20250305 into the tools array", async () => {
+    const { client, calls } = makeMockClient("ok");
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
+    );
+    await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: null },
+    });
+    expect(calls[0]?.tools).toEqual([
+      { type: "web_search_20250305", name: "web_search" },
+    ]);
+  });
+
+  test("discovery mode swaps citation prompt for discovery prompt", async () => {
+    const { client, calls } = makeMockClient("ok");
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
+    );
+    await target.run("How?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: "https://example.com/docs" },
+    });
+    // Discovery prompt advertises the agent's research mode; citation
+    // prompt's "Answer using ONLY information" phrasing is absent.
+    expect(calls[0]?.system).not.toContain("Answer using ONLY information");
+    expect(calls[0]?.system).toContain("https://example.com/docs");
+  });
+
+  test("captures server_tool_use blocks as toolsUsed (provenance signal)", async () => {
+    const { client } = makeMockClient([
+      { type: "text", text: "Searching..." },
+      {
+        type: "server_tool_use",
+        id: "srvtoolu_1",
+        name: "web_search",
+        input: { query: "pickled" },
+      },
+      {
+        type: "web_search_tool_result",
+        tool_use_id: "srvtoolu_1",
+        content: [],
+      },
+      { type: "text", text: "Pickled is a CLI for agent legibility." },
+    ]);
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
+    );
+    const result = await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: null },
+    });
+    expect(result.toolsUsed).toEqual(["web_search"]);
+    expect(result.response).toContain("Pickled is a CLI");
+  });
+
+  test("multiple server_tool_use blocks of the same name dedupe", async () => {
+    const { client } = makeMockClient([
+      { type: "server_tool_use", id: "srvtoolu_1", name: "web_search" },
+      { type: "server_tool_use", id: "srvtoolu_2", name: "web_search" },
+      { type: "text", text: "ok" },
+    ]);
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
+    );
+    const result = await target.run("?", baseRunOptions);
+    expect(result.toolsUsed).toEqual(["web_search"]);
+  });
+
+  test("toolsUsed is empty when response has no server_tool_use blocks", async () => {
+    const { client } = makeMockClient("plain answer");
+    const target = new AnthropicApiTarget("anth", baseConfig, () =>
+      asAnthropic(client),
+    );
+    const result = await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      discovery: { sourceHint: null },
+    });
+    // No server_tool_use block in the response means the model answered
+    // without searching. The matrix runner's provenance hard-veto reads
+    // empty toolsUsed for a web cell and forces NO/0; the adapter itself
+    // simply reports what it saw.
+    expect(result.toolsUsed).toEqual([]);
   });
 });

@@ -592,47 +592,81 @@ async function runMatrixScenario(
               `Toolset "${toolsetName}" is declared but defines no runtime shape. Supported today: "none", web (webSearch/webFetch flags), MCP (mcpServers map). Other adapters (Firecrawl, native API search) land per release.`,
             );
           }
-          if (baseTargetConfig.provider !== "claude-code") {
+          // Provider gates per toolset shape:
+          // - MCP today runs only on claude-code (the generic adapter wires
+          //   mcpServers through the Agent SDK). OpenAI MCP lands as #13.
+          // - Web runs on claude-code (client tools WebSearch/WebFetch) and
+          //   on the anthropic API target (server-side web_search). Other
+          //   providers (codex-cli, openai) throw until their adapters land.
+          if (wantsMcp && baseTargetConfig.provider !== "claude-code") {
             throw new Error(
-              `Toolset "${toolsetName}" is implemented only on the claude-code interface. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
+              `Toolset "${toolsetName}" (MCP) is implemented only on the claude-code interface today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
+            );
+          }
+          if (
+            wantsWeb &&
+            baseTargetConfig.provider !== "claude-code" &&
+            baseTargetConfig.provider !== "anthropic"
+          ) {
+            throw new Error(
+              `Toolset "${toolsetName}" (web) is implemented on claude-code and anthropic interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
+            );
+          }
+          if (
+            wantsWeb &&
+            baseTargetConfig.provider === "anthropic" &&
+            !toolsetConfig?.webSearch
+          ) {
+            throw new Error(
+              `Toolset "${toolsetName}" on anthropic provider requires webSearch: true. The Anthropic API exposes a single server-side web tool; declare webSearch to enable it, or split web/fetch behaviour across separate toolsets.`,
             );
           }
         }
 
         // Build the effective per-cell target config. For non-none
-        // toolsets, OVERRIDE allowedTools so the cell is a controlled
-        // experiment (no Read/Edit/Write/Bash from defaults). Non-none
-        // cells also need more turns because the agent typically does
-        // discover -> fetch -> reason -> respond. Bump maxTurns to 15
-        // unless the target already declares a higher value.
+        // toolsets on Claude Code, OVERRIDE allowedTools so the cell is a
+        // controlled experiment (no Read/Edit/Write/Bash from defaults).
+        // Non-none cells also need more turns because the agent typically
+        // does discover -> fetch -> reason -> respond. Bump maxTurns to 15
+        // unless the target already declares a higher value. The Anthropic
+        // API target has no allowedTools/maxTurns concept; we leave its
+        // base config untouched.
         //
-        // Provenance match list (mirrors allowedForCell): the cell passes
-        // provenance iff at least one configured tool was actually used.
-        // Web: exact-name match (WebSearch/WebFetch). MCP: prefix match
-        // on `mcp__<server>__` because individual MCP tool names come
-        // from the server (e.g., `mcp__context7__resolve-library-id`).
+        // Provenance match list: the cell passes provenance iff at least
+        // one configured tool was actually used. Tool names are
+        // provider-specific:
+        // - Claude Code: WebSearch / WebFetch (exact-name match) for web;
+        //   mcp__<server>__* (prefix match) for MCP.
+        // - Anthropic API: web_search (exact-name match) for web. The API
+        //   exposes one server-side web tool; webFetch is unsupported on
+        //   this provider (rejected at the gate above when set alone).
         // Three lists for the cell:
         // - allowedForCell: the SDK's auto-permission list (passed as
-        //   `allowedTools`). This bypasses permission prompts but does
-        //   NOT restrict tool availability on its own.
+        //   `allowedTools`). Claude-Code-only; bypasses permission
+        //   prompts but does NOT restrict tool availability on its own.
         // - builtinToolsForCell: the SDK's built-in tool restriction
-        //   (passed as `tools`). This is what actually scopes the cell
-        //   to the intended path. Empty for MCP cells (built-ins
-        //   disabled; MCP tools come from mcpServers).
+        //   (passed as `tools`). Claude-Code-only; empty for MCP cells.
         // - toolMatchers: provenance predicates over invoked tool names.
         const allowedForCell: string[] = [];
         const builtinToolsForCell: string[] = [];
         const toolMatchers: Array<(t: string) => boolean> = [];
+        const isAnthropic = baseTargetConfig.provider === "anthropic";
         if (wantsWeb) {
-          if (toolsetConfig?.webSearch) {
-            allowedForCell.push("WebSearch");
-            builtinToolsForCell.push("WebSearch");
-            toolMatchers.push((t) => t === "WebSearch");
-          }
-          if (toolsetConfig?.webFetch) {
-            allowedForCell.push("WebFetch");
-            builtinToolsForCell.push("WebFetch");
-            toolMatchers.push((t) => t === "WebFetch");
+          if (isAnthropic) {
+            // webSearch on anthropic maps to the server-side web_search
+            // tool; the loader gate above enforced webSearch:true.
+            toolMatchers.push((t) => t === "web_search");
+          } else {
+            if (toolsetConfig?.webSearch) {
+              allowedForCell.push("WebSearch");
+              builtinToolsForCell.push("WebSearch");
+              toolMatchers.push((t) => t === "WebSearch");
+            }
+            if (toolsetConfig?.webFetch) {
+              allowedForCell.push("WebFetch");
+              builtinToolsForCell.push("WebFetch");
+              toolMatchers.push((t) => t === "WebFetch");
+            }
           }
         }
         if (wantsMcp) {
@@ -642,7 +676,7 @@ async function runMatrixScenario(
           }
         }
         const targetConfig =
-          toolsetName === "none"
+          toolsetName === "none" || isAnthropic
             ? baseTargetConfig
             : {
                 ...baseTargetConfig,
@@ -720,6 +754,10 @@ async function runMatrixScenario(
             discovery: discoveryHint,
             restrictBuiltinTools:
               toolsetName === "none" ? undefined : builtinToolsForCell,
+            webTools:
+              wantsWeb && isAnthropic
+                ? { search: toolsetConfig?.webSearch === true }
+                : undefined,
             onProgress: options.onProgress,
           });
         } catch (err) {

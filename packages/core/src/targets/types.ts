@@ -51,6 +51,15 @@ export interface RunOptions {
    * non-none toolsets as unsupported elsewhere.
    */
   restrictBuiltinTools?: string[];
+  /**
+   * Provider-agnostic web-tool intent. Matrix runner sets this for web
+   * cells on providers that do not consume `restrictBuiltinTools` (e.g.
+   * the Anthropic API target, which maps `search: true` to the server-
+   * side `web_search` tool entry on `messages.create`). Adapters that
+   * scope tools via SDK built-ins (Claude Code) ignore this field and
+   * read `restrictBuiltinTools` instead.
+   */
+  webTools?: { search?: boolean };
   onProgress?: (msg: string) => void;
 }
 
