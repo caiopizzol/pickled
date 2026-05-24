@@ -24,25 +24,49 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # "Context availability gradient" - quick × [none, public_docs_full] × [none, web]
-          - slug: gradient-none-none
+          # "Context availability gradient" - [quick, anthropic_api] × [none, public_docs_full] × [none, web]
+          # The [quick · * · web] vs [anthropic_api · * · web] pairs are
+          # the cross-provider demo: same prompt, same checks, two web
+          # mechanisms (client-side WebSearch+WebFetch vs server-side
+          # web_search).
+          - slug: gradient-quick-none-none
             scenario: Context availability gradient
             interface: quick
             source: none
             toolset: none
-          - slug: gradient-none-web
+          - slug: gradient-quick-none-web
             scenario: Context availability gradient
             interface: quick
             source: none
             toolset: web
-          - slug: gradient-docs-none
+          - slug: gradient-quick-docs-none
             scenario: Context availability gradient
             interface: quick
             source: public_docs_full
             toolset: none
-          - slug: gradient-docs-web
+          - slug: gradient-quick-docs-web
             scenario: Context availability gradient
             interface: quick
+            source: public_docs_full
+            toolset: web
+          - slug: gradient-anth-none-none
+            scenario: Context availability gradient
+            interface: anthropic_api
+            source: none
+            toolset: none
+          - slug: gradient-anth-none-web
+            scenario: Context availability gradient
+            interface: anthropic_api
+            source: none
+            toolset: web
+          - slug: gradient-anth-docs-none
+            scenario: Context availability gradient
+            interface: anthropic_api
+            source: public_docs_full
+            toolset: none
+          - slug: gradient-anth-docs-web
+            scenario: Context availability gradient
+            interface: anthropic_api
             source: public_docs_full
             toolset: web
           # "What does Pickled do?" - quick × [public_docs_full, llms] × [none, web]
