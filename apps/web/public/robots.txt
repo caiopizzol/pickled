@@ -1,0 +1,43 @@
+# Pickled landing robots.txt.
+#
+# Shipped as a static file under apps/web/public/ to override Vite's SPA
+# catch-all, which was previously rewriting any unmatched URL (including
+# /robots.txt) to index.html. The result was a robots response that
+# carried the Cloudflare-managed rules followed by the full landing
+# HTML, which broke strict robots parsers and surfaced as 26 parse
+# errors in PageSight audits.
+#
+# Rules below mirror the AI-training-bot blocklist that Cloudflare's
+# managed robots feature was injecting, so behavior for those bots
+# does not change. Update the list when Cloudflare publishes a newer
+# managed snapshot or when we want a different policy.
+
+User-agent: *
+Allow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CloudflareBrowserRenderingCrawler
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
