@@ -143,3 +143,105 @@ Do **not** ship more scenarios upfront before running this row across more inter
 
 - Scenario YAML: snapshot in the file itself above.
 - JSON receipt: not committed (lives at `/tmp/superdoc-dogfood/receipt.json`). 22.3KB; mostly per-cell allResponses. If wanted in this repo, copy to a `proposals/superdoc-readiness-dogfood.receipt.json` sibling.
+
+---
+
+# v2.1: reframed around "what context path does the agent get?" (2026-05-25)
+
+## Why v2.1 exists
+
+v1 asked the right question (does the agent get the right answer when given the right source?) but the framing was source-quality-comparison-shaped. The Discord report was actually about **context delivery** - the user gave their agent a docs link / web tools / an MCP server, and asked it to build with SuperDoc. The honest test is "for each context-delivery mode, does the agent produce the right implementation guidance?"
+
+The wide intermediate v2 (72 cells, 4 scenarios) was killed mid-run because it mixed too many axes at once. v2.1 reframes around the simple product question.
+
+## Scenario shape
+
+One scenario (custom React toolbar) × 2 interfaces (Claude Code, OpenAI Responses) × 8 source/toolset combinations = 16 cells. The 5 setups the user actually wanted are the "diagonal" cells (no source × tool, or source × no tool); the other 6 are hinted-discovery extras (source + tool) that pickled's Cartesian matrix produces.
+
+Sources: `none`, `superdoc_llms_full` (the official curated bundle).
+Toolsets: `none`, `web`, `superdoc_mintlify_mcp` (official Mintlify docs MCP, public HTTP, verified live), `context7_mcp` (third-party docs MCP, requires `CONTEXT7_API_KEY`).
+
+Assertions unchanged from v1: same `expected.symbols / paths / excludes`.
+
+## Receipts (live run, 2026-05-25)
+
+Overall: 44/100. Below is the five-setup view across both interfaces (the user's mental model; ignores the 3 hinted-extra rows per interface):
+
+| Setup | Claude Code (quick) | OpenAI API (gpt-5.2) |
+|---|---|---|
+| **A. none** (model prior) | PARTIAL 40 | PARTIAL 40 |
+| **B. docs_link** (bundle injected) | PARTIAL 40 (**both excludes HIT**) | PARTIAL 40 (**both excludes HIT**) |
+| **C. web** (default web tools) | ERROR (maxTurns=15 loop) | PARTIAL 40 |
+| **D. mintlify_mcp** (official) | **YES 100** | PARTIAL 80 (missed SuperDocUIProvider) |
+| **E. context7_mcp** (third-party) | PARTIAL 80 (missed SuperDocUIProvider) | **YES 100** |
+
+The 3 hinted-extra rows per interface (source + tool) mirrored their tool-only counterparts: the docs-link-plus-tool variants tracked the tool-only verdict, not the docs-link-only verdict, suggesting the agent used the tool (web/MCP) rather than the injected source when both were available.
+
+## Findings (v2.1)
+
+### 1. MCP beats docs injection on the custom React toolbar scenario. Counter-intuitive but earned.
+
+The strongest finding, and not what we expected before running. **On this one scenario, both providers scored higher with an MCP server (no source injected) than with the official `llms-full.txt` bundle injected.** One scenario does not generalize to all SuperDoc topics; it is, however, a clear signal worth re-testing on a second scenario before drawing a category-wide conclusion.
+
+- Mintlify MCP on Claude Code: **YES 100** (clean across symbols + paths + excludes)
+- Context7 MCP on OpenAI: **YES 100** (clean across all)
+- Docs-link injection on either provider: PARTIAL 40 (anti-patterns leak; both excludes HIT)
+
+Why: MCP returns *focused snippets* via search + filesystem-read, so the agent's context window contains only the relevant React-UI surface. Injecting the full bundle gives the agent ambient knowledge of the legacy surface (`createHeadlessToolbar` is somewhere in the bundle, in a migration or comparison section), and the agent's answer mentions both the right and the legacy names.
+
+**Action for SuperDoc:** promote the Mintlify MCP server as the recommended agent-context path, ahead of "here's our docs URL." Both `docs.superdoc.dev/.well-known/mcp` and the canonical endpoint are public and need no auth.
+
+### 2. The Discord report on Context7 needs nuance.
+
+v1 found that Context7's *flat llms.txt URL* (the contributor-setup-heavy one Context7 serves at `https://context7.com/superdoc-dev/superdoc/llms.txt`) was bad. v2.1 finds that Context7 *as an MCP server* (with its search + retrieval tools) is competitive - YES 100 on OpenAI, PARTIAL 80 on Claude Code.
+
+The Discord complaint was likely about whichever surface the agent's Context7 integration consumed. If it consumed the flat llms.txt, the complaint matches v1. If it consumed the MCP retrieval, the complaint may have been about something else (search relevance, specific query) - Context7's MCP did fine here.
+
+**Action for SuperDoc:** if users are reporting Context7 quality issues, ask which Context7 surface their agent uses. The flat index ≠ the MCP retrieval.
+
+### 3. Docs injection has an anti-pattern-leak problem the MCP path avoids.
+
+v1's finding 2 reproduced on BOTH providers in v2.1: with `superdoc_llms_full` injected, BOTH `createHeadlessToolbar` and `activeEditor.commands` showed up in the agent's answer, despite the bundle saying not to use them.
+
+The MCP path avoided this consistently. The injected-bundle path failed consistently. Strong signal for SuperDoc: the bundle's "DO NOT USE" salience is not high enough to override agent prior knowledge of the legacy names when those names appear anywhere in the surrounding context.
+
+### 4. Default web tools cannot reliably reach SuperDoc docs.
+
+- Claude Code's WebSearch+WebFetch loop on the toolbar question hit maxTurns=15 (errored). The agent thrashed trying to find the right SuperDoc page.
+- OpenAI's hosted `web_search` returned a useful tool call but the answer was still PARTIAL 40 (missed all symbols + path).
+
+Neither provider's default web stack reached the actionable SuperDoc surface in this scenario. The web cell is the worst-performing context mode in v2.1, worse than even no-context model prior in the "symbols hit" axis.
+
+**Action for SuperDoc:** SEO / discoverability matters. If most users reach for docs via "search Google for superdoc react toolbar," the web tools have to land on the official docs reliably. Right now they don't.
+
+### 5. Reporter signals worked
+
+Four `grouped_check_pass`, four `interface_comparison`, and one `source_comparison` diagnostics fired correctly (9 total). The post-#24 reporter no longer mislabels excludes-hit cells as "Full readiness signal" (the `docs_link` cells correctly stayed silent of that diagnostic; only the MCP and clean cells got it).
+
+## What v2.1 changes about the v1 "What v2 should be" list
+
+- `(1) Add traps for the legacy surface` - partially carried out via `excludes` in v2.1; the trap-vs-exclude question stays open (excludes are scenario-specific, which is right per critic guidance for `createHeadlessToolbar`).
+- `(2) Add a trap for the 180+ vs 12 MCP-tools drift` - not run in v2.1 (scope tightened to one scenario). Worth a future small pass.
+- `(3) Expand to anthropic_api and openai_api interfaces` - done (OpenAI added; Anthropic skipped because MCP toolsets on Anthropic aren't shipped per #13).
+- `(4) Add 2-3 more readiness scenarios` - explicitly NOT done (anti-recommendation respected).
+- `(5) Open small reporter fix` - done (#24 -> cli-v0.28.1, behavior visible in v2.1's diagnostic output).
+
+## Next concrete actions for SuperDoc product
+
+1. **Promote the Mintlify MCP server in `llms.txt` and `README` as the recommended agent context path.** It's public, no auth, and the receipt shows it produces better implementation guidance than handing the bundle to the agent.
+2. **Audit `llms-full.txt` for anti-pattern salience.** The deprecated names leak into agent answers even when the bundle warns against them. Possible fixes: move warnings to the top, fence deprecated sections, remove migration-history names from the bundle entirely (keep them in docs but not in the AI context).
+3. **SEO/discoverability check on `docs.superdoc.dev`.** Web cells couldn't reliably reach the right docs in either provider's default tooling. The Discord report is partially about this.
+4. **Codex coverage is worth opening as a focused pickled feature issue** if SuperDoc users heavily use Codex; v2.1's two-provider receipt confirms the assertions calibrated cleanly, so Codex would slot in as a third cell row.
+
+## Anti-recommendation (still applies)
+
+Do not add more SuperDoc scenarios upfront before the next iteration. v2.1's 16-cell receipt produced 4 strong findings (MCP-beats-injection, Context7-nuance, anti-pattern-leak-reproduced, web-discovery-fails). Wider scope dilutes the signal.
+
+## Snapshot artifacts (v2.1)
+
+- v2.1 scenario YAML: `/tmp/superdoc-dogfood/pickled.yml` (live during run; ephemeral)
+- v2.1 JSON receipt: `/tmp/superdoc-dogfood/v2_1-receipt.json` (55 KB; not committed - mostly per-cell allResponses)
+- v2-wide killed config: `/tmp/superdoc-dogfood/pickled.yml.v2-wide` (snapshot of the 72-cell attempt that was killed before completion)
+- v1 snapshot: `/tmp/superdoc-dogfood/pickled.yml.snapshot`
+
+If receipts should live in the repo for reproducibility, copy to `proposals/superdoc-readiness-dogfood.v2_1-receipt.json` siblings.
