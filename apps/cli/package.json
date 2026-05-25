@@ -1,6 +1,6 @@
 {
   "name": "@pickled-dev/cli",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "Test what agents actually understand about your product",
   "module": "dist/index.js",
   "type": "module",
