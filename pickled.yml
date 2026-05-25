@@ -175,15 +175,23 @@ scenarios:
     prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, paths, and constraints matter before I write the YAML?"
     matrix:
       interfaces: [quick]
-      sources: [public_docs_full, core_src]
+      # Only the public docs are injected as the agent's active source.
+      # The test question is "can the agent read the docs and name the
+      # right config/path/symbols?" - injecting the codebase too would
+      # answer a different question ("can the agent infer the YAML
+      # from source code?"). `core_src` stays registered (above) so
+      # the existence verifier (#21) can check declared paths/symbols
+      # against the real code without making them agent context.
+      sources: [public_docs_full]
       toolsets: [none]
     expected:
       symbols:
         - "matrix"
         - "toolsets"
       paths:
-        # Real file under packages/core/src - existence verifier should
-        # mark this true against the core_src codebase source (#21).
+        # Real file under packages/core/src - existence verifier (#21)
+        # should mark this true against the core_src codebase source
+        # via path-suffix match.
         - "scorers/expected.ts"
       options:
         - "webSearch"
