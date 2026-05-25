@@ -3,11 +3,7 @@ export type TargetCategory = "api" | "cli" | "ide";
 
 // Providers by category
 export type ApiProvider = "anthropic" | "openai" | "google";
-export type CliProvider =
-  | "claude-code"
-  | "codex-cli"
-  | "gemini-cli"
-  | "amazon-q";
+export type CliProvider = "claude-code" | "codex-cli" | "amazon-q";
 export type IdeProvider = "cursor" | "copilot" | "windsurf";
 
 export interface McpServerConfig {

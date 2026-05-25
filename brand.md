@@ -15,7 +15,7 @@ Pickled is an open-source CLI that tests whether AI agents actually understand y
 
 Pickled started as a freshness checker for developer tool docs. It got rewritten when the real problem became clear, and the real problem has three surfaces, not one.
 
-- **Agent surface.** Where the interaction happens. Today: Claude Code and Codex CLI. Designed for future targets like Gemini CLI, Amazon Q, Cursor, hosted API agents, and whatever else exposes your product to agents.
+- **Agent surface.** Where the interaction happens. Today: Claude Code and Codex CLI. Designed for future targets like Antigravity CLI, Amazon Q, Cursor, hosted API agents, and whatever else exposes your product to agents.
 - **Context surface.** What agents can read about your product. README, llms.txt, API references, examples, hosted source bundles, public docs, private docs.
 - **Prompt surface.** The subset of context that actively steers behavior. Inline comments, JSDoc, CLAUDE.md, AGENTS.md, runbooks, agent instructions.
 
@@ -59,7 +59,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 - **Tool-specific scenarios.** The questions are your product's questions, not a generic benchmark.
 - **Per-surface scoring.** The same scenario can pass on one surface and fail on another. Pickled reports per-surface results because legibility is per-surface, not global.
 - **Trap-aware.** A grounded answer can still be wrong. Declared traps fire when matched, and any firing forces the result to NO with confidence zero, regardless of how well the answer was grounded.
-- **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Gemini CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
+- **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Antigravity CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
 - **Source-agnostic.** Registers anything an agent can read. Public docs, private docs, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. URLs or local paths.
 - **The report is the receipt.** Each run produces a structured artifact: scenario, target, response, registered sources cited, unknown sources invented, traps that fired, threshold result. The run fails on the receipt, not on a vibe.
 - **CLI-first. CI-native. No dashboard required.**
@@ -134,7 +134,7 @@ This is the one-sentence description used as the lead line in `README.md`, `apps
 
 We're an open-source CLI for testing what AI agents actually understand about your product.
 
-We run on the agent surfaces your product actually reaches. Today, Claude Code and Codex CLI. Designed for future targets like Gemini CLI, Amazon Q, Cursor, hosted API agents, and whatever else lands. We pull from every kind of context an agent could read on the way there. Your README. Your llms.txt. Your CLAUDE.md. Your AGENTS.md. Your JSDoc. Your inline comments. Your internal handbook. We run the same scenarios across each agent surface, against the same registered sources, and trip on the declared stale patterns you told us to watch for.
+We run on the agent surfaces your product actually reaches. Today, Claude Code and Codex CLI. Designed for future targets like Antigravity CLI, Amazon Q, Cursor, hosted API agents, and whatever else lands. We pull from every kind of context an agent could read on the way there. Your README. Your llms.txt. Your CLAUDE.md. Your AGENTS.md. Your JSDoc. Your inline comments. Your internal handbook. We run the same scenarios across each agent surface, against the same registered sources, and trip on the declared stale patterns you told us to watch for.
 
 Nothing here is graded by another model. Citations are extracted by code. Declared traps are matched as regex or substring. The score is the score.
 

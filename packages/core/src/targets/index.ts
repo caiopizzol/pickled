@@ -43,8 +43,6 @@ function createCliTarget(name: string, config: Target): TargetRunner {
       return new ClaudeCodeTarget(name, config);
     case "codex-cli":
       return new CodexCliTarget(name, config);
-    case "gemini-cli":
-      throw new Error(`Gemini CLI target not yet implemented. Coming soon!`);
     case "amazon-q":
       throw new Error(`Amazon Q target not yet implemented. Coming soon!`);
     default:

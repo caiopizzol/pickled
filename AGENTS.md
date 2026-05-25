@@ -54,7 +54,7 @@ API targets call the model directly via the provider SDK. No workspace, no Agent
 
 Both require an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets. Comparable to CLI targets but not identical.
 
-Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, Google API target. Do not claim they work; do not list them in user-facing present tense.
+Stubbed and not yet implemented: `amazon-q`, Google API target. Do not claim they work; do not list them in user-facing present tense. `gemini-cli` was removed when Google announced the consumer-tier sunset (2026-06-18) in favor of Antigravity CLI; a future Antigravity adapter will be its own provider.
 
 ## Two audiences
 

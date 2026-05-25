@@ -67,7 +67,7 @@ Citation contract only applies in `none` cells. Non-`none` cells score on `expec
 - `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. Supports `none` and `web` (server-side `web_search`); MCP lands per release. No workspace, no Agent SDK orchestration; comparable to CLI targets but not identical.
 - `openai` - OpenAI Responses API, direct SDK. Requires `OPENAI_API_KEY`. Supports `none`, `web` (server-side `web_search`), and `mcp` (hosted-MCP tool entries, HTTP servers only). No workspace, no Agent SDK orchestration.
 
-Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, Google API target. Do not list these as supported in present tense.
+Stubbed and not yet implemented: `amazon-q`, Google API target. Do not list these as supported in present tense. `gemini-cli` was removed when Google announced the consumer-tier sunset (2026-06-18) in favor of Antigravity CLI; a future Antigravity adapter will be its own provider.
 
 ## JSON contract
 
