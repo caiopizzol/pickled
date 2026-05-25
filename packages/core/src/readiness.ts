@@ -122,10 +122,20 @@ function findGroupedCheckPass(scenario: ScenarioResult): ReadinessDiagnostic[] {
 /**
  * Shared helper used by both the matrix-cell loop and the single-mode
  * path. Returns the diagnostic when every declared grouped entry
- * satisfied, null when the input is missing, empty of grouped keys, or
- * has any unsatisfied entry. The `coord` is included in the diagnostic's
- * cells list when provided (matrix); single-mode passes null and the
- * scenario name carries the attribution.
+ * satisfied AND every declared exclude held (i.e. the agent named the
+ * right things AND avoided the wrong things). Returns null when the
+ * input is missing, no grouped keys were declared, any positive entry
+ * is unsatisfied, or any exclude was hit. The `coord` is included in
+ * the diagnostic's cells list when provided (matrix); single-mode
+ * passes null and the scenario name carries the attribution.
+ *
+ * Excludes inclusion: surfaced during the first SuperDoc dogfood run
+ * (#23 / #24). A cell that satisfied symbols+paths but hit excludes
+ * was incorrectly labeled "Full readiness signal" even though the
+ * cell's verdict was PARTIAL. The strict reading of "full readiness"
+ * is: got the right things AND avoided the wrong things. Cells that
+ * miss the excludes still surface via the cell-level reason string;
+ * the readiness diagnostic stays silent so the label doesn't lie.
  */
 function buildGroupedCheckPass(
   exp:
@@ -134,17 +144,22 @@ function buildGroupedCheckPass(
         paths: Array<{ value: string; satisfied: boolean }>;
         options: Array<{ value: string; satisfied: boolean }>;
         constraints: Array<{ value: string; satisfied: boolean }>;
+        excludes: Array<{ value: string; satisfied: boolean }>;
       }
     | undefined,
   scenarioName: string,
   coord: CellCoord | null,
 ): ReadinessDiagnostic | null {
   if (!exp) return null;
-  const groups = [exp.symbols, exp.paths, exp.options, exp.constraints];
-  const declared = groups.reduce((n, g) => n + g.length, 0);
-  if (declared === 0) return null;
-  const allSatisfied = groups.every((g) => g.every((c) => c.satisfied));
-  if (!allSatisfied) return null;
+  const positiveGroups = [exp.symbols, exp.paths, exp.options, exp.constraints];
+  const positiveDeclared = positiveGroups.reduce((n, g) => n + g.length, 0);
+  if (positiveDeclared === 0) return null;
+  const positivesSatisfied = positiveGroups.every((g) =>
+    g.every((c) => c.satisfied),
+  );
+  if (!positivesSatisfied) return null;
+  const excludesSatisfied = exp.excludes.every((c) => c.satisfied);
+  if (!excludesSatisfied) return null;
   const parts: string[] = [];
   if (exp.symbols.length > 0)
     parts.push(`symbols ${exp.symbols.length}/${exp.symbols.length}`);
@@ -156,6 +171,8 @@ function buildGroupedCheckPass(
     parts.push(
       `constraints ${exp.constraints.length}/${exp.constraints.length}`,
     );
+  if (exp.excludes.length > 0)
+    parts.push(`excludes ${exp.excludes.length}/${exp.excludes.length}`);
   const location = coord
     ? `[${fmtCoord(coord)}]`
     : `scenario "${scenarioName}"`;

@@ -187,6 +187,68 @@ describe("grouped_check_pass", () => {
     expect(diags[0]?.cells).toEqual([]);
   });
 
+  test("skipped when every positive group is satisfied BUT an exclude was hit (#24)", () => {
+    // Regression for #24, surfaced by the first SuperDoc dogfood run.
+    // Cell that satisfied symbols + paths but hit an exclude was being
+    // labeled "Full readiness signal" while its verdict was PARTIAL.
+    // Strict reading of "full readiness": got the right things AND
+    // avoided the wrong things.
+    const r = report([
+      scenario("ExcludeHit", [
+        cell({
+          interface: "a",
+          source: "docs",
+          toolset: "none",
+          answerable: "PARTIAL",
+          expected: {
+            symbols: [{ value: "RightAPI", satisfied: true }],
+            paths: [{ value: "right/path", satisfied: true }],
+            // The exclude was declared but NOT satisfied (i.e. the
+            // agent did mention the banned name). The diagnostic
+            // must stay silent so it doesn't lie about readiness.
+            excludes: [{ value: "deprecatedAPI", satisfied: false }],
+            satisfied: 2,
+            total: 3,
+          },
+        }),
+      ]),
+    ]);
+    const diags = summarizeReadiness(r).diagnostics.filter(
+      (d) => d.pattern === "grouped_check_pass",
+    );
+    expect(diags).toEqual([]);
+  });
+
+  test("fires when positives are satisfied AND every exclude held", () => {
+    // The honest "full readiness" case: agent named the right things
+    // (symbols + paths satisfied) AND avoided the wrong things
+    // (excludes satisfied).
+    const r = report([
+      scenario("Clean", [
+        cell({
+          interface: "a",
+          source: "docs",
+          toolset: "none",
+          answerable: "YES",
+          expected: {
+            symbols: [{ value: "RightAPI", satisfied: true }],
+            paths: [{ value: "right/path", satisfied: true }],
+            excludes: [{ value: "deprecatedAPI", satisfied: true }],
+            satisfied: 3,
+            total: 3,
+          },
+        }),
+      ]),
+    ]);
+    const diags = summarizeReadiness(r).diagnostics.filter(
+      (d) => d.pattern === "grouped_check_pass",
+    );
+    expect(diags).toHaveLength(1);
+    // The message now includes the excludes tally so the receipt is
+    // explicit about what was checked (declared + clean).
+    expect(diags[0]?.message).toContain("excludes 1/1");
+  });
+
   test("skipped when any group entry is unsatisfied (partial)", () => {
     const r = report([
       scenario("Partial", [
