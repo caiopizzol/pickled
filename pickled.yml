@@ -41,6 +41,18 @@ docs:
       audit:
         traps: false
 
+    # Codebase source for implementation-readiness existence checks
+    # (step 3 of #19). Used by the readiness probe to verify the
+    # declared expected.paths actually exist in the registered code.
+    # Glob kept tight - just packages/core/src - because the readiness
+    # scenario only cares about scoring/check surface files.
+    core_src:
+      type: codebase
+      path: "packages/core/src/**/*.ts"
+      exclude: ["**/*.test.ts"]
+      audit:
+        traps: false
+
 targets:
   quick:
     category: cli
@@ -160,15 +172,19 @@ scenarios:
   # presentational. See proposals/implementation-readiness.md for the
   # design.
   - name: "Implementation-readiness: declare a web cell"
-    prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, and constraints matter before I write the YAML?"
+    prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, paths, and constraints matter before I write the YAML?"
     matrix:
       interfaces: [quick]
-      sources: [public_docs_full]
+      sources: [public_docs_full, core_src]
       toolsets: [none]
     expected:
       symbols:
         - "matrix"
         - "toolsets"
+      paths:
+        # Real file under packages/core/src - existence verifier should
+        # mark this true against the core_src codebase source (#21).
+        - "scorers/expected.ts"
       options:
         - "webSearch"
       constraints:

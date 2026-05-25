@@ -14,6 +14,16 @@ export type AbsentGroup = "excludes";
 export interface CheckResult {
   value: string;
   satisfied: boolean;
+  /**
+   * Optional codebase-existence flag, populated by `verifyExpectedExistence`
+   * for `symbols` and `paths` groups when at least one registered source has
+   * `type: "codebase"`. `null` means "not checked" (no codebase source was
+   * registered); `false` means "checked and missing"; `true` means
+   * "checked and present." Other groups (`includes`/`excludes`/`options`/
+   * `constraints`) leave the field undefined - existence makes no sense
+   * for those substrings.
+   */
+  existsInCodebase?: boolean | null;
 }
 
 export interface ExpectedDetail {

@@ -100,6 +100,31 @@ export interface ScenarioResult {
   /** Per-cell evaluations. Present iff scenario.matrix declared. */
   cells?: CellResult[];
   /**
+   * Per-group expected-check breakdown for single-mode runs. Mirrors the
+   * `CellResult.expected` shape so a future reader (readiness reporter,
+   * downstream tooling) can consume single-mode and matrix results
+   * uniformly. Absent in compare mode (surfaces own the verdict there)
+   * and absent in matrix mode (cells own it there).
+   */
+  expected?: {
+    includes: Array<{ value: string; satisfied: boolean }>;
+    excludes: Array<{ value: string; satisfied: boolean }>;
+    symbols: Array<{
+      value: string;
+      satisfied: boolean;
+      existsInCodebase?: boolean | null;
+    }>;
+    paths: Array<{
+      value: string;
+      satisfied: boolean;
+      existsInCodebase?: boolean | null;
+    }>;
+    options: Array<{ value: string; satisfied: boolean }>;
+    constraints: Array<{ value: string; satisfied: boolean }>;
+    satisfied: number;
+    total: number;
+  };
+  /**
    * Verifier source snapshots surfaced for human review. Present iff
    * scenario.verifiers.sources is declared and the referenced sources
    * loaded successfully. NEVER LLM-judged; NEVER injected into the agent's

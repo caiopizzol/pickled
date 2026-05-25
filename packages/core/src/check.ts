@@ -7,10 +7,12 @@ import { getScenarioStatus } from "./report-status.js";
 import { sampleCellsPerScenario } from "./sampling.js";
 import {
   type Answerable,
+  formatExistenceNotes,
   formatExpectedNotes,
   scoreCitations,
   scoreExpected,
   scoreTraps,
+  verifyExpectedExistence,
 } from "./scorers/index.js";
 import { fetchAllSources } from "./sources.js";
 import {
@@ -587,6 +589,9 @@ async function runScenario(
           expected: scenario.expected,
         })
       : null;
+  if (expectedDetail) {
+    verifyExpectedExistence(expectedDetail, docs);
+  }
 
   let answerable: Answerable;
   let confidence: number;
@@ -614,6 +619,13 @@ async function runScenario(
       const expectedAnswerable: Answerable =
         pct === 100 ? "YES" : pct === 0 ? "NO" : "PARTIAL";
       parts.push({ answerable: expectedAnswerable, confidence: pct });
+      // Mirror the matrix branch: per-group expected notes (which key
+      // missed) and codebase-existence hygiene notes. Without these,
+      // the single-mode reason was a blank string when only expected
+      // checks were declared and they all passed - and silent when
+      // they failed too.
+      reasons.push(...formatExpectedNotes(expectedDetail));
+      reasons.push(...formatExistenceNotes(expectedDetail));
     }
     if (parts.length === 0) {
       // Validator should reject this; if it slips through, treat as YES.
@@ -643,6 +655,18 @@ async function runScenario(
       ? citationScore.citations
       : { cited: [], required, missing: [], unknown: [] },
     traps: trapDetails,
+    expected: expectedDetail
+      ? {
+          includes: expectedDetail.includes,
+          excludes: expectedDetail.excludes,
+          symbols: expectedDetail.symbols,
+          paths: expectedDetail.paths,
+          options: expectedDetail.options,
+          constraints: expectedDetail.constraints,
+          satisfied: expectedDetail.satisfied,
+          total: expectedDetail.total,
+        }
+      : undefined,
     target: result.metadata,
     context: { name: contextName },
     toolsUsed: result.toolsUsed,
@@ -1084,6 +1108,9 @@ async function runMatrixScenario(
                 expected: scenario.expected,
               })
             : null;
+        if (expectedDetail) {
+          verifyExpectedExistence(expectedDetail, docs);
+        }
 
         // Tool-use provenance check. A non-none cell exists to prove the
         // agent reached the answer via the configured toolset; if it
@@ -1114,6 +1141,7 @@ async function runMatrixScenario(
           if (citationScore) notes.push(citationScore.reason);
           if (expectedDetail) {
             notes.push(...formatExpectedNotes(expectedDetail));
+            notes.push(...formatExistenceNotes(expectedDetail));
           }
           return notes.filter((n) => n.length > 0);
         };
@@ -1164,6 +1192,10 @@ async function runMatrixScenario(
               pct === 100 ? "YES" : pct === 0 ? "NO" : "PARTIAL";
             parts.push({ answerable: expectedAnswerable, confidence: pct });
             reasons.push(...formatExpectedNotes(expectedDetail));
+            // Hygiene-only: existence misses do not change the cell
+            // verdict, but the note tells the vendor a declared
+            // symbol/path is fictional or stale.
+            reasons.push(...formatExistenceNotes(expectedDetail));
           }
           if (toolUseDetail) {
             // Verified branch only: provenance failure was vetoed above.

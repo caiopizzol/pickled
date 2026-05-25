@@ -2419,8 +2419,10 @@ describe("runCheck grouped expected checks (implementation-readiness)", () => {
       expect(cell.expected?.satisfied).toBe(2);
       expect(cell.expected?.total).toBe(4);
       // Per-group serialization carries the booleans the reporter will read.
+      // symbols/paths additionally carry `existsInCodebase`; with no
+      // codebase source registered here, it is null (not checked).
       expect(cell.expected?.symbols).toEqual([
-        { value: "Editor.update", satisfied: true },
+        { value: "Editor.update", satisfied: true, existsInCodebase: null },
       ]);
       expect(cell.expected?.options).toEqual([
         { value: "icon", satisfied: true },
@@ -2470,6 +2472,218 @@ describe("runCheck grouped expected checks (implementation-readiness)", () => {
       expect(cell.expected?.paths).toEqual([]);
       expect(cell.expected?.options).toEqual([]);
       expect(cell.expected?.constraints).toEqual([]);
+    });
+  });
+});
+
+describe("runCheck codebase existence verification (implementation-readiness)", () => {
+  test("non-matrix scenario also records existsInCodebase and surfaces hygiene note", async () => {
+    // Regression: an earlier draft ran verifyExpectedExistence in the
+    // non-matrix branch but never appended the hygiene notes to the
+    // reason string and never serialized expectedDetail into the
+    // returned ScenarioResult. The existence check was effectively
+    // invisible there. Non-matrix and matrix paths must report
+    // existence symmetrically.
+    const dir = mkdtempSync(join(tmpdir(), "pickled-existence-single-"));
+    writeFileSync(
+      join(dir, "real.ts"),
+      "export function registerToolbarButton() {}\n",
+    );
+    try {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        docs: { sources: { code: { type: "codebase", path: "*.ts" } } },
+        scenarios: [
+          {
+            name: "Non-matrix existence",
+            prompt: "?",
+            expected: {
+              symbols: ["registerToolbarButton", "MissingSymbol"],
+              paths: ["real.ts", "missing.ts"],
+            },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path: dir },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "mock",
+            async run() {
+              return {
+                response:
+                  "Call registerToolbarButton in real.ts. Also MissingSymbol in missing.ts.",
+                allResponses: [{ type: "final", text: "..." }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "default",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const scenario = report.scenarios[0]!;
+      // Non-matrix shape: top-level fields carry the verdict, not cells.
+      expect(scenario.cells).toBeUndefined();
+      expect(scenario.surfaces).toBeUndefined();
+      // Substring verdict YES; existence is hygiene-only and does not
+      // downgrade.
+      expect(scenario.answerable).toBe("YES");
+      // expected receipt is on ScenarioResult now (matched CellResult).
+      expect(scenario.expected?.symbols).toEqual([
+        {
+          value: "registerToolbarButton",
+          satisfied: true,
+          existsInCodebase: true,
+        },
+        { value: "MissingSymbol", satisfied: true, existsInCodebase: false },
+      ]);
+      expect(scenario.expected?.paths).toEqual([
+        { value: "real.ts", satisfied: true, existsInCodebase: true },
+        { value: "missing.ts", satisfied: true, existsInCodebase: false },
+      ]);
+      // The hygiene notes surface in the reason now.
+      expect(scenario.reason).toContain(
+        'declared symbols missing from codebase: "MissingSymbol"',
+      );
+      expect(scenario.reason).toContain(
+        'declared paths missing from codebase: "missing.ts"',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("matrix cell records existsInCodebase and surfaces hygiene note when declared values are missing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pickled-existence-"));
+    // Create a small registered codebase: one file containing the
+    // symbol "registerToolbarButton". The scenario declares one real
+    // path/symbol plus one missing path/symbol; the verifier should
+    // mark them per value and surface a hygiene note in the cell's
+    // reason for the misses.
+    writeFileSync(
+      join(dir, "real.ts"),
+      "export function registerToolbarButton() { return 1; }\n",
+    );
+    try {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: {
+          sources: {
+            code: { type: "codebase", path: "*.ts" },
+          },
+        },
+        scenarios: [
+          {
+            name: "Existence probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], sources: ["code"] },
+            expected: {
+              symbols: ["registerToolbarButton", "MissingSymbol"],
+              paths: ["real.ts", "missing.ts"],
+            },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path: dir },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "mock",
+            async run() {
+              // Mention all four declared values so the substring
+              // verdict passes uniformly and existence is the only
+              // distinguishing signal in the receipt.
+              return {
+                response:
+                  "Call registerToolbarButton in real.ts. Also MissingSymbol in missing.ts.",
+                allResponses: [{ type: "final", text: "..." }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      // Substring verdict: all 4 declared values are in the response → YES.
+      // Existence is hygiene-only and does not downgrade.
+      expect(cell.answerable).toBe("YES");
+      // Per-value existence in the JSON receipt.
+      expect(cell.expected?.symbols).toEqual([
+        {
+          value: "registerToolbarButton",
+          satisfied: true,
+          existsInCodebase: true,
+        },
+        { value: "MissingSymbol", satisfied: true, existsInCodebase: false },
+      ]);
+      expect(cell.expected?.paths).toEqual([
+        { value: "real.ts", satisfied: true, existsInCodebase: true },
+        { value: "missing.ts", satisfied: true, existsInCodebase: false },
+      ]);
+      // Reason carries a hygiene line per group with at least one miss.
+      expect(cell.reason).toContain(
+        'declared symbols missing from codebase: "MissingSymbol"',
+      );
+      expect(cell.reason).toContain(
+        'declared paths missing from codebase: "missing.ts"',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("no codebase source registered → existsInCodebase is null and no hygiene note appears", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "No codebase probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], sources: ["readme"] },
+            expected: { symbols: ["AnySymbol"], paths: ["any.ts"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () =>
+            makeMockTarget("Mentioning AnySymbol in any.ts."),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.expected?.symbols).toEqual([
+        { value: "AnySymbol", satisfied: true, existsInCodebase: null },
+      ]);
+      expect(cell.expected?.paths).toEqual([
+        { value: "any.ts", satisfied: true, existsInCodebase: null },
+      ]);
+      // No hygiene note: null means "not checked", not "missing".
+      expect(cell.reason).not.toContain("missing from codebase");
     });
   });
 });
