@@ -5,3 +5,5 @@ dev/
 dist/
 report.json
 mockups/
+.mcp.json
+proposals/
