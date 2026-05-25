@@ -74,3 +74,15 @@ pickled check . --sample 2 --seed nightly-2026-05-24
 ```
 
 The receipt header (text and JSON) records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
+
+## Readiness diagnostics
+
+After a run completes, pickled walks the per-cell receipts and emits a structured `readiness.diagnostics` summary. Each diagnostic is a pattern over fields already in the report (no model is asked to interpret receipts). v1 surfaces five patterns:
+
+- `grouped_check_pass` - a cell satisfied every entry across every declared `expected.{symbols,paths,options,constraints}` group; full readiness signal.
+- `source_comparison` - a named source answered while `source: none` (model prior) did not on the same `(interface, toolset)` axis; the docs are doing the comprehension work.
+- `toolset_comparison` - a tool-enabled cell answered while `toolset: none` did not on the same `(interface, source)` axis; the agent needed live discovery to reach the answer.
+- `interface_comparison` - at least one interface scored YES and another scored worse on the same `(source, toolset)`; provider-specific gap.
+- `trap_attribution` - one or more declared traps fired; hoisted to a scenario-level diagnostic so the reporter can show the stale-content pipeline is working at a glance.
+
+The terminal output prints a `Readiness diagnostics` block when at least one pattern applied; otherwise it stays silent. The JSON receipt carries the same diagnostics under `readiness.diagnostics` with structured `pattern` / `scenario` / `cells` fields so downstream tooling (CI status, dashboards) can consume them.

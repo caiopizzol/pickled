@@ -3,6 +3,7 @@ import type {
   ResolvedDocSource,
   Scenario,
 } from "@pickled-dev/config";
+import { summarizeReadiness } from "./readiness.js";
 import { getScenarioStatus } from "./report-status.js";
 import { sampleCellsPerScenario } from "./sampling.js";
 import {
@@ -440,6 +441,17 @@ export async function runCheck(
     selectedCells: selectedCells.length,
     seed: usedSeed,
   };
+  // Stamp the readiness summary (#22 / step 4 of #19) only when at
+  // least one diagnostic pattern applied. A scenario suite with no
+  // matrix scenarios, no readiness signals, and no trap firings
+  // produces an empty diagnostics array; surfacing `readiness: {
+  // diagnostics: [] }` in every receipt would clutter the output for
+  // legacy users. Omit the field when empty so existing pickled.yml
+  // configs are byte-for-byte unchanged in their JSON receipt shape.
+  const readiness = summarizeReadiness(report);
+  if (readiness.diagnostics.length > 0) {
+    report.readiness = readiness;
+  }
   return report;
 }
 

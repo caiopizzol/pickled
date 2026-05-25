@@ -407,6 +407,14 @@ export function formatCheckReport(
     }
   }
 
+  if (report.readiness && report.readiness.diagnostics.length > 0) {
+    lines.push(chalk.bold("Readiness diagnostics"));
+    for (const d of report.readiness.diagnostics) {
+      lines.push(`  ${chalk.dim("·")} ${d.message}`);
+    }
+    lines.push("");
+  }
+
   lines.push(LINE);
   lines.push(formatOverall(report, options.threshold));
   lines.push(chalk.dim(getSummaryGuidance(scenarios)));

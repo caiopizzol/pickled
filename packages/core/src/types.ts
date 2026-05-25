@@ -161,6 +161,30 @@ export interface CheckReport {
     score: number;
   };
   /**
+   * Implementation-readiness diagnostics derived from scenario results.
+   * Pure function of the rest of the report; #22 / step 4 of #19.
+   * Reads existing fields (grouped expected, existence flags, trap
+   * firings, axis comparisons); does not change scoring. Absent when
+   * no diagnostic pattern applied.
+   */
+  readiness?: {
+    diagnostics: Array<{
+      pattern:
+        | "grouped_check_pass"
+        | "source_comparison"
+        | "toolset_comparison"
+        | "interface_comparison"
+        | "trap_attribution";
+      message: string;
+      scenario: string;
+      cells: Array<{
+        interface: string;
+        source: string | null;
+        toolset: string;
+      }>;
+    }>;
+  };
+  /**
    * Cell counts and sampling provenance for a run. `expandedCells` is the
    * count after `--scenario` / `--interface` / `--source` / `--toolset`
    * filters but before sampling. `selectedCells` is the count after
