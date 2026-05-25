@@ -2364,3 +2364,112 @@ describe("runCheck plan + sample + max-cells", () => {
     });
   });
 });
+
+describe("runCheck grouped expected checks (implementation-readiness)", () => {
+  test("matrix cell with grouped expected serializes per-group results and uses labeled reason", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Readiness probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], sources: ["readme"] },
+            expected: {
+              symbols: ["Editor.update"],
+              options: ["icon", "tooltip"],
+              constraints: ["register command before rendering"],
+            },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "mock",
+            async run() {
+              return {
+                // Hits: Editor.update + icon. Misses: tooltip, the
+                // constraint. No `includes` declared, so the satisfied/
+                // total tally comes entirely from the grouped fields.
+                response:
+                  "Call Editor.update with icon configured for the toolbar.",
+                allResponses: [{ type: "final", text: "..." }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "mock",
+                  category: "cli",
+                  provider: "claude-code",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      // 1 symbol + 2 options + 1 constraint = 4 declared; satisfied: 1+1 = 2.
+      expect(cell.expected?.satisfied).toBe(2);
+      expect(cell.expected?.total).toBe(4);
+      // Per-group serialization carries the booleans the reporter will read.
+      expect(cell.expected?.symbols).toEqual([
+        { value: "Editor.update", satisfied: true },
+      ]);
+      expect(cell.expected?.options).toEqual([
+        { value: "icon", satisfied: true },
+        { value: "tooltip", satisfied: false },
+      ]);
+      expect(cell.expected?.constraints).toEqual([
+        { value: "register command before rendering", satisfied: false },
+      ]);
+      // The reason names WHICH groups failed, not a generic
+      // "missing includes" line.
+      expect(cell.reason).toContain('missing options: "tooltip"');
+      expect(cell.reason).toContain("missing constraints:");
+      expect(cell.reason).not.toContain("missing includes");
+      // Score reflects the mixed satisfaction: 2/4 = 50 → PARTIAL.
+      expect(cell.answerable).toBe("PARTIAL");
+      expect(cell.confidence).toBe(50);
+    });
+  });
+
+  test("scenario with only includes still works exactly as before (back-compat)", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Legacy includes-only",
+            prompt: "?",
+            matrix: { interfaces: ["a"], sources: ["readme"] },
+            expected: { includes: ["legacy"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("response contains legacy") },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("YES");
+      expect(cell.expected?.includes).toEqual([
+        { value: "legacy", satisfied: true },
+      ]);
+      // New groups are present in the serialization but empty.
+      expect(cell.expected?.symbols).toEqual([]);
+      expect(cell.expected?.paths).toEqual([]);
+      expect(cell.expected?.options).toEqual([]);
+      expect(cell.expected?.constraints).toEqual([]);
+    });
+  });
+});

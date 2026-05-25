@@ -150,6 +150,34 @@ scenarios:
     verifiers:
       sources: [public_docs_full]
 
+  # Implementation-readiness probe (Step 2 dogfood of #19). Asks the
+  # agent the kind of pre-implementation question a developer would ask
+  # before writing a pickled.yml from scratch, and scores the answer
+  # with grouped expected checks so the receipt can say WHAT kind of
+  # comprehension failed (symbol vs option vs constraint) rather than
+  # rolling everything under "missing includes". Scoring substrate is
+  # the same substring matcher includes already uses; the split is
+  # presentational. See proposals/implementation-readiness.md for the
+  # design.
+  - name: "Implementation-readiness: declare a web cell"
+    prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, and constraints matter before I write the YAML?"
+    matrix:
+      interfaces: [quick]
+      sources: [public_docs_full]
+      toolsets: [none]
+    expected:
+      symbols:
+        - "matrix"
+        - "toolsets"
+      options:
+        - "webSearch"
+      constraints:
+        - "discovery"
+      excludes:
+        - "AI-powered"
+    verifiers:
+      sources: [public_docs_full]
+
   # Which toolsets work today? — coverage of the matrix toolset axis as
   # currently shipped. The three shapes (none / web / mcp) are documented
   # at docs.pickled.dev/toolsets. Provider matrix as of cli-v0.25.0:

@@ -57,6 +57,16 @@ export interface CellResult {
   expected?: {
     includes: Array<{ value: string; satisfied: boolean }>;
     excludes: Array<{ value: string; satisfied: boolean }>;
+    /**
+     * Implementation-readiness groups. Each is scored with the same
+     * substring-presence matcher as `includes`; the split records WHAT
+     * kind of comprehension failed for the readiness reporter to
+     * surface. Empty arrays when the scenario did not declare the group.
+     */
+    symbols: Array<{ value: string; satisfied: boolean }>;
+    paths: Array<{ value: string; satisfied: boolean }>;
+    options: Array<{ value: string; satisfied: boolean }>;
+    constraints: Array<{ value: string; satisfied: boolean }>;
     satisfied: number;
     total: number;
   };

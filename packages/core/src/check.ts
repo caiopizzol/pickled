@@ -7,6 +7,7 @@ import { getScenarioStatus } from "./report-status.js";
 import { sampleCellsPerScenario } from "./sampling.js";
 import {
   type Answerable,
+  formatExpectedNotes,
   scoreCitations,
   scoreExpected,
   scoreTraps,
@@ -1112,24 +1113,7 @@ async function runMatrixScenario(
           const notes: string[] = [];
           if (citationScore) notes.push(citationScore.reason);
           if (expectedDetail) {
-            const missing = expectedDetail.includes
-              .filter((c) => !c.satisfied)
-              .map((c) => `"${c.value}"`);
-            const banned = expectedDetail.excludes
-              .filter((c) => !c.satisfied)
-              .map((c) => `"${c.value}"`);
-            const expectedNotes: string[] = [];
-            if (missing.length > 0) {
-              expectedNotes.push(`missing includes: ${missing.join(", ")}`);
-            }
-            if (banned.length > 0) {
-              expectedNotes.push(`hit excludes: ${banned.join(", ")}`);
-            }
-            notes.push(
-              expectedNotes.length > 0
-                ? expectedNotes.join("; ")
-                : `expected checks satisfied (${expectedDetail.satisfied}/${expectedDetail.total})`,
-            );
+            notes.push(...formatExpectedNotes(expectedDetail));
           }
           return notes.filter((n) => n.length > 0);
         };
@@ -1179,24 +1163,7 @@ async function runMatrixScenario(
             const expectedAnswerable: Answerable =
               pct === 100 ? "YES" : pct === 0 ? "NO" : "PARTIAL";
             parts.push({ answerable: expectedAnswerable, confidence: pct });
-            const missing = expectedDetail.includes
-              .filter((c) => !c.satisfied)
-              .map((c) => `"${c.value}"`);
-            const banned = expectedDetail.excludes
-              .filter((c) => !c.satisfied)
-              .map((c) => `"${c.value}"`);
-            const expectedNotes: string[] = [];
-            if (missing.length > 0) {
-              expectedNotes.push(`missing includes: ${missing.join(", ")}`);
-            }
-            if (banned.length > 0) {
-              expectedNotes.push(`hit excludes: ${banned.join(", ")}`);
-            }
-            reasons.push(
-              expectedNotes.length > 0
-                ? expectedNotes.join("; ")
-                : `expected checks satisfied (${expectedDetail.satisfied}/${expectedDetail.total})`,
-            );
+            reasons.push(...formatExpectedNotes(expectedDetail));
           }
           if (toolUseDetail) {
             // Verified branch only: provenance failure was vetoed above.
@@ -1244,6 +1211,10 @@ async function runMatrixScenario(
             ? {
                 includes: expectedDetail.includes,
                 excludes: expectedDetail.excludes,
+                symbols: expectedDetail.symbols,
+                paths: expectedDetail.paths,
+                options: expectedDetail.options,
+                constraints: expectedDetail.constraints,
                 satisfied: expectedDetail.satisfied,
                 total: expectedDetail.total,
               }

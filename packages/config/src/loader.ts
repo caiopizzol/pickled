@@ -266,17 +266,34 @@ function validateScenarioMatrix(
   checkArray("toolsets", toolsetNames, "toolset");
 }
 
+type ExpectedField =
+  | "includes"
+  | "excludes"
+  | "symbols"
+  | "paths"
+  | "options"
+  | "constraints";
+
+const EXPECTED_FIELDS: readonly ExpectedField[] = [
+  "includes",
+  "excludes",
+  "symbols",
+  "paths",
+  "options",
+  "constraints",
+];
+
 function validateExpected(
   scenarioName: string,
-  expected: { includes?: unknown; excludes?: unknown } | undefined,
+  expected: Partial<Record<ExpectedField, unknown>> | undefined,
 ): void {
   if (expected === undefined) return;
   if (typeof expected !== "object" || Array.isArray(expected)) {
     throw new Error(
-      `pickled.yml: scenario "${scenarioName}" expected must be an object with optional includes/excludes arrays`,
+      `pickled.yml: scenario "${scenarioName}" expected must be an object with optional ${EXPECTED_FIELDS.join("/")} arrays`,
     );
   }
-  const checkStrings = (field: "includes" | "excludes"): void => {
+  const checkStrings = (field: ExpectedField): void => {
     const arr = expected[field];
     if (arr === undefined) return;
     if (!Array.isArray(arr)) {
@@ -297,8 +314,9 @@ function validateExpected(
       }
     }
   };
-  checkStrings("includes");
-  checkStrings("excludes");
+  for (const field of EXPECTED_FIELDS) {
+    checkStrings(field);
+  }
 }
 
 function validateVerifiers(
@@ -336,22 +354,41 @@ function validateVerifiers(
 function validateActionableContract(scenario: {
   name: string;
   requiredSources?: string[];
-  expected?: { includes?: string[]; excludes?: string[] };
+  expected?: {
+    includes?: string[];
+    excludes?: string[];
+    symbols?: string[];
+    paths?: string[];
+    options?: string[];
+    constraints?: string[];
+  };
   traps?: Trap[];
   compareSurfaces?: string[][];
   matrix?: { interfaces?: string[]; sources?: string[]; toolsets?: string[] };
 }): void {
   const hasCitation = scenario.requiredSources !== undefined;
+  // Any non-empty expected group counts as an actionable contract. The
+  // grouped keys (symbols/paths/options/constraints) score with the same
+  // matcher as includes; gating on includes/excludes only would silently
+  // reject scenarios that use ONLY the new grouped keys.
+  const expectedFields = [
+    "includes",
+    "excludes",
+    "symbols",
+    "paths",
+    "options",
+    "constraints",
+  ] as const;
   const hasExpected =
     scenario.expected !== undefined &&
-    ((scenario.expected.includes !== undefined &&
-      scenario.expected.includes.length > 0) ||
-      (scenario.expected.excludes !== undefined &&
-        scenario.expected.excludes.length > 0));
+    expectedFields.some((field) => {
+      const arr = scenario.expected?.[field];
+      return arr !== undefined && arr.length > 0;
+    });
   const hasTraps = scenario.traps !== undefined && scenario.traps.length > 0;
   if (!hasCitation && !hasExpected && !hasTraps) {
     throw new Error(
-      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources, expected.includes/excludes, or traps. A scenario with nothing to check has no verdict.`,
+      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources, expected checks (includes/excludes/symbols/paths/options/constraints), or traps. A scenario with nothing to check has no verdict.`,
     );
   }
   // Non-none cells skip the citation contract (source is not injected; the
@@ -364,7 +401,7 @@ function validateActionableContract(scenario: {
   );
   if (nonNoneToolsets.length > 0 && !hasExpected && !hasTraps) {
     throw new Error(
-      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has neither expected.includes/excludes nor traps. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected or traps, or restrict matrix.toolsets to ["none"].`,
+      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has no expected checks or traps. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected (any of includes/excludes/symbols/paths/options/constraints) or traps, or restrict matrix.toolsets to ["none"].`,
     );
   }
 }

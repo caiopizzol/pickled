@@ -163,6 +163,27 @@ export interface ScenarioMatrix {
 export interface ExpectedChecks {
   includes?: string[];
   excludes?: string[];
+  /**
+   * Implementation-readiness groups. Each is scored with the SAME
+   * deterministic substring matcher as `includes`; the split is
+   * presentational so the reporter can say WHAT kind of comprehension
+   * failed (a missing `symbols` entry means the agent did not name the
+   * right API; a missing `options` entry means the agent did not name
+   * the required config field; etc.).
+   *
+   * These do NOT buy semantic grading. `constraints` is not "the agent
+   * understood the ordering rule"; it is "the agent's response contains
+   * the substring you declared as a constraint." Use the labels for
+   * diagnosis; do not claim more than substring presence in vendor docs.
+   *
+   * Back-compatible: omit any/all of these to score only `includes` /
+   * `excludes` exactly as before. See proposals/implementation-readiness.md
+   * for the design.
+   */
+  symbols?: string[];
+  paths?: string[];
+  options?: string[];
+  constraints?: string[];
 }
 
 /**

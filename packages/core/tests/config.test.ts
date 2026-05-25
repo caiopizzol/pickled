@@ -1237,7 +1237,7 @@ scenarios:
 `;
     await withTempConfig(yaml, async (dir) => {
       await expect(loadConfig(dir)).rejects.toThrow(
-        /non-none toolsets \[web\] but has neither expected.*nor traps/,
+        /non-none toolsets \[web\] but has no expected checks or traps/,
       );
     });
   });
@@ -1459,6 +1459,96 @@ scenarios:
     await withTempConfig(yaml, async (dir) => {
       const cfg = await loadConfig(dir);
       expect(cfg.scenarios[0]?.matrix?.sources).toEqual(["none", "readme"]);
+    });
+  });
+
+  describe("actionable-contract gate honors grouped expected keys", () => {
+    test("symbols-only scenario is accepted (regression for grouped-only gate)", async () => {
+      const yaml = `
+tool:
+  name: t
+  description: d
+scenarios:
+  - name: SymbolsOnly
+    prompt: p
+    expected:
+      symbols: ["Matrix"]
+`;
+      await withTempConfig(yaml, async (dir) => {
+        const cfg = await loadConfig(dir);
+        expect(cfg.scenarios[0]!.expected?.symbols).toEqual(["Matrix"]);
+      });
+    });
+
+    test("each grouped-only key (paths/options/constraints) is also accepted", async () => {
+      for (const field of ["paths", "options", "constraints"] as const) {
+        const yaml = `
+tool:
+  name: t
+  description: d
+scenarios:
+  - name: GroupedOnly
+    prompt: p
+    expected:
+      ${field}: ["value"]
+`;
+        await withTempConfig(yaml, async (dir) => {
+          const cfg = await loadConfig(dir);
+          expect(cfg.scenarios[0]!.expected?.[field]).toEqual(["value"]);
+        });
+      }
+    });
+
+    test("scenario with no actionable contract at all still rejects", async () => {
+      const yaml = `
+tool:
+  name: t
+  description: d
+scenarios:
+  - name: Empty
+    prompt: p
+`;
+      await withTempConfig(yaml, async (dir) => {
+        // Error message now mentions grouped keys, not just includes/excludes.
+        await expect(loadConfig(dir)).rejects.toThrow(
+          /symbols\/paths\/options\/constraints/,
+        );
+      });
+    });
+
+    test("non-none toolset cell with only grouped expected is accepted (matrix gate)", async () => {
+      const yaml = `
+tool:
+  name: t
+  description: d
+docs:
+  sources:
+    readme: ./README.md
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+targets:
+  q:
+    category: cli
+    provider: claude-code
+scenarios:
+  - name: WebCellGroupedOnly
+    prompt: p
+    matrix:
+      interfaces: [q]
+      sources: [readme]
+      toolsets: [web]
+    expected:
+      symbols: ["registerToolbarButton"]
+`;
+      await withTempConfig(yaml, async (dir) => {
+        const cfg = await loadConfig(dir);
+        expect(cfg.scenarios[0]!.matrix?.toolsets).toEqual(["web"]);
+        expect(cfg.scenarios[0]!.expected?.symbols).toEqual([
+          "registerToolbarButton",
+        ]);
+      });
     });
   });
 });
