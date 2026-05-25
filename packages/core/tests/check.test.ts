@@ -818,6 +818,186 @@ describe("runCheck matrix mode", () => {
     });
   });
 
+  test("mcp toolset on the openai interface passes mcpTools.servers to the adapter", async () => {
+    await withTempProject("# README", async (path) => {
+      const captured: {
+        mcpTools?: { servers: Record<string, unknown> };
+        docsCount: number;
+      }[] = [];
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              context7: {
+                type: "http",
+                url: "https://mcp.context7.com/mcp",
+              },
+            },
+          },
+        },
+        targets: {
+          a: {
+            category: "api",
+            provider: "openai",
+            model: "gpt-5.2",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "OpenAI MCP cell",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["docs_mcp"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "api",
+            provider: "openai",
+            name: "captured",
+            async run(_p, opts) {
+              captured.push({
+                mcpTools: opts.mcpTools,
+                docsCount: opts.docs.length,
+              });
+              return {
+                response: "x answer via context7 MCP",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: ["mcp__context7__search"],
+                sources: [],
+                metadata: {
+                  model: "gpt-5.2",
+                  category: "api",
+                  provider: "openai",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.cell.toolset).toBe("docs_mcp");
+      expect(cell.answerable).toBe("YES");
+      expect(captured[0]?.mcpTools?.servers).toEqual({
+        context7: { type: "http", url: "https://mcp.context7.com/mcp" },
+      });
+      expect(captured[0]?.docsCount).toBe(0);
+    });
+  });
+
+  test("mcp cell on openai that does not invoke any mcp tool hard-vetoes via provenance", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              context7: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: {
+          a: { category: "api", provider: "openai", model: "gpt-5.2" },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "OpenAI MCP cell that skips the tool",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              sources: ["readme"],
+              toolsets: ["docs_mcp"],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "api",
+            provider: "openai",
+            name: "captured",
+            async run() {
+              return {
+                response: "x answer from prior knowledge",
+                allResponses: [{ type: "final", text: "x" }],
+                toolsUsed: [],
+                sources: [],
+                metadata: {
+                  model: "gpt-5.2",
+                  category: "api",
+                  provider: "openai",
+                  target: "a",
+                },
+              };
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.answerable).toBe("NO");
+      expect(cell.confidence).toBe(0);
+      expect(cell.reason).toMatch(/Provenance failed/);
+    });
+  });
+
+  test("mcp toolset on an unsupported provider (anthropic) throws clearly", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: {
+          none: {},
+          docs_mcp: {
+            mcpServers: {
+              docs: { type: "http", url: "https://example.com/mcp" },
+            },
+          },
+        },
+        targets: {
+          a: {
+            category: "api",
+            provider: "anthropic",
+            model: "claude-haiku-4-5",
+          },
+        },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Anthropic MCP probe",
+            prompt: "?",
+            matrix: { interfaces: ["a"], toolsets: ["docs_mcp"] },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        { targetFactory: () => makeMockTarget("x") },
+      );
+      expect(report.scenarios[0]!.error).toMatch(
+        /implemented on claude-code and openai interfaces today/,
+      );
+    });
+  });
+
   test("web toolset on openai with only webFetch:true rejects at config-gate", async () => {
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {
@@ -1705,7 +1885,7 @@ describe("runCheck matrix mode", () => {
     });
   });
 
-  test("mcp toolset on non-claude-code interface throws clearly", async () => {
+  test("mcp toolset on an unsupported CLI provider (codex-cli) throws clearly", async () => {
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {
         tool: { name: "t", description: "d" },
@@ -1736,7 +1916,7 @@ describe("runCheck matrix mode", () => {
         { targetFactory: () => makeMockTarget("x") },
       );
       expect(report.scenarios[0]!.error).toMatch(
-        /implemented only on the claude-code interface/,
+        /implemented on claude-code and openai interfaces today/,
       );
     });
   });

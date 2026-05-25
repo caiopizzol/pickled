@@ -1,4 +1,8 @@
-import type { Target, TargetCategory } from "@pickled-dev/config";
+import type {
+  McpServerConfig,
+  Target,
+  TargetCategory,
+} from "@pickled-dev/config";
 import OpenAI from "openai";
 import { buildCitationPrompt } from "../citation-prompt.js";
 import { buildDiscoveryPrompt } from "../discovery-prompt.js";
@@ -16,17 +20,20 @@ import type {
  * prompt as `instructions`, the scenario prompt as `input`, and is
  * expected to return its answer with a `## Sources` section.
  *
- * For matrix `web` cells (`options.webTools.search`), the target passes
- * the server-side `web_search` tool to `responses.create` and switches
- * to the discovery prompt (no injected source). Web tool invocations
- * are extracted from `response.output` items of `type:
- * 'web_search_call'` and normalized into `toolsUsed: ["web_search"]` so
- * the matrix runner's tool-use provenance hard-veto fires the same way
- * it does on Claude Code and the Anthropic API target.
+ * Toolset support today: `none`, `web`, and `mcp`.
  *
- * Toolset support today: `none` and `web`. Remote MCP lands in a
- * follow-up (#13). Currently uses the canonical `web_search` tool type
- * (not the dated `web_search_2025_08_26` variant).
+ * - `web` cells (`options.webTools.search`): passes the server-side
+ *   `web_search` tool to `responses.create` and switches to the
+ *   discovery prompt. Provenance: `web_search_call` items in
+ *   `response.output`, normalized to `toolsUsed: ["web_search"]`.
+ * - `mcp` cells (`options.mcpTools.servers`): passes a hosted-MCP tool
+ *   entry per declared server (`server_label` = the map key, so the
+ *   matrix runner's `mcp__<server>__*` provenance matcher works
+ *   uniformly). Approval prompts are bypassed (`require_approval:
+ *   "never"`) because pickled runs are non-interactive. Provenance:
+ *   `mcp_call` items in `response.output`, normalized to
+ *   `mcp__<server_label>__<tool_name>` (same shape the Claude Code
+ *   adapter emits for its MCP cells).
  *
  * Requires `OPENAI_API_KEY` in the environment. The model field is
  * required on the target config; the loader enforces this so silent
@@ -47,7 +54,8 @@ export class OpenAIApiTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, docs, requiredSources, discovery, webTools } = options;
+    const { tool, docs, requiredSources, discovery, webTools, mcpTools } =
+      options;
 
     if (!this.config.model) {
       // Defense in depth: the loader rejects API targets without a model,
@@ -63,9 +71,16 @@ export class OpenAIApiTarget implements TargetRunner {
       : buildCitationPrompt(tool, docs, requiredSources);
     const client = this.clientFactory();
 
-    const tools = webTools?.search
-      ? [{ type: "web_search" as const }]
-      : undefined;
+    const requestTools: Array<Record<string, unknown>> = [];
+    if (webTools?.search) {
+      requestTools.push({ type: "web_search" });
+    }
+    if (mcpTools?.servers) {
+      for (const [serverLabel, server] of Object.entries(mcpTools.servers)) {
+        requestTools.push(buildMcpToolEntry(serverLabel, server));
+      }
+    }
+    const tools = requestTools.length > 0 ? requestTools : undefined;
 
     const response = await client.responses.create({
       model: this.config.model,
@@ -73,12 +88,12 @@ export class OpenAIApiTarget implements TargetRunner {
       input: prompt,
       temperature: this.config.temperature ?? 0,
       max_output_tokens: this.config.maxTokens ?? 4096,
-      ...(tools ? { tools } : {}),
+      ...(tools ? { tools: tools as unknown as never } : {}),
     });
 
     const responseText =
       typeof response.output_text === "string" ? response.output_text : "";
-    const toolsUsed = extractWebSearchCalls(response.output);
+    const toolsUsed = extractToolsUsed(response.output);
 
     const allResponses: ResponseEntry[] = responseText
       ? [{ type: "final", text: responseText }]
@@ -99,21 +114,60 @@ export class OpenAIApiTarget implements TargetRunner {
   }
 }
 
-interface OutputItem {
-  type?: string;
+function buildMcpToolEntry(
+  serverLabel: string,
+  server: McpServerConfig,
+): Record<string, unknown> {
+  if (!server.url) {
+    // OpenAI hosted MCP requires a server_url (or a connector_id we do
+    // not currently support). A pickled mcpServers entry with
+    // stdio/command/args has no URL to wire; surface a clear runtime
+    // error rather than silently send an invalid tool entry.
+    throw new Error(
+      `MCP server "${serverLabel}" has no url; the OpenAI hosted-MCP tool requires server_url. Stdio MCP transports are not reachable from the OpenAI API.`,
+    );
+  }
+  const entry: Record<string, unknown> = {
+    type: "mcp",
+    server_label: serverLabel,
+    server_url: server.url,
+    // Pickled runs are non-interactive; approval prompts would deadlock
+    // the cell. The user is opting in to a third-party MCP server via
+    // pickled.yml; setting `never` is the honest behavior for a CI
+    // runner.
+    require_approval: "never",
+  };
+  if (server.headers && Object.keys(server.headers).length > 0) {
+    entry.headers = server.headers;
+  }
+  return entry;
 }
 
-function extractWebSearchCalls(output: unknown): string[] {
+interface OutputItem {
+  type?: string;
+  name?: string;
+  server_label?: string;
+}
+
+function extractToolsUsed(output: unknown): string[] {
   if (!Array.isArray(output)) return [];
-  let saw = false;
+  const seen = new Set<string>();
   for (const item of output as OutputItem[]) {
     if (item?.type === "web_search_call") {
-      saw = true;
-      break;
+      // Normalize to the same provenance string the Anthropic adapter
+      // emits (`web_search`) so the matrix runner's matcher stays
+      // provider-agnostic.
+      seen.add("web_search");
+    } else if (
+      item?.type === "mcp_call" &&
+      typeof item.server_label === "string" &&
+      typeof item.name === "string"
+    ) {
+      // Normalize to `mcp__<server_label>__<tool_name>` (same shape the
+      // Claude Agent SDK emits) so the runner's `mcp__<server>__*`
+      // prefix matcher works uniformly across providers.
+      seen.add(`mcp__${item.server_label}__${item.name}`);
     }
   }
-  // Normalize to the same provenance string the Anthropic adapter emits
-  // (`web_search`) so the matrix runner's matcher logic stays
-  // provider-agnostic.
-  return saw ? ["web_search"] : [];
+  return Array.from(seen);
 }

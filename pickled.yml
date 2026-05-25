@@ -152,10 +152,13 @@ scenarios:
 
   # Which toolsets work today? — coverage of the matrix toolset axis as
   # currently shipped. The three shapes (none / web / mcp) are documented
-  # at docs.pickled.dev/toolsets, and both `web` and `mcp` are
-  # Claude-Code-only today. Firecrawl is mentioned in the proposals but
-  # not shipped; if an agent claims it as a working toolset, that is the
-  # exact "false support claim" we want to catch.
+  # at docs.pickled.dev/toolsets. Provider matrix as of cli-v0.25.0:
+  # - none: every provider
+  # - web:  claude-code, anthropic, openai
+  # - mcp:  claude-code, openai
+  # Firecrawl is mentioned in the proposals but not shipped; if an agent
+  # claims it as a working toolset, that is the exact "false support
+  # claim" we want to catch.
   - name: "Which toolsets work today?"
     prompt: "Which toolset shapes does pickled run today, and which interface do they need?"
     matrix:

@@ -9,7 +9,8 @@
       "!**/dist",
       "!**/.next",
       "!**/.source",
-      "!apps/docs/out"
+      "!apps/docs/out",
+      "!.claude"
     ]
   },
   "linter": {

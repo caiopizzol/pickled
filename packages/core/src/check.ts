@@ -719,11 +719,12 @@ function buildReport(
  * the `web` shape (`webSearch`/`webFetch` flags) on Claude Code (client
  * `WebSearch`/`WebFetch`), the Anthropic API target (server-side
  * `web_search`), and the OpenAI API target (server-side `web_search`);
- * the `mcp` shape (`mcpServers` map) on Claude Code. Toolsets with no
- * recognized shape, mixed shapes (web flags + mcpServers), or an
- * unsupported provider for the requested shape throw with a clear
- * per-cell error so misconfigurations are not masked by silent no-ops;
- * further adapters land per release.
+ * the `mcp` shape (`mcpServers` map) on Claude Code (Agent SDK native)
+ * and on the OpenAI API target (hosted-MCP on `responses.create`, HTTP
+ * transports only). Toolsets with no recognized shape, mixed shapes
+ * (web flags + mcpServers), or an unsupported provider for the
+ * requested shape throw with a clear per-cell error so misconfigurations
+ * are not masked by silent no-ops; further adapters land per release.
  */
 async function runMatrixScenario(
   scenario: Scenario,
@@ -789,10 +790,15 @@ async function runMatrixScenario(
         //       adapter normalizes `web_search_call` output items into
         //       the literal `web_search` provenance name.
         //   Source NOT injected; citation contract skipped on any path.
-        // - mcp: `mcpServers` map on Claude Code. The SDK's built-in
-        //   tool set is disabled (`tools: []`); MCP tools come from
-        //   `mcpServers` and are auto-permitted via
-        //   `allowedTools: [mcp__<server>__*, ...]`. Source NOT injected.
+        // - mcp: `mcpServers` map. Two wiring paths:
+        //     * Claude Code: SDK built-ins disabled (`tools: []`);
+        //       MCP tools come from `mcpServers` and are auto-permitted
+        //       via `allowedTools: [mcp__<server>__*, ...]`.
+        //     * OpenAI API: each server becomes a hosted-MCP tool
+        //       entry on `responses.create` via the provider-agnostic
+        //       mcpTools intent on RunOptions. Provenance reads
+        //       `mcp_call` items and normalizes to `mcp__<server>__<tool>`.
+        //   Source NOT injected on either path.
         // Mixed shapes (web+mcp in one toolset) are rejected because
         // pickled cannot attribute provenance honestly across both.
         // The SDK's `tools` option (not `allowedTools`) is what actually
@@ -831,15 +837,21 @@ async function runMatrixScenario(
             );
           }
           // Provider gates per toolset shape:
-          // - MCP today runs only on claude-code (the generic adapter wires
-          //   mcpServers through the Agent SDK). OpenAI MCP lands as #13.
+          // - MCP runs on claude-code (Agent SDK natively wires
+          //   mcpServers) and on the openai Responses API target
+          //   (hosted-MCP tool entries on responses.create). Other
+          //   providers throw until their adapters land.
           // - Web runs on claude-code (client tools WebSearch/WebFetch),
           //   the anthropic API target (server-side web_search), and the
           //   openai API target (server-side web_search). Other providers
           //   (codex-cli) throw until their adapters land.
-          if (wantsMcp && baseTargetConfig.provider !== "claude-code") {
+          if (
+            wantsMcp &&
+            baseTargetConfig.provider !== "claude-code" &&
+            baseTargetConfig.provider !== "openai"
+          ) {
             throw new Error(
-              `Toolset "${toolsetName}" (MCP) is implemented only on the claude-code interface today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a Claude Code interface or use toolset "none".`,
+              `Toolset "${toolsetName}" (MCP) is implemented on claude-code and openai interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
             );
           }
           if (
@@ -1009,6 +1021,12 @@ async function runMatrixScenario(
             webTools:
               wantsWeb && isServerWebTarget
                 ? { search: toolsetConfig?.webSearch === true }
+                : undefined,
+            mcpTools:
+              wantsMcp &&
+              baseTargetConfig.provider === "openai" &&
+              toolsetConfig?.mcpServers
+                ? { servers: toolsetConfig.mcpServers }
                 : undefined,
             onProgress: options.onProgress,
           });

@@ -30,7 +30,7 @@ interface CapturedCreateCall {
   input: string;
   temperature?: number;
   max_output_tokens?: number;
-  tools?: Array<{ type: string }>;
+  tools?: Array<Record<string, unknown> & { type: string }>;
 }
 
 type MockOutputItem =
@@ -39,6 +39,14 @@ type MockOutputItem =
       type: "web_search_call";
       id: string;
       status: "completed" | "in_progress" | "searching" | "failed";
+    }
+  | {
+      type: "mcp_call";
+      id: string;
+      server_label: string;
+      name: string;
+      arguments: string;
+      status?: string;
     };
 
 function makeMockClient(
@@ -238,6 +246,127 @@ describe("OpenAIApiTarget", () => {
     );
     const result = await target.run("?", baseRunOptions);
     expect(result.toolsUsed).toEqual(["web_search"]);
+  });
+
+  test("mcpTools.servers wires one hosted-MCP tool entry per declared server", async () => {
+    const { client, calls } = makeMockClient("ok");
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    await target.run("?", {
+      ...baseRunOptions,
+      mcpTools: {
+        servers: {
+          context7: {
+            type: "http",
+            url: "https://mcp.context7.com/mcp",
+            headers: { CONTEXT7_API_KEY: "key-redacted" },
+          },
+        },
+      },
+      discovery: { sourceHint: null },
+    });
+    expect(calls[0]?.tools).toEqual([
+      {
+        type: "mcp",
+        server_label: "context7",
+        server_url: "https://mcp.context7.com/mcp",
+        require_approval: "never",
+        headers: { CONTEXT7_API_KEY: "key-redacted" },
+      },
+    ]);
+  });
+
+  test("mcpTools throws when a server has no url (stdio not reachable from OpenAI)", async () => {
+    const { client } = makeMockClient("(unused)");
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    await expect(
+      target.run("?", {
+        ...baseRunOptions,
+        mcpTools: {
+          servers: {
+            local_stdio: { type: "stdio", command: "node", args: ["x.js"] },
+          },
+        },
+        discovery: { sourceHint: null },
+      }),
+    ).rejects.toThrow(/has no url/);
+  });
+
+  test("mcp_call output items captured as mcp__<server>__<tool> (matcher shape)", async () => {
+    const { client } = makeMockClient("Docs say X.", [
+      {
+        type: "mcp_call",
+        id: "mcp_1",
+        server_label: "context7",
+        name: "resolve-library-id",
+        arguments: "{}",
+        status: "completed",
+      },
+      {
+        type: "mcp_call",
+        id: "mcp_2",
+        server_label: "context7",
+        name: "query-docs",
+        arguments: "{}",
+        status: "completed",
+      },
+      {
+        type: "message",
+        content: [{ type: "output_text", text: "Docs say X." }],
+      },
+    ]);
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    const result = await target.run("?", {
+      ...baseRunOptions,
+      mcpTools: {
+        servers: {
+          context7: { type: "http", url: "https://mcp.context7.com/mcp" },
+        },
+      },
+      discovery: { sourceHint: null },
+    });
+    expect(result.toolsUsed).toContain("mcp__context7__resolve-library-id");
+    expect(result.toolsUsed).toContain("mcp__context7__query-docs");
+  });
+
+  test("web + mcp tools coexist in the request and provenance set", async () => {
+    const { client, calls } = makeMockClient("ok", [
+      { type: "web_search_call", id: "ws_1", status: "completed" },
+      {
+        type: "mcp_call",
+        id: "mcp_1",
+        server_label: "context7",
+        name: "search",
+        arguments: "{}",
+        status: "completed",
+      },
+    ]);
+    const target = new OpenAIApiTarget("oai", baseConfig, () =>
+      asOpenAI(client),
+    );
+    const result = await target.run("?", {
+      ...baseRunOptions,
+      webTools: { search: true },
+      mcpTools: {
+        servers: {
+          context7: { type: "http", url: "https://mcp.context7.com/mcp" },
+        },
+      },
+      discovery: { sourceHint: null },
+    });
+    expect(calls[0]?.tools?.map((t) => t.type).sort()).toEqual([
+      "mcp",
+      "web_search",
+    ]);
+    expect(result.toolsUsed.sort()).toEqual([
+      "mcp__context7__search",
+      "web_search",
+    ]);
   });
 
   test("toolsUsed is empty when output has no web_search_call items", async () => {

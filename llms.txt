@@ -54,7 +54,7 @@ A scenario can expand into one cell per `(interface × source × toolset)` tuple
 
 - `none`: deterministic baseline. The cell's active source content is injected into the agent's prompt. The citation contract applies if `requiredSources` is declared.
 - `web`: web research, three mechanisms. On Claude Code the cell scopes the SDK's built-in tools to `[WebSearch, WebFetch]`. On the Anthropic API target the cell passes the server-side `web_search` tool (`web_search_20250305`) to `messages.create`. On the OpenAI API target the cell passes the `web_search` tool to `responses.create`. The Anthropic and OpenAI APIs have no separate fetch tool, so `webSearch: true` is required on both and `webFetch` is a no-op on those providers. Source is NOT injected on any path; the cell's prompt names the active source as the discovery target. Tool-use provenance is required.
-- `mcp`: any MCP server (`stdio`, `http`, `sse`) on Claude Code. Source is NOT injected; the agent invokes `mcp__<server>__*` tools at inference. Tool-use provenance is required.
+- `mcp`: any MCP server (`stdio`, `http`, `sse`) on Claude Code; URL-based MCP servers on the OpenAI Responses target (OpenAI's hosted-MCP path is URL-based, supporting Streamable HTTP and HTTP-SSE; `stdio` MCP servers are not reachable from the OpenAI API). Source is NOT injected; the agent invokes `mcp__<server>__*` tools at inference. Tool-use provenance is required. Provenance accepts the same `mcp__<server>__*` shape on both providers; the OpenAI adapter normalizes its native `mcp_call` items into that shape.
 
 Citation contract only applies in `none` cells. Non-`none` cells score on `expected.includes`/`excludes` plus tool-use provenance: a cell that satisfies `expected` but never invokes any of the configured tools is hard-vetoed to `NO` with confidence `0`, because an answer from model prior knowledge cannot testify to the tool path the cell is meant to test.
 
@@ -65,7 +65,7 @@ Citation contract only applies in `none` cells. Non-`none` cells score on `expec
 - `claude-code` - Claude Agent SDK. Supports `none`, `web`, and `mcp` toolsets.
 - `codex-cli` - Codex CLI binary. Supports `none` only.
 - `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. Supports `none` and `web` (server-side `web_search`); MCP lands per release. No workspace, no Agent SDK orchestration; comparable to CLI targets but not identical.
-- `openai` - OpenAI Responses API, direct SDK. Requires `OPENAI_API_KEY`. Supports `none` and `web` (server-side `web_search`); remote MCP lands per release. No workspace, no Agent SDK orchestration.
+- `openai` - OpenAI Responses API, direct SDK. Requires `OPENAI_API_KEY`. Supports `none`, `web` (server-side `web_search`), and `mcp` (hosted-MCP tool entries, HTTP servers only). No workspace, no Agent SDK orchestration.
 
 Stubbed and not yet implemented: `gemini-cli`, `amazon-q`, Google API target. Do not list these as supported in present tense.
 

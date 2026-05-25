@@ -1,4 +1,8 @@
-import type { ResolvedDocSource, TargetCategory } from "@pickled-dev/config";
+import type {
+  McpServerConfig,
+  ResolvedDocSource,
+  TargetCategory,
+} from "@pickled-dev/config";
 
 export { DEFAULT_TARGET } from "@pickled-dev/config";
 
@@ -60,6 +64,17 @@ export interface RunOptions {
    * read `restrictBuiltinTools` instead.
    */
   webTools?: { search?: boolean };
+  /**
+   * Provider-agnostic MCP-server intent. Matrix runner sets this for
+   * `mcp` cells on the OpenAI Responses target (the OpenAI adapter
+   * translates each entry to a hosted-MCP tool entry on
+   * `responses.create`). The Claude Code adapter reads `mcpServers`
+   * from its target config directly via the Agent SDK and ignores this
+   * field. Each server's key in the map is used as the OpenAI
+   * `server_label`, so the matrix runner's `mcp__<server>__*`
+   * provenance matcher works across providers.
+   */
+  mcpTools?: { servers: Record<string, McpServerConfig> };
   onProgress?: (msg: string) => void;
 }
 

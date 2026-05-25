@@ -31,7 +31,7 @@ The mechanism depends on the interface:
 - On the Anthropic API target, the cell passes the server-side `web_search` tool to `messages.create` (tool version `web_search_20250305`). The API has no separate fetch tool, so `webFetch: true` is ignored on this provider and `webSearch: true` is required.
 - On the OpenAI API target, the cell passes the `web_search` tool to `responses.create`. The API has no separate fetch tool either; `webSearch: true` is required and `webFetch: true` is a no-op. Provenance reads `web_search_call` output items and normalizes them to the same `web_search` provider-agnostic name.
 
-## `mcp` (Claude Code, generic)
+## `mcp` (Claude Code, OpenAI API)
 
 ```yaml
 toolsets:
@@ -44,7 +44,12 @@ toolsets:
           CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 ```
 
-The toolset name (`context7_mcp` here) is user-chosen; Pickled has no server-specific knowledge. Any MCP server reachable via `stdio`, `http`, or `sse` can be declared the same way. The cell sets `tools: []` (built-ins disabled) and `allowedTools: ["mcp__<server>__*"]` (auto-permission). Provenance accepts any invocation of `mcp__<server>__*` for any configured server.
+The toolset name (`context7_mcp` here) is user-chosen; Pickled has no server-specific knowledge. Any MCP server reachable via `stdio`, `http`, or `sse` can be declared the same way. Provenance accepts any invocation of `mcp__<server>__*` for any configured server, regardless of provider.
+
+The wiring depends on the interface:
+
+- On Claude Code, the cell sets `tools: []` (built-ins disabled) and `allowedTools: ["mcp__<server>__*"]` (auto-permission); MCP tools come from the Agent SDK's native `mcpServers` config.
+- On the OpenAI API target, the cell passes one hosted-MCP tool entry per declared server to `responses.create` (`type: "mcp"`, `server_label` = the map key, `server_url` = `url`, `headers` forwarded). `require_approval: "never"` is set so non-interactive runs do not deadlock on approval prompts. The OpenAI hosted-MCP path requires HTTP transports; `stdio` MCP servers can only run on Claude Code.
 
 `${UPPER_SNAKE_CASE}` values in `pickled.yml` are expanded from `process.env` at load, so secrets stay out of the config file. Bun auto-loads `.env`.
 
@@ -59,4 +64,4 @@ Declaring both `webSearch`/`webFetch` flags and `mcpServers` on the same toolset
 ## Interface restriction
 
 - `web` runs on `claude-code` (client tools `WebSearch`/`WebFetch`), `anthropic` (server-side `web_search`), and `openai` (server-side `web_search`) today. Codex CLI lands per release.
-- `mcp` runs on `claude-code` only today. OpenAI remote MCP and other providers land per release.
+- `mcp` runs on `claude-code` (Agent SDK native) and `openai` (hosted-MCP on Responses) today. Anthropic and other providers land per release.

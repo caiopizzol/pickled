@@ -135,10 +135,11 @@ export interface Trap {
  * Claude Code (client `WebSearch`/`WebFetch`), the Anthropic API target
  * (server-side `web_search`), and the OpenAI API target (server-side
  * `web_search`); the `mcp` shape (`mcpServers` map) runs on Claude Code
- * today. Pickled has no server-specific knowledge (Context7 is a dogfood
- * example, not a special case). Other shapes (Firecrawl, native search
- * on additional providers) are recognized by the loader; their adapters
- * land per release.
+ * (Agent SDK native) and on the OpenAI API target (hosted-MCP on
+ * `responses.create`, HTTP transports only). Pickled has no server-
+ * specific knowledge (Context7 is a dogfood example, not a special case).
+ * Other shapes (Firecrawl, native search on additional providers) are
+ * recognized by the loader; their adapters land per release.
  */
 export interface ToolsetConfig {
   /** Reserved for future tool flags; `none` is `{}`. */

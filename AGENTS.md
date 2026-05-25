@@ -50,7 +50,7 @@ A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**` or `package
 API targets call the model directly via the provider SDK. No workspace, no Agent SDK orchestration.
 
 - `anthropic`: supports the `none` toolset and the `web` toolset. `web` wires the server-side `web_search` tool (`web_search_20250305`) on `messages.create`; `webFetch` has no Anthropic API equivalent and is a no-op on this provider. Requires `ANTHROPIC_API_KEY`.
-- `openai`: supports the `none` toolset and the `web` toolset. `web` wires the server-side `web_search` tool on `responses.create`; provenance reads `web_search_call` output items and normalizes them to the provider-agnostic `web_search` name. `webFetch` is a no-op on this provider (single server-side web tool). Remote MCP lands in #13. Requires `OPENAI_API_KEY`.
+- `openai`: supports the `none` toolset, the `web` toolset, and the `mcp` toolset. `web` wires the server-side `web_search` tool on `responses.create`; provenance reads `web_search_call` output items and normalizes them to the provider-agnostic `web_search` name. `webFetch` is a no-op on this provider (single server-side web tool). `mcp` wires one hosted-MCP tool entry per declared server (HTTP only; `stdio` MCP servers are not reachable from the API); provenance reads `mcp_call` output items and normalizes them to `mcp__<server>__<tool>` (same shape the Claude Code adapter emits). Requires `OPENAI_API_KEY`.
 
 Both require an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets. Comparable to CLI targets but not identical.
 

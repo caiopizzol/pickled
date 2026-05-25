@@ -27,7 +27,7 @@ That scenario produces eight cells. Each cell label is `[interface · source · 
 
 - **`none`** is the deterministic baseline. Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared.
 - **`web`** runs on Claude Code, the Anthropic API target, and the OpenAI API target. On Claude Code the cell scopes built-ins to `[WebSearch, WebFetch]` so the agent cannot fall back to filesystem; on the Anthropic API target the cell passes the server-side `web_search` tool (`web_search_20250305`) to `messages.create`; on the OpenAI API target the cell passes the `web_search` tool to `responses.create`. Source is NOT injected on any path; the cell scores on `expected.includes`/`excludes` plus tool-use provenance.
-- **`mcp`** runs on Claude Code today. The configured MCP servers are passed through; `tools: []` disables built-ins; `allowedTools: ["mcp__<server>__*"]` is the auto-permission list. Provenance accepts any invocation of `mcp__<server>__*`.
+- **`mcp`** runs on Claude Code and on the OpenAI API target. On Claude Code the configured MCP servers are passed to the Agent SDK natively (`tools: []` disables built-ins, `allowedTools: ["mcp__<server>__*"]` auto-permits); on the OpenAI API target each server becomes a hosted-MCP tool entry on `responses.create` (`type: "mcp"`, `server_label` = map key, `server_url` = `url`, `headers` forwarded). Provenance accepts any invocation of `mcp__<server>__*` regardless of provider.
 
 See [Toolsets](/toolsets) for the full shape of each profile.
 
