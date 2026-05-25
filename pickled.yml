@@ -41,17 +41,13 @@ docs:
       audit:
         traps: false
 
-    # Codebase source for implementation-readiness existence checks
-    # (step 3 of #19). Used by the readiness probe to verify the
-    # declared expected.paths actually exist in the registered code.
-    # Glob kept tight - just packages/core/src - because the readiness
-    # scenario only cares about scoring/check surface files.
-    core_src:
-      type: codebase
-      path: "packages/core/src/**/*.ts"
-      exclude: ["**/*.test.ts"]
-      audit:
-        traps: false
+    # NOTE: a `core_src` codebase source used to live here for the
+    # implementation-readiness probe's `expected.paths` existence check
+    # (#21). Removed when the probe was reframed to ask a public-docs
+    # DX question - public user docs should not teach internal scorer
+    # paths, so the path check was misplaced. Re-register `core_src`
+    # (or any codebase glob) if/when a contributor-mode scenario lands
+    # that asks about modifying pickled internals.
 
 targets:
   quick:
@@ -172,27 +168,24 @@ scenarios:
   # presentational. See proposals/implementation-readiness.md for the
   # design.
   - name: "Implementation-readiness: declare a web cell"
-    prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, paths, and constraints matter before I write the YAML?"
+    prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, and constraints matter before I write the YAML?"
     matrix:
       interfaces: [quick]
-      # Only the public docs are injected as the agent's active source.
-      # The test question is "can the agent read the docs and name the
-      # right config/path/symbols?" - injecting the codebase too would
-      # answer a different question ("can the agent infer the YAML
-      # from source code?"). `core_src` stays registered (above) so
-      # the existence verifier (#21) can check declared paths/symbols
-      # against the real code without making them agent context.
+      # Only the public docs are injected. The test question is "can
+      # the agent read the docs and name the right config/symbols/
+      # constraints?" - a public-docs DX question, not a contributor/
+      # internals question. Earlier draft of this scenario tacked
+      # `expected.paths: ["scorers/expected.ts"]` on as a mechanics
+      # demo for #21's existence verifier, but public docs should not
+      # teach internal scorer paths and the substring miss was an
+      # unfair signal. The path check belongs in a (future)
+      # contributor-mode scenario backed by a `core_src` registration.
       sources: [public_docs_full]
       toolsets: [none]
     expected:
       symbols:
         - "matrix"
         - "toolsets"
-      paths:
-        # Real file under packages/core/src - existence verifier (#21)
-        # should mark this true against the core_src codebase source
-        # via path-suffix match.
-        - "scorers/expected.ts"
       options:
         - "webSearch"
       constraints:
