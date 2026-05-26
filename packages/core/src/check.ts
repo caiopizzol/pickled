@@ -259,7 +259,7 @@ export async function runCheck(
   let docs: ResolvedDocSource[] = [];
   if (Object.keys(sourcesMap).length > 0) {
     onProgress?.("Loading sources...");
-    docs = await fetchAllSources(sourcesMap, tool.path);
+    docs = await fetchAllSources(sourcesMap, tool.path, onProgress);
     for (const d of docs) {
       onProgress?.(`  [${d.id}] ${d.name}`);
     }

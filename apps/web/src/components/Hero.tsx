@@ -41,7 +41,7 @@ export function Hero() {
         <div className="hero-terminal">
           <Terminal label="pickled check">
             <TerminalLine>
-              <T.Prompt>$</T.Prompt> pickled check --target claude
+              <T.Prompt>$</T.Prompt> pickled check
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>

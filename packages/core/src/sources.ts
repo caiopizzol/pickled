@@ -80,7 +80,7 @@ async function loadCodebase(
   matched.sort();
 
   const softCap = entry.maxBytes ?? CODEBASE_SOFT_CAP_BYTES;
-  const hardCap = Math.max(softCap, CODEBASE_HARD_CAP_BYTES);
+  const hardCap = CODEBASE_HARD_CAP_BYTES;
 
   const parts: string[] = [];
   let totalBytes = 0;
@@ -93,7 +93,7 @@ async function loadCodebase(
     totalBytes += header.length + text.length;
     if (totalBytes > hardCap) {
       throw new Error(
-        `Codebase source "${id}" exceeded hard cap of ${hardCap} bytes (matched glob ${entry.path}). Tighten the glob or raise the limit via maxBytes (and accept the request-size risk).`,
+        `Codebase source "${id}" exceeded hard cap of ${hardCap} bytes (matched glob ${entry.path}). Tighten the glob; the 4 MB ceiling is fixed to protect the agent request size.`,
       );
     }
   }
@@ -122,8 +122,32 @@ export async function fetchSource(
   onProgress?: (msg: string) => void,
 ): Promise<ResolvedDocSource> {
   const { path: srcPath, auditTraps } = normalizeDocSource(source);
-  if (typeof source !== "string" && source.type === "codebase") {
-    return loadCodebase(id, source, cwd, auditTraps, onProgress);
+  const explicitType = typeof source !== "string" ? source.type : undefined;
+
+  if (explicitType === "codebase") {
+    return loadCodebase(
+      id,
+      source as DocSourceEntry,
+      cwd,
+      auditTraps,
+      onProgress,
+    );
+  }
+  if (explicitType === "url") {
+    if (!isUrl(srcPath)) {
+      throw new Error(
+        `Source "${id}" declares type: url but path "${srcPath}" is not an http(s) URL. Use type: file for local paths, or omit type to auto-detect.`,
+      );
+    }
+    return fetchUrl(id, srcPath, auditTraps);
+  }
+  if (explicitType === "file") {
+    if (isUrl(srcPath)) {
+      throw new Error(
+        `Source "${id}" declares type: file but path "${srcPath}" is an http(s) URL. Use type: url for remote paths, or omit type to auto-detect.`,
+      );
+    }
+    return readFile(id, srcPath, cwd, auditTraps);
   }
   if (isUrl(srcPath)) return fetchUrl(id, srcPath, auditTraps);
   return readFile(id, srcPath, cwd, auditTraps);

@@ -32,11 +32,15 @@ targets:
     provider: claude-code
     model: claude-haiku-4-5
 
+threshold: 80
+
 scenarios:
   - name: Install
     prompt: How do I install my-product?
     requiredSources: [readme]
 ```
+
+`threshold` is optional. Set it to make the run pass or fail on the overall score; omit it to see the score without a pass/fail verdict.
 
 ## Run a check
 
@@ -51,7 +55,7 @@ Scenario: Install
   ✓ Well grounded (100%)
     cited: [readme]
 
-Overall: 100 / 100 · run passes
+Overall: 100 / 100 · threshold 80 · run passes
 Citations hold. No declared traps fired.
 ```
 

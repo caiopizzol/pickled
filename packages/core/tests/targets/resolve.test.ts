@@ -1,65 +1,48 @@
 import { describe, expect, test } from "bun:test";
 import { resolveContext, resolveTarget } from "../../src/targets/index.js";
 
-const originalWarn = console.warn;
-
-function captureWarnings(fn: () => void): string[] {
-  const captured: string[] = [];
-  console.warn = (...args: unknown[]) => {
-    captured.push(args.map(String).join(" "));
-  };
-  try {
-    fn();
-  } finally {
-    console.warn = originalWarn;
-  }
-  return captured;
-}
-
 describe("resolveTarget", () => {
-  test('treats "default" as sentinel - no warning', () => {
-    const warnings = captureWarnings(() => {
-      resolveTarget("default", undefined);
-    });
-    expect(warnings).toEqual([]);
+  test('treats "default" as sentinel - no throw', () => {
+    expect(() => resolveTarget("default", undefined)).not.toThrow();
   });
 
-  test("treats undefined as sentinel - no warning", () => {
-    const warnings = captureWarnings(() => {
-      resolveTarget(undefined, undefined);
-    });
-    expect(warnings).toEqual([]);
+  test("treats undefined as sentinel - no throw", () => {
+    expect(() => resolveTarget(undefined, undefined)).not.toThrow();
   });
 
-  test("warns when named ref is unknown", () => {
-    const warnings = captureWarnings(() => {
-      resolveTarget("nonexistent", undefined);
+  test("throws when named ref is unknown", () => {
+    expect(() => resolveTarget("nonexistent", undefined)).toThrow(
+      /Unknown target "nonexistent"/,
+    );
+  });
+
+  test("returns the named target when declared", () => {
+    const { name } = resolveTarget("quick", {
+      quick: { category: "cli", provider: "claude-code" },
     });
-    expect(warnings.length).toBe(1);
-    expect(warnings[0]).toContain("nonexistent");
+    expect(name).toBe("quick");
   });
 });
 
 describe("resolveContext", () => {
-  test('treats "default" as sentinel - no warning', () => {
-    const warnings = captureWarnings(() => {
-      resolveContext("default", undefined);
-    });
-    expect(warnings).toEqual([]);
+  test('treats "default" as sentinel - no throw', () => {
+    expect(() => resolveContext("default", undefined)).not.toThrow();
   });
 
-  test("treats undefined as sentinel - no warning", () => {
-    const warnings = captureWarnings(() => {
-      resolveContext(undefined, undefined);
-    });
-    expect(warnings).toEqual([]);
+  test("treats undefined as sentinel - no throw", () => {
+    expect(() => resolveContext(undefined, undefined)).not.toThrow();
   });
 
-  test("warns when named ref is unknown", () => {
-    const warnings = captureWarnings(() => {
-      resolveContext("nonexistent", undefined);
+  test("throws when named ref is unknown", () => {
+    expect(() => resolveContext("nonexistent", undefined)).toThrow(
+      /Unknown context "nonexistent"/,
+    );
+  });
+
+  test("returns the named context when declared", () => {
+    const { name } = resolveContext("ide", {
+      ide: { allowedTools: ["Read"] },
     });
-    expect(warnings.length).toBe(1);
-    expect(warnings[0]).toContain("nonexistent");
+    expect(name).toBe("ide");
   });
 });
