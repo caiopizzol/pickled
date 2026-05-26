@@ -78,8 +78,10 @@ export function resolveTarget(
   if (targets?.[targetRef]) {
     return { name: targetRef, config: targets[targetRef] };
   }
-  console.warn(`Target "${targetRef}" not found, using default`);
-  return { name: DEFAULT_SENTINEL, config: DEFAULT_TARGET };
+  const declared = Object.keys(targets ?? {}).join(", ") || "(none)";
+  throw new Error(
+    `Unknown target "${targetRef}". Declared targets: ${declared}. Use "default" to fall back to the built-in Claude Code target.`,
+  );
 }
 
 export function resolveContext(
@@ -92,6 +94,8 @@ export function resolveContext(
   if (contexts?.[contextRef]) {
     return { name: contextRef, config: contexts[contextRef] };
   }
-  console.warn(`Context "${contextRef}" not found, using default`);
-  return { name: DEFAULT_SENTINEL, config: {} };
+  const declared = Object.keys(contexts ?? {}).join(", ") || "(none)";
+  throw new Error(
+    `Unknown context "${contextRef}". Declared contexts: ${declared}.`,
+  );
 }

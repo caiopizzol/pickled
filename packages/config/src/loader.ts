@@ -133,6 +133,11 @@ function validate(config: CheckConfig): void {
   }
 
   const sourceIds = new Set(Object.keys(config.docs?.sources ?? {}));
+  const targetNames = new Set(Object.keys(config.targets ?? {}));
+  const contextNames = new Set(Object.keys(config.contexts ?? {}));
+
+  validateTopLevelMatrixRefs(config.matrix, targetNames, contextNames);
+
   for (const scenario of config.scenarios) {
     if (!scenario.name || !scenario.prompt) {
       throw new Error("pickled.yml: every scenario needs 'name' and 'prompt'");
@@ -151,13 +156,15 @@ function validate(config: CheckConfig): void {
         }
       }
     }
+    validateScenarioTargetRef(scenario.name, scenario.target, targetNames);
+    validateScenarioContextRef(scenario.name, scenario.context, contextNames);
     validateTraps(scenario.name, scenario.traps);
     validateCompareSurfaces(scenario.name, scenario.compareSurfaces, sourceIds);
     validateScenarioMatrix(
       scenario.name,
       scenario.matrix,
       sourceIds,
-      new Set(Object.keys(config.targets ?? {})),
+      targetNames,
       new Set(Object.keys(config.toolsets ?? { none: {} })),
     );
     validateExpected(scenario.name, scenario.expected);
@@ -166,6 +173,76 @@ function validate(config: CheckConfig): void {
   }
 
   validateAuditTrapsSuppression(config);
+}
+
+const DEFAULT_REF = "default";
+
+function validateScenarioTargetRef(
+  scenarioName: string,
+  ref: string | undefined,
+  targetNames: Set<string>,
+): void {
+  if (ref === undefined || ref === DEFAULT_REF) return;
+  if (targetNames.has(ref)) return;
+  const declared = [...targetNames].join(", ") || "(none)";
+  throw new Error(
+    `pickled.yml: scenario "${scenarioName}" references unknown target "${ref}". Declared targets: ${declared}. Use "default" to fall back to the built-in Claude Code target.`,
+  );
+}
+
+function validateScenarioContextRef(
+  scenarioName: string,
+  ref: string | undefined,
+  contextNames: Set<string>,
+): void {
+  if (ref === undefined || ref === DEFAULT_REF) return;
+  if (contextNames.has(ref)) return;
+  const declared = [...contextNames].join(", ") || "(none)";
+  throw new Error(
+    `pickled.yml: scenario "${scenarioName}" references unknown context "${ref}". Declared contexts: ${declared}.`,
+  );
+}
+
+function validateTopLevelMatrixRefs(
+  matrix: { target?: unknown; context?: unknown } | undefined,
+  targetNames: Set<string>,
+  contextNames: Set<string>,
+): void {
+  if (matrix === undefined) return;
+  if (matrix.target !== undefined) {
+    if (!Array.isArray(matrix.target)) {
+      throw new Error(
+        `pickled.yml: matrix.target must be an array of target names (got ${typeof matrix.target}).`,
+      );
+    }
+    for (const ref of matrix.target) {
+      if (typeof ref !== "string") {
+        throw new Error(`pickled.yml: matrix.target entries must be strings`);
+      }
+      if (ref === DEFAULT_REF || targetNames.has(ref)) continue;
+      const declared = [...targetNames].join(", ") || "(none)";
+      throw new Error(
+        `pickled.yml: matrix.target references unknown target "${ref}". Declared targets: ${declared}. Use "default" to fall back to the built-in Claude Code target.`,
+      );
+    }
+  }
+  if (matrix.context !== undefined) {
+    if (!Array.isArray(matrix.context)) {
+      throw new Error(
+        `pickled.yml: matrix.context must be an array of context names (got ${typeof matrix.context}).`,
+      );
+    }
+    for (const ref of matrix.context) {
+      if (typeof ref !== "string") {
+        throw new Error(`pickled.yml: matrix.context entries must be strings`);
+      }
+      if (ref === DEFAULT_REF || contextNames.has(ref)) continue;
+      const declared = [...contextNames].join(", ") || "(none)";
+      throw new Error(
+        `pickled.yml: matrix.context references unknown context "${ref}". Declared contexts: ${declared}.`,
+      );
+    }
+  }
 }
 
 /**
@@ -549,6 +626,12 @@ function validateDocSourceEntry(id: string, value: unknown): void {
       ) {
         throw new Error(
           `pickled.yml: docs.sources["${id}"].maxBytes must be a positive number of bytes`,
+        );
+      }
+      const HARD_CAP = 4 * 1024 * 1024;
+      if (entry.maxBytes > HARD_CAP) {
+        throw new Error(
+          `pickled.yml: docs.sources["${id}"].maxBytes (${entry.maxBytes}) exceeds the 4 MB hard ceiling. Tighten the glob to fit; the cap protects the agent request size.`,
         );
       }
     }

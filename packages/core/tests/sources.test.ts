@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchSource } from "../src/sources.js";
+import { fetchAllSources, fetchSource } from "../src/sources.js";
 
 const created: string[] = [];
 
@@ -173,5 +173,60 @@ describe("fetchSource codebase loader", () => {
     );
     expect(res.matchedFiles).toEqual([]);
     expect(res.content).toBe("");
+  });
+});
+
+describe("fetchSource explicit type", () => {
+  test("type: file rejects an http URL path", async () => {
+    const dir = makeRepo({ "x.md": "x" });
+    await expect(
+      fetchSource(
+        "remote",
+        { type: "file", path: "https://example.com/x.md" },
+        dir,
+      ),
+    ).rejects.toThrow(/type: file but path .* is an http\(s\) URL/);
+  });
+
+  test("type: url rejects a local file path", async () => {
+    const dir = makeRepo({ "x.md": "x" });
+    await expect(
+      fetchSource("local", { type: "url", path: "./x.md" }, dir),
+    ).rejects.toThrow(/type: url but path .* is not an http\(s\) URL/);
+  });
+
+  test("type: file loads a local file", async () => {
+    const dir = makeRepo({ "readme.md": "hello" });
+    const res = await fetchSource(
+      "doc",
+      { type: "file", path: "readme.md" },
+      dir,
+    );
+    expect(res.type).toBe("file");
+    expect(res.content).toBe("hello");
+  });
+
+  test("omitted type still auto-detects", async () => {
+    const dir = makeRepo({ "readme.md": "auto" });
+    const res = await fetchSource("doc", { path: "readme.md" }, dir);
+    expect(res.type).toBe("file");
+    expect(res.content).toBe("auto");
+  });
+});
+
+describe("fetchAllSources onProgress threading", () => {
+  test("forwards onProgress to per-source loaders (codebase soft-cap warning surfaces)", async () => {
+    const dir = makeRepo({
+      "big-a.ts": "x".repeat(200 * 1024),
+      "big-b.ts": "x".repeat(200 * 1024),
+      "readme.md": "hello",
+    });
+    const messages: string[] = [];
+    const sources = {
+      code: { type: "codebase" as const, path: "*.ts" },
+      readme: "readme.md",
+    };
+    await fetchAllSources(sources, dir, (m) => messages.push(m));
+    expect(messages.some((m) => m.includes("soft cap"))).toBe(true);
   });
 });
