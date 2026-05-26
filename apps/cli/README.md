@@ -22,6 +22,8 @@ bunx @pickled-dev/cli <command>
 
 ## Minimum config
 
+A registered source is the truth Pickled is allowed to score against: a local file, a URL, or a codebase glob. Anything not registered does not count.
+
 ```yaml
 tool:
   name: my-product

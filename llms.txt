@@ -46,7 +46,7 @@ The scenario verdict determines the label family. Confidence may refine `YES` in
 
 ## Source contract
 
-Pickled does not magically introspect your product. You declare what counts as truth under `docs.sources` in `pickled.yml`. Anything not registered does not count for scoring. Anything an agent could read can be registered: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. Public or private. URLs or local paths. Loader types: `file` (default), `url`, `codebase` (glob expanded into one logical source; useful for registering whole directories of JSDoc or per-package agent docs).
+A registered source is the truth Pickled is allowed to score against: a local file, a URL, or a codebase glob. Anything not registered does not count for scoring. Anything an agent could read can be registered: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. Public or private. URLs or local paths. Loader types: `file` (default), `url`, `codebase` (glob expanded into one logical source; useful for registering whole directories of JSDoc or per-package agent docs).
 
 ## Matrix and toolsets
 
