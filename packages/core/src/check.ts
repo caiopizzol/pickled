@@ -499,7 +499,7 @@ async function runScenario(
 
   // Compare-surfaces mode: run the scenario once per declared surface, each
   // with only that surface's sources visible. Top-level evaluation fields
-  // stay null per proposals/compare-surfaces.md Decision 3.
+  // stay null because each surface owns its own result block.
   if (scenario.compareSurfaces && scenario.compareSurfaces.length > 0) {
     const surfaces: SurfaceResult[] = [];
     let metadata: ScenarioResult["target"];
@@ -694,7 +694,7 @@ function buildReport(
 ): CheckReport {
   // Each "evaluation" is one data point in the score average. Compare-mode
   // results contribute one evaluation per surface; single-mode results
-  // contribute one. See proposals/compare-surfaces.md Decision 3.
+  // contribute one.
   type Eval = {
     answerable: "YES" | "PARTIAL" | "NO";
     confidence: number;

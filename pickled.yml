@@ -165,8 +165,7 @@ scenarios:
   # comprehension failed (symbol vs option vs constraint) rather than
   # rolling everything under "missing includes". Scoring substrate is
   # the same substring matcher includes already uses; the split is
-  # presentational. See proposals/implementation-readiness.md for the
-  # design.
+  # presentational. See issue #19 for the design.
   - name: "Implementation-readiness: declare a web cell"
     prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, and constraints matter before I write the YAML?"
     matrix:

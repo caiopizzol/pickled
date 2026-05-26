@@ -34,7 +34,7 @@ export interface SurfaceResult {
 /**
  * One per-cell evaluation produced by matrix mode. A cell is the tuple
  * (interface, source, toolset). Carries the scenario's evaluation fields
- * scoped to that cell. See `proposals/matrix-evaluation.md`.
+ * scoped to that cell.
  *
  * Runtime support today: `toolset = "none"` (source injected), the `web`
  * shape (`webSearch`/`webFetch` flags), and the `mcp` shape (`mcpServers`

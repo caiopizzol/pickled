@@ -147,7 +147,7 @@ export interface ToolsetConfig {
 /**
  * Matrix declaration on a scenario. Expands the scenario into one cell per
  * (interface × source × toolset) combination. Each cell becomes one
- * evaluation in the report. See `proposals/matrix-evaluation.md`.
+ * evaluation in the report.
  */
 export interface ScenarioMatrix {
   interfaces?: string[];
@@ -177,8 +177,7 @@ export interface ExpectedChecks {
    * diagnosis; do not claim more than substring presence in vendor docs.
    *
    * Back-compatible: omit any/all of these to score only `includes` /
-   * `excludes` exactly as before. See proposals/implementation-readiness.md
-   * for the design.
+   * `excludes` exactly as before. See issue #19 for the design.
    */
   symbols?: string[];
   paths?: string[];
@@ -226,7 +225,7 @@ export interface Scenario {
    * one surface. The scenario runs once per declared surface, with only
    * those sources visible to the agent. Per-surface results live in
    * `ScenarioResult.surfaces[]`; the top-level evaluation fields are
-   * `null` when this is set. See `proposals/compare-surfaces.md`.
+   * `null` when this is set.
    */
   compareSurfaces?: string[][];
 
@@ -234,7 +233,6 @@ export interface Scenario {
    * Matrix declaration. When set, the scenario runs once per cell formed
    * by (interfaces × sources × toolsets). Per-cell results live in
    * `ScenarioResult.cells[]`; top-level evaluation fields are `null`.
-   * See `proposals/matrix-evaluation.md`.
    */
   matrix?: ScenarioMatrix;
 
@@ -272,7 +270,6 @@ export interface DocSourceEntry {
    * Source loader to use. Default (when omitted) is to auto-detect file vs
    * URL based on the path prefix. Set explicitly to `codebase` to treat
    * `path` as a glob and load every matching file as one logical source.
-   * See `proposals/codebase-source-loader.md`.
    */
   type?: "file" | "url" | "codebase";
   /**

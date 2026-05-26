@@ -144,7 +144,7 @@ function formatResultLine(result: ScenarioResult): string {
 }
 
 /**
- * Matrix-mode block per proposals/matrix-evaluation.md. One row per cell;
+ * Matrix-mode block. One row per cell;
  * cell label is `[interface · source · toolset]`. Verifier sources, when
  * declared on the scenario, surface as a human-review note (NOT graded).
  */
@@ -216,7 +216,7 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
 }
 
 /**
- * Compare-mode block per proposals/compare-surfaces.md Decisions 2 and 5.
+ * Compare-mode block.
  * One preamble line names the intersection citation contract; each surface
  * gets its own status line plus indented details. No synthesized top-level
  * aggregate.
