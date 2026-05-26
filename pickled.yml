@@ -114,7 +114,7 @@ toolsets:
           CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 
 scenarios:
-  # What does Pickled do? — positioning across two public surfaces and two
+  # What does Pickled do? - positioning across two public surfaces and two
   # tool paths. The `none` cells inject the source and ask the agent to
   # summarize; the `web` cells get only the URL as a hint and must use
   # WebSearch / WebFetch to reach it (tool-use provenance vetoes cells
@@ -135,7 +135,7 @@ scenarios:
     verifiers:
       sources: [public_docs_full]
 
-  # Install and run a first check — the practical onboarding test. Both
+  # Install and run a first check - the practical onboarding test. Both
   # cells inject the source (toolset: none); a real user reading the docs
   # should walk away with the `bunx @pickled-dev/cli` install form, a
   # `pickled.yml`, and `pickled check .` as the run command. The excludes
@@ -195,7 +195,7 @@ scenarios:
     verifiers:
       sources: [public_docs_full]
 
-  # Which toolsets work today? — coverage of the matrix toolset axis as
+  # Which toolsets work today? - coverage of the matrix toolset axis as
   # currently shipped. The three shapes (none / web / mcp) are documented
   # at docs.pickled.dev/toolsets. Provider matrix as of cli-v0.25.0:
   # - none: every provider

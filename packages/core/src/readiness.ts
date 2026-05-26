@@ -129,8 +129,7 @@ function findGroupedCheckPass(scenario: ScenarioResult): ReadinessDiagnostic[] {
  * the diagnostic's cells list when provided (matrix); single-mode
  * passes null and the scenario name carries the attribution.
  *
- * Excludes inclusion: surfaced during the first SuperDoc dogfood run
- * (#23 / #24). A cell that satisfied symbols+paths but hit excludes
+ * Excludes inclusion: see #24. A cell that satisfied symbols+paths but hit excludes
  * was incorrectly labeled "Full readiness signal" even though the
  * cell's verdict was PARTIAL. The strict reading of "full readiness"
  * is: got the right things AND avoided the wrong things. Cells that

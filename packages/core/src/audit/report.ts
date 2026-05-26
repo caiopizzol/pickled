@@ -121,7 +121,7 @@ export function renderAuditMarkdown(scan: ScanResult): string {
   } else {
     for (const m of scan.sourceTrapMatches) {
       lines.push(
-        `- **${m.sourceId}** (\`${m.sourcePath}:L${m.line}\`) — trap \`${m.trapId}\` matched \`${m.matched}\` (${m.severity})`,
+        `- **${m.sourceId}** (\`${m.sourcePath}:L${m.line}\`) - trap \`${m.trapId}\` matched \`${m.matched}\` (${m.severity})`,
       );
       lines.push(`  - reason: ${m.trapReason}`);
       lines.push(

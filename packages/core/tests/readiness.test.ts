@@ -188,7 +188,7 @@ describe("grouped_check_pass", () => {
   });
 
   test("skipped when every positive group is satisfied BUT an exclude was hit (#24)", () => {
-    // Regression for #24, surfaced by the first SuperDoc dogfood run.
+    // Regression for #24, surfaced by an early real-product dogfood run.
     // Cell that satisfied symbols + paths but hit an exclude was being
     // labeled "Full readiness signal" while its verdict was PARTIAL.
     // Strict reading of "full readiness": got the right things AND
