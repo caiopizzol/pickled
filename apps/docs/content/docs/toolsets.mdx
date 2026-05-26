@@ -5,6 +5,8 @@ description: Configure the tool path each matrix cell uses to reach an answer.
 
 Toolsets name a tool configuration the matrix can iterate over. Three shapes ship today.
 
+In `web` and `mcp` cells, local files and codebase globs are not read from disk by the agent; they are name-only hints unless the configured tools can reach the same content. Use `toolset: none` to test injected local context.
+
 ## `none` (controlled baseline)
 
 ```yaml

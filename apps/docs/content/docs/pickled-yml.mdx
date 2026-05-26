@@ -17,6 +17,8 @@ Both fields are required. They flow into the system prompt so the agent knows wh
 
 ## `docs.sources`
 
+A registered source is the truth Pickled is allowed to score against: a local file, a URL, or a codebase glob. Anything not registered does not count.
+
 A map of source ID to source definition.
 
 ```yaml
@@ -41,6 +43,8 @@ Source values can be:
 - A URL string (fetched at check time).
 - An object with `type: "codebase"` (codebase loader: glob over the local repo).
 - An object with `path` + `audit` (per-source audit overrides).
+
+Use local files for repo docs and agent instructions, URLs for published docs and hosted bundles, and codebase globs for groups of files such as JSDoc, comments, or per-package agent docs.
 
 ## `targets`
 
