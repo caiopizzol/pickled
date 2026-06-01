@@ -248,6 +248,23 @@ export interface Scenario {
    * into the agent's prompt; never LLM-judged.
    */
   verifiers?: VerifierConfig;
+
+  /**
+   * Sample answers for `pickled test` to score offline, with no model calls.
+   * Each `pass` string must satisfy the scenario's `expected` checks and trip
+   * no `traps`; each `fail` string must NOT (a check missing or a trap fired).
+   * Catches brittle/over-specific checks and false-firing traps before a paid
+   * run. Only the deterministic text contract (`expected` + `traps`) is scored;
+   * citation/`requiredSources` is not, since an example has no source-injection
+   * context. `pass`/`fail` are the forward-facing vocabulary (see the planned
+   * questions/checks/examples model); the field name does not change with it.
+   */
+  examples?: ScenarioExamples;
+}
+
+export interface ScenarioExamples {
+  pass?: string[];
+  fail?: string[];
 }
 
 export type DocSourceType = "url" | "file" | "codebase";

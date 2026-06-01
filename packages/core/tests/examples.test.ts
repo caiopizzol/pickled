@@ -1,0 +1,76 @@
+import { expect, test } from "bun:test";
+import type { CheckConfig } from "@pickled-dev/config";
+import { runExampleTests } from "../src/examples.js";
+
+// runExampleTests only reads config.scenarios, so a minimal cast is enough.
+function withScenario(scenario: object): CheckConfig {
+  return { scenarios: [scenario] } as unknown as CheckConfig;
+}
+
+const base = {
+  name: "S",
+  prompt: "p",
+  matrix: { interfaces: ["q"], sources: ["readme"], toolsets: ["none"] },
+  expected: {
+    symbols: ["SuperDocUIProvider"],
+    paths: ["superdoc/ui/react"],
+  },
+  traps: [
+    { id: "legacy", pattern: "createHeadlessToolbar\\s*\\(", reason: "legacy" },
+  ],
+};
+
+test("flags a pass example that trips a trap (the false-fire we hit on SuperDoc)", () => {
+  const report = runExampleTests(
+    withScenario({
+      ...base,
+      examples: {
+        pass: [
+          "Use SuperDocUIProvider from superdoc/ui/react. Avoid createHeadlessToolbar() (legacy).",
+        ],
+      },
+    }),
+  );
+  expect(report.mismatches).toBe(1);
+  const result = report.scenarios[0].results[0];
+  expect(result.ok).toBe(false);
+  expect(result.reasons.join(" ")).toContain("trap fired: legacy");
+});
+
+test("a clean pass example passes", () => {
+  const report = runExampleTests(
+    withScenario({
+      ...base,
+      traps: [],
+      examples: { pass: ["Use SuperDocUIProvider from superdoc/ui/react."] },
+    }),
+  );
+  expect(report.mismatches).toBe(0);
+});
+
+test("a fail example that misses a required check is ok", () => {
+  const report = runExampleTests(
+    withScenario({
+      ...base,
+      examples: { fail: ["Use editor.doc for your React toolbar."] },
+    }),
+  );
+  expect(report.mismatches).toBe(0);
+  expect(report.scenarios[0].results[0].ok).toBe(true);
+});
+
+test("flags a fail example that satisfies everything (check too weak)", () => {
+  const report = runExampleTests(
+    withScenario({
+      ...base,
+      traps: [],
+      examples: { fail: ["SuperDocUIProvider lives in superdoc/ui/react."] },
+    }),
+  );
+  expect(report.mismatches).toBe(1);
+});
+
+test("scenarios without examples are skipped", () => {
+  const report = runExampleTests(withScenario({ ...base }));
+  expect(report.total).toBe(0);
+});

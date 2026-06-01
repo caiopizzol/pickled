@@ -121,6 +121,25 @@ scenarios:
 
 String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding `process.env` entry at load. Missing env vars become empty strings so the failure surfaces at the call site (e.g., a 401 from the MCP server) rather than at config load. Bun auto-loads `.env`.
 
+## Testing checks offline (`examples` + `pickled test`)
+
+Add sample answers to a scenario and score them with no model calls:
+
+```yaml
+scenarios:
+  - name: Install
+    prompt: How do I install my-product?
+    expected:
+      includes: ["bunx my-product"]
+    examples:
+      pass:
+        - "Install it with `bunx my-product`."
+      fail:
+        - "Run `npm install my-product-cli`."
+```
+
+`pickled test` scores each `examples.pass` / `examples.fail` string against the scenario's `expected` and `traps` with the same matchers a real run uses, makes zero model calls, and exits non-zero if any example does not behave as declared. A `pass` example a check rejects means the check is too strict; a `pass` example a trap fires on means the trap is over-broad. Citation / `requiredSources` is not scored, since an example has no injected source.
+
 ## What pickled rejects at load
 
 - A scenario with no actionable contract (no `requiredSources`, `expected`, or `traps`).
