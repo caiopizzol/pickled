@@ -79,12 +79,12 @@ export interface CheckOptions {
   /**
    * Matrix-mode cell filters. When set, only cells matching the filter run;
    * other cells are skipped. Designed to support GitHub Actions matrix usage
-   * where each CI job runs one cell (e.g.,
-   * `pickled check --interface codex --source readme --toolset none`).
+   * where each CI job runs one narrowed slice.
    * Each filter accepts a single name; omit to include all cells on that axis.
    */
   cellFilter?: {
     interface?: string;
+    access?: string;
     source?: string;
     toolset?: string;
   };
@@ -125,6 +125,7 @@ export interface PlannedCell {
   scenario: string;
   kind: "matrix" | "single";
   interface?: string;
+  access?: string;
   source?: string | null;
   toolset?: string;
   target?: string;
@@ -144,7 +145,7 @@ export interface PlannedCell {
 // and the runner so they expand identically.
 function matrixCellPairs(
   matrix: ScenarioMatrix,
-): Array<{ source: string | null; toolset: string }> {
+): Array<{ access?: string; source: string | null; toolset: string }> {
   if (matrix.accessPairs) return matrix.accessPairs;
   const sources: Array<string | null> = matrix.sources ?? [null];
   const toolsets = matrix.toolsets ?? ["none"];
@@ -172,7 +173,13 @@ function planMatrixCells(
         if (cellFilter.interface && cellFilter.interface !== interfaceName) {
           continue;
         }
-        for (const { source: sourceName, toolset: toolsetName } of pairs) {
+        for (const cellPair of pairs) {
+          const accessName = cellPair.access;
+          const sourceName = cellPair.source;
+          const toolsetName = cellPair.toolset;
+          if (cellFilter.access && cellFilter.access !== accessName) {
+            continue;
+          }
           if (
             cellFilter.source !== undefined &&
             cellFilter.source !== (sourceName ?? "")
@@ -186,6 +193,7 @@ function planMatrixCells(
             scenario: scenario.name,
             kind: "matrix",
             interface: interfaceName,
+            access: accessName,
             source: sourceName,
             toolset: toolsetName,
           });
@@ -194,8 +202,8 @@ function planMatrixCells(
     } else {
       // Non-matrix: one cell per (target, context). Per-axis filters
       // do not apply to non-matrix scenarios (they have no source or
-      // toolset axis); to skip a non-matrix scenario, use
-      // `--scenario` instead.
+      // toolset axis); to skip a non-matrix scenario, use the question
+      // filter instead.
       cells.push({
         scenario: scenario.name,
         kind: "single",
@@ -213,7 +221,7 @@ function planMatrixCells(
  */
 function plannedCellKey(c: PlannedCell): string {
   if (c.kind === "matrix") {
-    return `m:${c.scenario}\u0001${c.interface}\u0001${c.source ?? ""}\u0001${c.toolset}`;
+    return `m:${c.scenario}\u0001${c.interface}\u0001${c.access ?? ""}\u0001${c.source ?? ""}\u0001${c.toolset}`;
   }
   return `s:${c.scenario}\u0001${c.target}\u0001${c.context}`;
 }
@@ -244,6 +252,7 @@ function buildPlanReport(args: {
           ? {
               scenario: c.scenario,
               interface: c.interface,
+              access: c.access,
               source: c.source,
               toolset: c.toolset,
             }
@@ -283,8 +292,7 @@ export async function runCheck(
   const registeredIds = docs.map((d) => d.id);
   let expanded = expandMatrix(config);
 
-  // Apply scenario name filter (used by CLI --scenario flag and CI matrix
-  // jobs that run one scenario at a time).
+  // Apply question name filter (stored internally as scenario names).
   if (options.scenarioFilter && options.scenarioFilter.length > 0) {
     const wanted = new Set(options.scenarioFilter);
     expanded = expanded.filter((e) => wanted.has(e.scenario.name));
@@ -300,6 +308,11 @@ export async function runCheck(
   // applies sampling and the max-cells gate before any adapter call.
   const cellFilter = options.cellFilter ?? {};
   const expandedCells = planMatrixCells(expanded, config, cellFilter);
+  if (expandedCells.length === 0) {
+    throw new Error(
+      "No cells matched the selected filters. Check --question, --agent, and --access.",
+    );
+  }
   let selectedCells = expandedCells;
   let usedSeed: string | undefined;
   if (options.sample !== undefined) {
@@ -325,7 +338,7 @@ export async function runCheck(
     selectedCells.length > options.maxCells
   ) {
     throw new Error(
-      `Matrix expands to ${selectedCells.length} cells, exceeding --max-cells ${options.maxCells}. Add --interface/--source/--toolset/--scenario filters, or pass --sample N to sample per scenario.`,
+      `Matrix expands to ${selectedCells.length} cells, exceeding --max-cells ${options.maxCells}. Add --question/--agent/--access filters, or pass --sample N to sample per question.`,
     );
   }
 
@@ -773,6 +786,10 @@ async function runMatrixScenario(
     for (const cellPair of pairs) {
       const sourceName = cellPair.source;
       const toolsetName = cellPair.toolset;
+      const accessName = cellPair.access;
+      if (cellFilter.access && cellFilter.access !== accessName) {
+        continue;
+      }
       if (
         cellFilter.source !== undefined &&
         cellFilter.source !== (sourceName ?? "")
@@ -787,7 +804,7 @@ async function runMatrixScenario(
       // sample; cells outside the set are skipped silently here so the
       // matrix shape stays honest (same axes, fewer cells run).
       if (matrixCellSelection !== undefined) {
-        const key = `m:${scenario.name}\u0001${interfaceName}\u0001${sourceName ?? ""}\u0001${toolsetName}`;
+        const key = `m:${scenario.name}\u0001${interfaceName}\u0001${accessName ?? ""}\u0001${sourceName ?? ""}\u0001${toolsetName}`;
         if (!matrixCellSelection.has(key)) continue;
       }
       // Toolset resolution. Three toolset shapes run today:
@@ -1199,6 +1216,7 @@ async function runMatrixScenario(
       cells.push({
         cell: {
           interface: interfaceName,
+          access: accessName,
           source: sourceName,
           toolset: toolsetName,
         },

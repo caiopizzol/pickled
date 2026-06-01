@@ -32,7 +32,7 @@ export interface SurfaceResult {
 
 /**
  * One per-cell evaluation produced by matrix mode. A cell is the tuple
- * (interface, source, toolset). Carries the scenario's evaluation fields
+ * (agent/interface, access, source, toolset). Carries the scenario's evaluation fields
  * scoped to that cell.
  *
  * Runtime support today: `toolset = "none"` (source injected), the `web`
@@ -44,6 +44,7 @@ export interface SurfaceResult {
 export interface CellResult {
   cell: {
     interface: string;
+    access?: string;
     source: string | null;
     toolset: string;
   };
@@ -187,6 +188,7 @@ export interface CheckReport {
       scenario: string;
       cells: Array<{
         interface: string;
+        access?: string;
         source: string | null;
         toolset: string;
       }>;
@@ -194,8 +196,8 @@ export interface CheckReport {
   };
   /**
    * Cell counts and sampling provenance for a run. `expandedCells` is the
-   * count after `--scenario` / `--interface` / `--source` / `--toolset`
-   * filters but before sampling. `selectedCells` is the count after
+   * count after `--question` / `--agent` / `--access` filters but before
+   * sampling. `selectedCells` is the count after
    * sampling (equal to `expandedCells` when `--sample` was not passed).
    * `seed` is recorded only when sampling was active.
    */
@@ -207,6 +209,7 @@ export interface CheckReport {
     cells?: Array<{
       scenario: string;
       interface?: string;
+      access?: string;
       source?: string | null;
       toolset?: string;
       target?: string;

@@ -27,6 +27,7 @@ export type ReadinessPattern =
 /** Coordinates of a matrix cell, for attribution in JSON consumers. */
 export interface CellCoord {
   interface: string;
+  access?: string;
   source: string | null;
   toolset: string;
 }
@@ -66,12 +67,14 @@ export function summarizeReadiness(report: CheckReport): ReadinessSummary {
 
 /** Coordinates pretty-printed for the terminal block. */
 function fmtCoord(c: CellCoord): string {
+  if (c.access) return `${c.interface} · ${c.access}`;
   return `${c.interface} · ${c.source ?? "-"} · ${c.toolset}`;
 }
 
 function cellCoord(cell: CellResult): CellCoord {
   return {
     interface: cell.cell.interface,
+    access: cell.cell.access,
     source: cell.cell.source,
     toolset: cell.cell.toolset,
   };
@@ -208,7 +211,10 @@ function findSourceComparison(scenario: ScenarioResult): ReadinessDiagnostic[] {
       ) {
         out.push({
           pattern: "source_comparison",
-          message: `Source "${otherCell.cell.source}" answered (${otherCell.answerable}) while model prior (source=none) did not on [${noneCell.cell.interface} · ${noneCell.cell.toolset}] - source is doing the comprehension work`,
+          message:
+            otherCell.cell.access && noneCell.cell.access
+              ? `Access "${otherCell.cell.access}" answered (${otherCell.answerable}) while "${noneCell.cell.access}" did not for agent "${noneCell.cell.interface}" - source is doing the comprehension work`
+              : `Source "${otherCell.cell.source}" answered (${otherCell.answerable}) while model prior (source=none) did not on [${noneCell.cell.interface} · ${noneCell.cell.toolset}] - source is doing the comprehension work`,
           scenario: scenario.scenario.name,
           cells: [cellCoord(otherCell), cellCoord(noneCell)],
         });
@@ -246,7 +252,10 @@ function findToolsetComparison(
       ) {
         out.push({
           pattern: "toolset_comparison",
-          message: `Toolset "${otherCell.cell.toolset}" answered (${otherCell.answerable}) while controlled (toolset=none) did not on [${noneCell.cell.interface} · ${noneCell.cell.source ?? "-"}] - agent needed live discovery to reach this answer`,
+          message:
+            otherCell.cell.access && noneCell.cell.access
+              ? `Access "${otherCell.cell.access}" answered (${otherCell.answerable}) while "${noneCell.cell.access}" did not for agent "${noneCell.cell.interface}" - agent needed live discovery to reach this answer`
+              : `Toolset "${otherCell.cell.toolset}" answered (${otherCell.answerable}) while controlled (toolset=none) did not on [${noneCell.cell.interface} · ${noneCell.cell.source ?? "-"}] - agent needed live discovery to reach this answer`,
           scenario: scenario.scenario.name,
           cells: [cellCoord(otherCell), cellCoord(noneCell)],
         });
@@ -269,12 +278,14 @@ function findInterfaceComparison(
   const cells = scenario.cells ?? [];
   if (cells.length === 0) return [];
   const out: ReadinessDiagnostic[] = [];
-  // Group cells by (source, toolset). Reading the array after a
+  // Group public cells by access; legacy/internal cells fall back to
+  // (source, toolset). Reading the array after a
   // ?? [] fallback avoids the non-null assertion warning the earlier
   // `groups.get(key)!` produced.
   const groups = new Map<string, CellResult[]>();
   for (const cell of cells) {
-    const key = `${cell.cell.source ?? ""}\u0001${cell.cell.toolset}`;
+    const key =
+      cell.cell.access ?? `${cell.cell.source ?? ""}\u0001${cell.cell.toolset}`;
     const existing = groups.get(key) ?? [];
     existing.push(cell);
     groups.set(key, existing);
@@ -294,9 +305,12 @@ function findInterfaceComparison(
       .join(", ");
     const sample = group[0];
     if (!sample) continue;
+    const location = sample.cell.access
+      ? `access "${sample.cell.access}"`
+      : `[${sample.cell.source ?? "-"} · ${sample.cell.toolset}]`;
     out.push({
       pattern: "interface_comparison",
-      message: `Provider gap on [${sample.cell.source ?? "-"} · ${sample.cell.toolset}]: [${yesNames}] at YES, [${worseNames}] - interface-specific comprehension gap`,
+      message: `Provider gap on ${location}: [${yesNames}] at YES, [${worseNames}] - interface-specific comprehension gap`,
       scenario: scenario.scenario.name,
       cells: group.map(cellCoord),
     });

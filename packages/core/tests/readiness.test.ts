@@ -24,6 +24,7 @@ function emptyExpected() {
 
 function cell(args: {
   interface: string;
+  access?: string;
   source: string | null;
   toolset: string;
   answerable: Answerable;
@@ -32,6 +33,7 @@ function cell(args: {
   return {
     cell: {
       interface: args.interface,
+      access: args.access,
       source: args.source,
       toolset: args.toolset,
     },
@@ -293,6 +295,33 @@ describe("source_comparison", () => {
     expect(diags[0]?.message).toContain('Source "docs" answered');
     expect(diags[0]?.message).toContain("model prior");
     expect(diags[0]?.cells).toHaveLength(2);
+  });
+
+  test("uses access names when public access metadata is present", () => {
+    const r = report([
+      scenario("Gradient", [
+        cell({
+          interface: "quick",
+          access: "prior",
+          source: "none",
+          toolset: "none",
+          answerable: "NO",
+        }),
+        cell({
+          interface: "quick",
+          access: "injected",
+          source: "docs",
+          toolset: "none",
+          answerable: "YES",
+        }),
+      ]),
+    ]);
+    const diags = summarizeReadiness(r).diagnostics.filter(
+      (d) => d.pattern === "source_comparison",
+    );
+    expect(diags[0]?.message).toContain('Access "injected" answered');
+    expect(diags[0]?.message).toContain('"prior" did not');
+    expect(diags[0]?.cells[0]?.access).toBe("injected");
   });
 
   test("does not emit when none cell also answered (no comparison signal)", () => {

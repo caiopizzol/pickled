@@ -77,7 +77,7 @@ A question carries at least one check. Each entry counts once; the cell verdict 
 - `mustNotMention` - substrings the answer must not contain.
 - `anyOf` - groups of `{ label, values }`; each group is satisfied when the answer contains at least one of its values.
 
-## Targets today
+## Agents today
 
 - `claude-code` - Claude Agent SDK. Supports `none`, `web`, and `mcp` tool modes.
 - `codex-cli` - Codex CLI binary. Supports `none` only.
@@ -92,12 +92,13 @@ JSON output stays raw. It carries machine fields (`answerable`, `confidence`, `c
 
 ## Cost and dry-run controls
 
-For paid targets, a run grows expensive as you add agents and access paths. Four flags keep it in check:
+For paid agents, a run grows expensive as you add agents and access paths. These flags keep it in check:
 
 - `--plan` (dry run): expand the run, apply filters and sampling, print the cell list, exit. Zero model calls.
 - `--max-cells N`: hard fail before any model call if the selected cell count exceeds N.
 - `--sample N`: deterministic per-question sample.
 - `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` are reproducible.
+- `--question ID`, `--agent NAME`, `--access NAME`: narrow a run by names from `pickled.yml`.
 
 The report header (text and JSON) records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
 

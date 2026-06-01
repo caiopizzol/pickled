@@ -139,7 +139,11 @@ export interface ScenarioMatrix {
    * no-context path to the string `"none"`, never null. The public schema's
    * `access` list compiles to this.
    */
-  accessPairs?: Array<{ source: string | null; toolset: string }>;
+  accessPairs?: Array<{
+    access?: string;
+    source: string | null;
+    toolset: string;
+  }>;
 }
 
 /**

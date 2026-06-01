@@ -3,7 +3,7 @@ import { loadConfig, runExampleTests } from "@pickled-dev/core";
 import chalk from "chalk";
 
 export interface TestOptions {
-  scenario?: string;
+  question?: string;
 }
 
 /**
@@ -26,10 +26,10 @@ export async function test(
     process.exit(1);
   }
 
-  if (options.scenario) {
-    const match = config.scenarios.filter((s) => s.name === options.scenario);
+  if (options.question) {
+    const match = config.scenarios.filter((s) => s.name === options.question);
     if (match.length === 0) {
-      console.error(chalk.red(`No question named "${options.scenario}".`));
+      console.error(chalk.red(`No question named "${options.question}".`));
       process.exit(1);
     }
     config = { ...config, scenarios: match };

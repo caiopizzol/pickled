@@ -56,7 +56,7 @@ That runs one question with your README injected. Add more `access` paths to com
 
 ## Cost controls
 
-For paid model targets, a run can expand to many `(agent x access)` cells. Three flags keep that in check:
+For paid agents, a run can expand to many `(agent x access)` cells. These flags keep that in check:
 
 ```bash
 pickled check . --plan                           # dry run: no model calls
@@ -65,6 +65,14 @@ pickled check . --sample 2 --seed nightly-2026  # deterministic sample per quest
 ```
 
 The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample.
+
+Narrow a run by the names in `pickled.yml`:
+
+```bash
+pickled check . --question install
+pickled check . --agent quick
+pickled check . --access injected
+```
 
 ## Current support
 

@@ -158,15 +158,23 @@ export function compilePublicConfig(pub: PublicConfig): CheckConfig {
   const toolsets: Record<string, ToolsetConfig> = {};
   const pairByAccess: Record<
     string,
-    { source: string | null; toolset: string }
+    { access: string; source: string | null; toolset: string }
   > = {};
   for (const [name, access] of Object.entries(pub.access)) {
     if (access.tools === "none") {
       toolsets.none = {};
-      pairByAccess[name] = { source: access.source, toolset: "none" };
+      pairByAccess[name] = {
+        access: name,
+        source: access.source,
+        toolset: "none",
+      };
     } else if (access.tools === "web") {
       toolsets[name] = { webSearch: true, webFetch: true };
-      pairByAccess[name] = { source: access.source, toolset: name };
+      pairByAccess[name] = {
+        access: name,
+        source: access.source,
+        toolset: name,
+      };
     } else {
       const mcpServers: Record<string, McpServerConfig> = {};
       for (const [label, server] of Object.entries(access.servers ?? {})) {
@@ -178,7 +186,11 @@ export function compilePublicConfig(pub: PublicConfig): CheckConfig {
         mcpServers[label] = cfg;
       }
       toolsets[name] = { mcpServers };
-      pairByAccess[name] = { source: access.source, toolset: name };
+      pairByAccess[name] = {
+        access: name,
+        source: access.source,
+        toolset: name,
+      };
     }
   }
 

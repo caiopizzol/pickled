@@ -136,19 +136,21 @@ function formatResultLine(result: ScenarioResult): string {
 
 /**
  * Matrix-mode block. One row per cell;
- * cell label is `[interface · source · toolset]`. Verifier sources, when
+ * public-schema cells render as `[agent · access]`. Legacy/internal cells
+ * fall back to `[interface · source · toolset]`. Verifier sources, when
  * declared on the scenario, surface as a human-review note (NOT graded).
  */
 function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
   if (!result.cells) return [];
   const lines: string[] = [];
+  const hasAccess = result.cells.some((cell) => cell.cell.access);
   lines.push(
-    `${indent}${chalk.dim("Matrix cells (interface · source · toolset)")}`,
+    `${indent}${chalk.dim(hasAccess ? "Matrix cells (agent · access)" : "Matrix cells (interface · source · toolset)")}`,
   );
   for (const cell of result.cells) {
     const status = getScenarioStatus(cell);
     const color = toneToColor(status.tone);
-    const labelText = `[${cell.cell.interface} · ${cell.cell.source ?? "-"} · ${cell.cell.toolset}]`;
+    const labelText = formatCellLabel(cell.cell);
     const label = chalk.dim(labelText);
     const statusLine = `${color(status.icon)} ${color(renderStatusLine(status))}`;
     lines.push(`${indent}${label} ${statusLine}`);
@@ -211,6 +213,16 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
     }
   }
   return lines;
+}
+
+function formatCellLabel(cell: {
+  interface?: string;
+  access?: string;
+  source?: string | null;
+  toolset?: string;
+}): string {
+  if (cell.access) return `[${cell.interface} · ${cell.access}]`;
+  return `[${cell.interface} · ${cell.source ?? "-"} · ${cell.toolset}]`;
 }
 
 /**
@@ -344,7 +356,7 @@ export function formatCheckReport(
       }
       const detail =
         c.interface !== undefined
-          ? `[${c.interface} · ${c.source ?? "-"} · ${c.toolset}]`
+          ? formatCellLabel(c)
           : `[${c.target}${c.context && c.context !== "default" ? `/${c.context}` : ""}]`;
       lines.push(`    ${chalk.dim(detail)}`);
     }

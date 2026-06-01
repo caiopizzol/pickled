@@ -425,7 +425,11 @@ function validateActionableContract(scenario: {
     interfaces?: string[];
     sources?: string[];
     toolsets?: string[];
-    accessPairs?: Array<{ source: string | null; toolset: string }>;
+    accessPairs?: Array<{
+      access?: string;
+      source: string | null;
+      toolset: string;
+    }>;
   };
 }): void {
   const hasCitation = scenario.requiredSources !== undefined;

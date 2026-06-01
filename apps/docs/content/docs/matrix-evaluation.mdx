@@ -69,3 +69,11 @@ pickled check . --sample 2 --seed nightly-2026-06-01
 ```
 
 `--sample` picks cells deterministically per question. The receipt records `expandedCells`, `selectedCells`, and `seed`.
+
+Narrow a run by config names when you need one slice:
+
+```bash
+pickled check . --question install
+pickled check . --agent quick
+pickled check . --access injected_llms
+```

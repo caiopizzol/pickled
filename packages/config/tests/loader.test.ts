@@ -65,6 +65,7 @@ describe("loadConfig pipeline", () => {
     expect(s.name).toBe("positioning");
     expect(s.matrix?.interfaces).toEqual(["quick", "api"]);
     expect(s.matrix?.accessPairs).toContainEqual({
+      access: "prior",
       source: "none",
       toolset: "none",
     });

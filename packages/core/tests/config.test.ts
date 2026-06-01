@@ -86,9 +86,9 @@ describe("loadConfig (new public schema, via package export)", () => {
       expect(s.prompt).toContain("what does pickled do");
       expect(s.matrix?.interfaces).toEqual(["quick", "api"]);
       expect(s.matrix?.accessPairs).toEqual([
-        { source: "none", toolset: "none" },
-        { source: "docs", toolset: "none" },
-        { source: "none", toolset: "web" },
+        { access: "prior", source: "none", toolset: "none" },
+        { access: "injected", source: "docs", toolset: "none" },
+        { access: "web", source: "none", toolset: "web" },
       ]);
     });
   });
@@ -98,7 +98,11 @@ describe("loadConfig (new public schema, via package export)", () => {
       const config = await loadConfig(dir);
       const pairs = config.scenarios[0]!.matrix?.accessPairs ?? [];
       expect(pairs.some((p) => p.source === null)).toBe(false);
-      expect(pairs).toContainEqual({ source: "none", toolset: "none" });
+      expect(pairs).toContainEqual({
+        access: "prior",
+        source: "none",
+        toolset: "none",
+      });
     });
   });
 

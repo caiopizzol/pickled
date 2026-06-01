@@ -147,12 +147,14 @@ describe("formatCheckReport", () => {
           {
             scenario: "s1",
             interface: "quick",
+            access: "injected",
             source: "readme",
             toolset: "none",
           },
           {
             scenario: "s1",
             interface: "quick",
+            access: "web",
             source: "readme",
             toolset: "web",
           },
@@ -163,6 +165,8 @@ describe("formatCheckReport", () => {
     expect(text).toContain("Questions: 1");
     expect(text).not.toContain("Questions: 0");
     expect(text).toContain("Cells: 2");
+    expect(text).toContain("[quick · injected]");
+    expect(text).toContain("[quick · web]");
   });
 
   test("PARTIAL at high confidence still renders Partially grounded, not Well grounded", () => {

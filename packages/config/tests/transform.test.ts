@@ -240,7 +240,11 @@ describe("compilePublicConfig", () => {
     const prior = pairs?.find(
       (p) => p.toolset === "none" && p.source === "none",
     );
-    expect(prior).toEqual({ source: "none", toolset: "none" });
+    expect(prior).toEqual({
+      access: "prior",
+      source: "none",
+      toolset: "none",
+    });
     // Guard: no pair carries a null source for an injected/prior cell.
     expect(pairs?.some((p) => p.source === null)).toBe(false);
   });
@@ -252,6 +256,7 @@ describe("compilePublicConfig", () => {
     const c = compilePublicConfig(pub);
     expect(c.toolsets?.web).toEqual({ webSearch: true, webFetch: true });
     expect(c.scenarios[0]!.matrix?.accessPairs).toContainEqual({
+      access: "web",
       source: "none",
       toolset: "web",
     });
@@ -279,6 +284,7 @@ describe("compilePublicConfig", () => {
       KEY: "v",
     });
     expect(c.scenarios[0]!.matrix?.accessPairs).toContainEqual({
+      access: "docs_mcp",
       source: "docs",
       toolset: "docs_mcp",
     });
@@ -291,8 +297,8 @@ describe("compilePublicConfig", () => {
     expect(s.prompt).toBe("what does it do?");
     expect(s.matrix?.interfaces).toEqual(["quick"]);
     expect(s.matrix?.accessPairs).toEqual([
-      { source: "none", toolset: "none" },
-      { source: "docs", toolset: "none" },
+      { access: "prior", source: "none", toolset: "none" },
+      { access: "injected", source: "docs", toolset: "none" },
     ]);
   });
 
