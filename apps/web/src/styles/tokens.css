@@ -43,8 +43,9 @@
 
   /* ===== TYPOGRAPHY ===== */
 
-  --font-heading: "Space Grotesk", system-ui, sans-serif;
-  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-heading:
+    "Space Grotesk", "Space Grotesk Fallback", system-ui, sans-serif;
+  --font-body: "DM Sans", "DM Sans Fallback", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
   /* Font Sizes */

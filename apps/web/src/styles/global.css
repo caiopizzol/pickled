@@ -9,6 +9,31 @@
    render-blocking. */
 @import "./tokens.css";
 
+/* Metric-matched fallback faces (the same technique next/font applies for the
+   docs app, which measures CLS 0). On a cold load the real fonts swap in late,
+   and on a narrow mobile viewport the advance-width difference re-wrapped the
+   hero heading/lede, shifting the terminal below them (mobile CLS 0.332). These
+   size-adjust the Arial fallback so wrapping is identical before and after the
+   swap. Values derived from @capsizecss/metrics (Space Grotesk / DM Sans vs
+   Arial); regenerate if the type ramp changes. The mono terminal does not wrap
+   (white-space: pre) so it needs no adjustment. */
+@font-face {
+  font-family: "Space Grotesk Fallback";
+  src: local("Arial");
+  size-adjust: 109.69%;
+  ascent-override: 89.71%;
+  descent-override: 26.62%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "DM Sans Fallback";
+  src: local("Arial");
+  size-adjust: 104.53%;
+  ascent-override: 94.9%;
+  descent-override: 29.66%;
+  line-gap-override: 0%;
+}
+
 /* ===== RESET ===== */
 
 *,
