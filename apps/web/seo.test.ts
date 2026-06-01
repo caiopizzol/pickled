@@ -30,6 +30,21 @@ test("homepage head carries canonical, description, and social cards", async () 
   expect(html).toContain('name="twitter:card" content="summary_large_image"');
 });
 
+test("homepage carries SoftwareApplication structured data", async () => {
+  const html = await read("index.html");
+  expect(html).toContain('type="application/ld+json"');
+  expect(html).toContain('"@type": "SoftwareApplication"');
+});
+
+test("fonts load without blocking render", async () => {
+  const html = await read("index.html");
+  const css = await read("src/styles/global.css");
+  // The font stylesheet must be the non-blocking print-swap <link>, and the
+  // render-blocking CSS @import must be gone.
+  expect(html).toContain("onload=\"this.media='all'\"");
+  expect(css).not.toContain("fonts.googleapis.com");
+});
+
 test("og-image asset exists and is a real card, not a placeholder", async () => {
   const file = Bun.file(join(import.meta.dir, "public/og-image.png"));
   expect(await file.exists()).toBe(true);

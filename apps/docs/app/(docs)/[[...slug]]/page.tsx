@@ -21,8 +21,51 @@ export default async function Page(props: PageProps<"/[[...slug]]">) {
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
 
+  // TechArticle + BreadcrumbList, built from the page's own route data so the
+  // structured data can never drift from the rendered page. Escape `<` so a
+  // title or description can't break out of the script tag.
+  const pageUrl = new URL(page.url, "https://docs.pickled.dev").toString();
+  const breadcrumb: object[] = [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Docs",
+      item: "https://docs.pickled.dev/",
+    },
+  ];
+  if (page.url !== "/") {
+    breadcrumb.push({
+      "@type": "ListItem",
+      position: 2,
+      name: page.data.title,
+      item: pageUrl,
+    });
+  }
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        headline: page.data.title,
+        description: page.data.description,
+        url: pageUrl,
+        isPartOf: {
+          "@type": "WebSite",
+          name: "pickled docs",
+          url: "https://docs.pickled.dev/",
+        },
+      },
+      { "@type": "BreadcrumbList", itemListElement: breadcrumb },
+    ],
+  }).replace(/</g, "\\u003c");
+
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
+      <script
+        type="application/ld+json"
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: serialized JSON-LD with < escaped above
+        dangerouslySetInnerHTML={{ __html: jsonLd }}
+      />
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">
         {page.data.description}

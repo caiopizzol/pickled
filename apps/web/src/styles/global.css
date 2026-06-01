@@ -3,7 +3,10 @@
  * v2 Minimal & Clean
  */
 
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+/* Google Fonts moved to a non-render-blocking <link> in index.html. A CSS
+   @import here forced the browser to download this whole sheet before it
+   could even discover the fonts, which Lighthouse flagged as ~751ms of
+   render-blocking. */
 @import "./tokens.css";
 
 /* ===== RESET ===== */
