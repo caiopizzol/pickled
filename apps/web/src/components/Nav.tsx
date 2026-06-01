@@ -7,6 +7,7 @@ interface NavLink {
 }
 
 const navLinks: NavLink[] = [
+  { label: "Blog", href: "/blog" },
   { label: "Docs", href: "https://docs.pickled.dev/" },
   { label: "GitHub", href: "https://github.com/caiopizzol/pickled" },
 ];

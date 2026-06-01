@@ -43,10 +43,11 @@
 
   /* ===== TYPOGRAPHY ===== */
 
-  --font-heading:
-    "Space Grotesk", "Space Grotesk Fallback", system-ui, sans-serif;
-  --font-body: "DM Sans", "DM Sans Fallback", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  /* next/font (app/layout.tsx) exposes these vars; each already carries its
+     own metric-matched fallback, so only generic finals follow. */
+  --font-heading: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "Fira Code", monospace;
 
   /* Font Sizes */
   --text-xs: 0.75rem; /* 12px */

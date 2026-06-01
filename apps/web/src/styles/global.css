@@ -3,36 +3,10 @@
  * v2 Minimal & Clean
  */
 
-/* Google Fonts moved to a non-render-blocking <link> in index.html. A CSS
-   @import here forced the browser to download this whole sheet before it
-   could even discover the fonts, which Lighthouse flagged as ~751ms of
-   render-blocking. */
+/* Fonts are loaded via next/font/google in app/layout.tsx, which self-hosts
+   them and generates metric-matched fallbacks automatically (no render-block,
+   no swap reflow). tokens.css consumes the --font-* CSS variables it exposes. */
 @import "./tokens.css";
-
-/* Metric-matched fallback faces (the same technique next/font applies for the
-   docs app, which measures CLS 0). On a cold load the real fonts swap in late,
-   and on a narrow mobile viewport the advance-width difference re-wrapped the
-   hero heading/lede, shifting the terminal below them (mobile CLS 0.332). These
-   size-adjust the Arial fallback so wrapping is identical before and after the
-   swap. Values derived from @capsizecss/metrics (Space Grotesk / DM Sans vs
-   Arial); regenerate if the type ramp changes. The mono terminal does not wrap
-   (white-space: pre) so it needs no adjustment. */
-@font-face {
-  font-family: "Space Grotesk Fallback";
-  src: local("Arial");
-  size-adjust: 109.69%;
-  ascent-override: 89.71%;
-  descent-override: 26.62%;
-  line-gap-override: 0%;
-}
-@font-face {
-  font-family: "DM Sans Fallback";
-  src: local("Arial");
-  size-adjust: 104.53%;
-  ascent-override: 94.9%;
-  descent-override: 29.66%;
-  line-gap-override: 0%;
-}
 
 /* ===== RESET ===== */
 
