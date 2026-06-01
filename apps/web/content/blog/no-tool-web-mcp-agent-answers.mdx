@@ -1,0 +1,85 @@
+---
+title: "The same agent gives three different answers about your product"
+description: "How an agent reaches your information - injected context, web search, or an MCP server - changes the answer. Test all three paths, not one."
+date: 2026-06-01
+updated: 2026-06-01
+author: Caio Pizzol
+tags: [agent-evals, mcp, toolsets]
+---
+
+Ask an agent the same question about your product three ways and you can get three different answers. Hand it your docs directly and it nails the install command. Tell it to search the web and it never finds your site, so it guesses. Give it an MCP server and it returns a section that is six months stale.
+
+Same agent, same question, same product. The variable is how the agent reached the information. If you only test one path, you are blind to the other two, and your users' agents run across all of them.
+
+## Three paths, three different questions
+
+Pickled models the path as a toolset, and the matrix runs one cell per path. Each one tests something different:
+
+- **`none`** injects your source straight into the prompt. This is the content test: given the material, is the answer right? It isolates one thing, the quality of what you wrote, by removing retrieval from the equation.
+- **`web`** injects nothing. It names your site as the target and makes the agent use a web tool to get there. This is the discovery test: can an agent find your content in the wild, the way a stranger's agent would?
+- **`mcp`** wires up an MCP server and requires the agent to call it. This is the surface test: does the tool you expose actually return the right answer?
+
+A pass on `none` and a fail on `web` is a specific, useful diagnosis: your content is good, but agents cannot discover it. A pass on `web` and a fail on `mcp` says your published docs work but the MCP path is not returning the same answer. One blended score would have hidden both.
+
+## What it looks like
+
+```yaml
+tool:
+  name: my-product
+  description: short one-liner
+
+docs:
+  sources:
+    docs_url: https://docs.my-product.dev/llms-full.txt
+
+targets:
+  quick:
+    category: cli
+    provider: claude-code
+    model: claude-haiku-4-5
+
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+  docs_mcp:
+    mcpServers:
+      context7:
+        type: http
+        url: https://mcp.context7.com/mcp
+        headers:
+          CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
+
+scenarios:
+  - name: Auth setup
+    prompt: How do I authenticate with my-product?
+    matrix:
+      interfaces: [quick]
+      sources: [docs_url]
+      toolsets: [none, web, docs_mcp]
+    expected:
+      includes: ["api key"]
+
+threshold: 80
+```
+
+One scenario, three cells, scored independently. The same `expected.includes` runs on all three, so the only thing that varies between them is the retrieval path. That is the comparison you want.
+
+## The label has to be honest
+
+There is a trap a softer test would fall into: an agent can answer from memory without ever using the tool the cell is named for, and happen to be right. Pickled vetoes that. For a `web` or `mcp` cell, if the agent never invokes the configured tool path, the cell is forced to a hard fail regardless of whether the words match. A cell labeled `web` has to have actually used the web. Otherwise "passes on web" would be a lie, and the whole point is to know which path works.
+
+One consequence worth stating: in `web` and `mcp` cells, your local files are not read from disk. They are name-only hints. If the same answer does not come back through the tool path, the cell fails, which is exactly the signal you are looking for.
+
+## Legibility is per-surface
+
+There is no single number for "does an agent understand my product," because it depends on how the agent got there. The matrix turns that into something you can act on: a grid showing which retrieval paths you are legible on and which ones you are invisible on. That tells you where to spend, whether that is making your content discoverable, fixing what your MCP server returns, or tightening the docs themselves.
+
+## Try it
+
+Declare `none`, `web`, and one `mcp` toolset, point a scenario at all three, and read the row. The gaps are the work.
+
+- [Toolsets](https://docs.pickled.dev/toolsets)
+- [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation)
+- [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
