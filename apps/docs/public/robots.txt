@@ -1,0 +1,8 @@
+# Cloudflare AI Audit prepends its managed Content-Signals + AI-bot
+# blocklist onto this `User-agent: *` group at the edge, so keep exactly one
+# such group here and manage the blocklist in Cloudflare, not here.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://docs.pickled.dev/sitemap.xml
