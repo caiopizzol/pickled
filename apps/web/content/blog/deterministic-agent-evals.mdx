@@ -13,7 +13,7 @@ For testing whether an agent actually understands your product, it is the wrong 
 
 ## A judge brings its own priors
 
-Ask "does this agent know how my product works" and grade it with a model, and you have added a second guesser to the loop. The judge does not know your product either. It scores against the same training-data priors the agent under test is drawing on. When both are wrong in the same direction, the judge happily approves a confident, incorrect answer. You have measured agreement between two models, not correctness against your product.
+Ask "does this agent know how my product works" and grade it with a model, and you have added a second guesser to the loop. Unless you ground the judge in your sources too, it scores from the same training-data priors the agent under test is drawing on, and even grounded it stays an interpretive path: a model deciding whether another model's answer was good enough. When judge and agent lean wrong in the same direction, the judge happily approves a confident, incorrect answer. You have measured agreement between two models, not correctness against your product.
 
 It is also not reproducible. Run the judge twice and the number moves. Change the judge model and it moves again. You cannot gate a release on a score that drifts, and you cannot debug a regression you cannot reproduce.
 
@@ -24,9 +24,22 @@ Whether an agent understands your product is a grounded, factual property. Did i
 That is the whole bet. Three deterministic checks, no model in the scoring path:
 
 ```yaml
+tool:
+  name: my-product
+  description: short one-liner
+
 docs:
   sources:
     readme: ./README.md
+
+targets:
+  quick:
+    category: cli
+    provider: claude-code
+    model: claude-haiku-4-5
+
+toolsets:
+  none: {}
 
 scenarios:
   - name: Install
@@ -44,13 +57,13 @@ scenarios:
         reason: package was renamed in 1.0
 ```
 
-`requiredSources` checks grounding: citations are extracted from the response by code, and the cell fails unless the answer cites the source you registered. `expected.includes` checks the answer: a literal substring that must be present. `traps` check for known-wrong: a regex or substring that, if it fires, forces the result to a hard fail. Run it twice and you get the same number. Change nothing and nothing moves. The score is the score.
+`requiredSources` checks grounding: citations are extracted from the response by code, and the cell fails unless the answer cites the source you registered. `expected.includes` checks the answer: a literal substring that must be present. `traps` check for known-wrong: a regex or substring that, if it fires, forces the result to a hard fail. None of these is a model. Given the same response, the score does not move. If a rerun comes back different, it is because the agent changed its answer, not because a judge reinterpreted the same one. The score is the score.
 
 ## What you give up, and why it is fine
 
 A deterministic contract cannot grade open-ended quality. It will not tell you whether an answer was elegant, or well-toned, or pleasantly phrased. That is real, and it is the honest cost.
 
-It is also beside the point here. Testing product legibility is not a writing competition. The question is narrow and binary: did the agent answer from your sources, with the right content, without tripping a stale pattern you declared. A contract answers that exactly. A judge answers it approximately, expensively, and differently each time.
+It is also beside the point here. Testing product legibility is not a writing competition. The question is narrow and checkable: did the agent answer from your sources, with the right content, without tripping a stale pattern you declared. A contract answers that exactly. A judge answers it approximately, expensively, and differently each time.
 
 There are tasks where a judge model earns its place: summarization quality, creative range, nuanced tone. Product legibility is not one of them. For "does the agent get my product right," you want a receipt, not a second opinion.
 
@@ -60,7 +73,7 @@ A deterministic score is reproducible, so it can gate CI. It costs no judge toke
 
 ## Try it
 
-Write one scenario with a `requiredSources`, an `expected`, and a `trap`, and run it twice. The number will not move.
+Write one scenario with a `requiredSources`, an `expected`, and a `trap`. Score the same response twice and nothing moves; the only thing that can change a rerun is the agent's answer, not the scoring.
 
 - [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation)
 - [Getting started](https://docs.pickled.dev/getting-started)
