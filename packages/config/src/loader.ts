@@ -169,6 +169,7 @@ function validate(config: CheckConfig): void {
     );
     validateExpected(scenario.name, scenario.expected);
     validateVerifiers(scenario.name, scenario.verifiers, sourceIds);
+    validateExamples(scenario.name, scenario.examples);
     validateActionableContract(scenario);
   }
 
@@ -423,6 +424,27 @@ function validateVerifiers(
     if (!sourceIds.has(id)) {
       throw new Error(
         `pickled.yml: scenario "${scenarioName}" verifiers.sources references unknown source "${id}"`,
+      );
+    }
+  }
+}
+
+function validateExamples(
+  scenarioName: string,
+  examples: { pass?: unknown; fail?: unknown } | undefined,
+): void {
+  if (examples === undefined) return;
+  if (typeof examples !== "object" || Array.isArray(examples)) {
+    throw new Error(
+      `pickled.yml: scenario "${scenarioName}" examples must be an object with optional pass/fail arrays`,
+    );
+  }
+  for (const key of ["pass", "fail"] as const) {
+    const value = examples[key];
+    if (value === undefined) continue;
+    if (!Array.isArray(value) || value.some((x) => typeof x !== "string")) {
+      throw new Error(
+        `pickled.yml: scenario "${scenarioName}" examples.${key} must be an array of strings`,
       );
     }
   }

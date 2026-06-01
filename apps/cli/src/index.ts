@@ -4,6 +4,7 @@ import pkg from "../package.json";
 import { audit } from "./commands/audit.js";
 import { check } from "./commands/check.js";
 import { init } from "./commands/init.js";
+import { test } from "./commands/test.js";
 
 program
   .name("pickled")
@@ -84,5 +85,14 @@ program
     'Seed for --sample. Defaults to "default" so reruns without --seed are reproducible.',
   )
   .action(check);
+
+program
+  .command("test")
+  .description(
+    "Score declared example answers against each scenario's checks, offline. No model calls.",
+  )
+  .argument("[path]", "Path to your project (default: current directory)", ".")
+  .option("--scenario <name>", "Test only the named scenario")
+  .action(test);
 
 await program.parseAsync();
