@@ -2,6 +2,30 @@
   "name": "@pickled-dev/cli",
   "version": "0.28.2",
   "description": "Test what agents actually understand about your product",
+  "license": "MIT",
+  "homepage": "https://pickled.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/caiopizzol/pickled.git",
+    "directory": "apps/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/caiopizzol/pickled/issues"
+  },
+  "keywords": [
+    "ai-agents",
+    "agent-evaluation",
+    "llm-evals",
+    "claude-code",
+    "codex-cli",
+    "llms-txt",
+    "agents-md",
+    "documentation-testing",
+    "ai-visibility",
+    "cli",
+    "anthropic",
+    "openai"
+  ],
   "module": "dist/index.js",
   "type": "module",
   "bin": {

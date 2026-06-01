@@ -1,0 +1,83 @@
+<!doctype html>
+<!--
+  Source for public/og-image.png (the 1200x630 social card referenced from
+  index.html). Colors and type mirror src/styles/tokens.css per brand.md.
+  Regenerate after edits by rendering this file at a 1200x630 viewport and
+  capturing the viewport to public/og-image.png.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --card: #141420;
+    --border: #1f1f30;
+    --green: #00e676;
+    --yellow: #ffd740;
+    --pink: #ff4081;
+    --white: #ffffff;
+    --brine: #8888a0;
+    --shelf: #50506a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(900px 500px at 12% -10%, rgba(0,230,118,0.10), transparent 60%);
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    color: var(--white);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 56px;
+    padding: 72px 80px;
+  }
+  .left { display: flex; flex-direction: column; gap: 28px; }
+  .wordmark { font-weight: 700; font-size: 40px; letter-spacing: -0.01em; color: var(--white); }
+  h1 { font-weight: 700; font-size: 64px; line-height: 1.05; letter-spacing: -0.02em; }
+  h1 .accent { color: var(--green); }
+  .install {
+    font-family: "JetBrains Mono", monospace; font-size: 22px; color: var(--brine);
+    display: inline-flex; align-items: center; gap: 12px;
+  }
+  .install .prompt { color: var(--green); }
+  .term {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 26px 28px; font-family: "JetBrains Mono", monospace; font-size: 20px; line-height: 1.7;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5);
+  }
+  .term .bar { display: flex; gap: 8px; margin-bottom: 18px; }
+  .term .bar i { width: 12px; height: 12px; border-radius: 50%; background: var(--shelf); display: inline-block; }
+  .dim { color: var(--brine); }
+  .muted { color: var(--shelf); }
+  .ok { color: var(--green); }
+  .warn { color: var(--yellow); }
+  .err { color: var(--pink); }
+  .indent { padding-left: 22px; }
+  .rule { height: 1px; background: var(--border); margin: 14px 0; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="wordmark">pickled</div>
+    <h1>Test what agents <span class="accent">actually</span> understand.</h1>
+    <div class="install"><span class="prompt">$</span> bun add -g @pickled-dev/cli</div>
+  </div>
+  <div class="term">
+    <div class="bar"><i></i><i></i><i></i></div>
+    <div><span class="ok">$</span> pickled check</div>
+    <div>&nbsp;</div>
+    <div class="dim">Scenario: How do I install pickled?</div>
+    <div class="indent"><span class="ok">✓ Well grounded</span> <span class="muted">(92%)</span> <span class="dim">cited: [readme]</span></div>
+    <div>&nbsp;</div>
+    <div class="dim">Scenario: Config format</div>
+    <div class="indent"><span class="err">✗ Trap fired</span> <span class="muted">(0%)</span> <span class="dim">old_config_schema</span></div>
+    <div class="rule"></div>
+    <div><span class="dim">Overall:</span> <span class="warn">42</span> <span class="muted">/ 100 · threshold 80 · run fails</span></div>
+  </div>
+</body>
+</html>

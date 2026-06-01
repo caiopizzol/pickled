@@ -13,3 +13,8 @@
 
 User-agent: *
 Allow: /
+
+# Both hosts sit under one sc-domain:pickled.dev GSC property, so the docs
+# sitemap is a valid cross-host entry alongside this host's own.
+Sitemap: https://pickled.dev/sitemap.xml
+Sitemap: https://docs.pickled.dev/sitemap.xml

@@ -13,6 +13,23 @@
   <link rel="canonical" href="https://pickled.dev/" />
   <title>pickled - Test what agents actually understand</title>
 
+  <!-- Description is duplicated verbatim across surfaces per brand.md.
+       og-image.png is a 1200x630 render of og-card.html (this dir);
+       regenerate it from that file if the tagline or palette changes. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pickled.dev/" />
+  <meta property="og:site_name" content="pickled" />
+  <meta property="og:title" content="pickled - Test what agents actually understand" />
+  <meta property="og:description" content="Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks." />
+  <meta property="og:image" content="https://pickled.dev/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="pickled check terminal output: one well-grounded scenario, one fired trap, overall score 42 of 100." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="pickled - Test what agents actually understand" />
+  <meta name="twitter:description" content="Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks." />
+  <meta name="twitter:image" content="https://pickled.dev/og-image.png" />
+
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-EF49SBB7Q7"></script>
   <script>
@@ -24,8 +41,18 @@
 </head>
 
 <body>
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
+  <!-- Raw-HTML crawl path for engines that do not execute JS. Sits outside
+       #root, so the React mount never touches it. -->
+  <noscript>
+    <nav aria-label="pickled">
+      <a href="https://docs.pickled.dev/getting-started">Getting started</a>
+      <a href="https://docs.pickled.dev/">Documentation</a>
+      <a href="https://github.com/caiopizzol/pickled">GitHub</a>
+      <a href="https://www.npmjs.com/package/@pickled-dev/cli">npm</a>
+    </nav>
+  </noscript>
+  <div id="root"><!--app-html--></div>
+  <script type="module" src="/src/entry-client.tsx"></script>
 </body>
 
 </html>
