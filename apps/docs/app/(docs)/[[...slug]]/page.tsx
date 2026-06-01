@@ -21,42 +21,50 @@ export default async function Page(props: PageProps<"/[[...slug]]">) {
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
 
-  // TechArticle + BreadcrumbList, built from the page's own route data so the
-  // structured data can never drift from the rendered page. Escape `<` so a
-  // title or description can't break out of the script tag.
+  // Structured data built from the page's own route data so it can never
+  // drift from the rendered page. Escape `<` so a title or description can't
+  // break out of the script tag. Dual ["TechArticle", "Article"] type because
+  // Google's Article rich result only recognizes Article/NewsArticle/
+  // BlogPosting, not the more accurate TechArticle alone.
   const pageUrl = new URL(page.url, "https://docs.pickled.dev").toString();
-  const breadcrumb: object[] = [
+  const graph: object[] = [
     {
-      "@type": "ListItem",
-      position: 1,
-      name: "Docs",
-      item: "https://docs.pickled.dev/",
+      "@type": ["TechArticle", "Article"],
+      headline: page.data.title,
+      description: page.data.description,
+      url: pageUrl,
+      isPartOf: {
+        "@type": "WebSite",
+        name: "pickled docs",
+        url: "https://docs.pickled.dev/",
+      },
     },
   ];
+  // A BreadcrumbList needs at least two ListItems to be valid (Google), so
+  // only non-root pages get one: Docs > <page>. The root would be a single
+  // self-referential item, which is invalid.
   if (page.url !== "/") {
-    breadcrumb.push({
-      "@type": "ListItem",
-      position: 2,
-      name: page.data.title,
-      item: pageUrl,
+    graph.push({
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Docs",
+          item: "https://docs.pickled.dev/",
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: page.data.title,
+          item: pageUrl,
+        },
+      ],
     });
   }
   const jsonLd = JSON.stringify({
     "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "TechArticle",
-        headline: page.data.title,
-        description: page.data.description,
-        url: pageUrl,
-        isPartOf: {
-          "@type": "WebSite",
-          name: "pickled docs",
-          url: "https://docs.pickled.dev/",
-        },
-      },
-      { "@type": "BreadcrumbList", itemListElement: breadcrumb },
-    ],
+    "@graph": graph,
   }).replace(/</g, "\\u003c");
 
   return (
