@@ -28,6 +28,8 @@ export const DEFAULT_IGNORE_PATTERNS = [
   "**/.turbo/**",
   ".cache/**",
   "**/.cache/**",
+  ".tmp/**",
+  "**/.tmp/**",
   ".runs/**",
   "**/.runs/**",
   "coverage/**",

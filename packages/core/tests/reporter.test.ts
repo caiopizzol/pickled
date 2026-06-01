@@ -184,6 +184,37 @@ describe("formatCheckReport", () => {
     expect(text).toContain("Review fired traps before trusting this surface.");
   });
 
+  test("plan mode reports the planned scenario count, not the scored count", () => {
+    const report: CheckReport = {
+      tool: { name: "t", description: "d", path: "/tmp/t" },
+      docs: [],
+      scenarios: [],
+      summary: { total: 0, answered: 0, unanswered: 0, score: 0 },
+      plan: {
+        expandedCells: 2,
+        selectedCells: 2,
+        cells: [
+          {
+            scenario: "s1",
+            interface: "quick",
+            source: "readme",
+            toolset: "none",
+          },
+          {
+            scenario: "s1",
+            interface: "quick",
+            source: "readme",
+            toolset: "web",
+          },
+        ],
+      },
+    };
+    const text = formatCheckReport(report, { threshold: 80 });
+    expect(text).toContain("Scenarios: 1");
+    expect(text).not.toContain("Scenarios: 0");
+    expect(text).toContain("Cells: 2");
+  });
+
   test("PARTIAL at high confidence still renders Partially grounded, not Well grounded", () => {
     const base = makeReport();
     const baseScenario = base.scenarios[0];
