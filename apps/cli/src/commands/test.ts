@@ -8,9 +8,9 @@ export interface TestOptions {
 
 /**
  * `pickled test` - score declared example answers (`examples.pass` /
- * `examples.fail`) against each scenario's deterministic contract, offline.
- * Zero model calls. Catches brittle checks and false-firing traps before a
- * paid run. Exits non-zero if any example does not behave as declared.
+ * `examples.fail`) against each question's deterministic contract, offline.
+ * Zero model calls. Catches brittle or over-specific checks before a paid
+ * run. Exits non-zero if any example does not behave as declared.
  */
 export async function test(
   targetPath: string,
@@ -29,7 +29,7 @@ export async function test(
   if (options.scenario) {
     const match = config.scenarios.filter((s) => s.name === options.scenario);
     if (match.length === 0) {
-      console.error(chalk.red(`No scenario named "${options.scenario}".`));
+      console.error(chalk.red(`No question named "${options.scenario}".`));
       process.exit(1);
     }
     config = { ...config, scenarios: match };
@@ -40,7 +40,7 @@ export async function test(
   if (report.total === 0) {
     console.log(
       chalk.dim(
-        "No examples declared. Add examples.pass / examples.fail to a scenario to test its checks offline.",
+        "No examples declared. Add examples.pass / examples.fail to a question to test its checks offline.",
       ),
     );
     return;
@@ -57,7 +57,7 @@ export async function test(
         const why =
           r.kind === "pass"
             ? `expected to pass, but: ${r.reasons.join("; ")}`
-            : `expected to fail, but the contract passed it (checks satisfied, no traps fired)`;
+            : `expected to fail, but the contract passed it (all checks satisfied)`;
         console.log(chalk.red(`      ${why}`));
       }
     }
@@ -72,7 +72,7 @@ export async function test(
   } else {
     console.log(
       chalk.red(
-        `${report.mismatches} of ${report.total} example(s) did not match (${passed} ok). The checks or traps need adjusting.`,
+        `${report.mismatches} of ${report.total} example(s) did not match (${passed} ok). The checks need adjusting.`,
       ),
     );
     process.exit(1);

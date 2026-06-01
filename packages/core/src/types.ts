@@ -3,10 +3,10 @@ import type {
   Scenario,
   TargetCategory,
 } from "@pickled-dev/config";
-import type { Answerable, TrapDetails } from "./scorers/index.js";
+import type { Answerable } from "./scorers/index.js";
 import type { ResponseEntry } from "./targets/types.js";
 
-export type { Answerable, TrapDetails };
+export type { Answerable };
 
 export interface CitationDetails {
   cited: string[];
@@ -27,7 +27,6 @@ export interface SurfaceResult {
   response: string;
   reason: string;
   citations: CitationDetails;
-  traps: TrapDetails;
   allResponses?: ResponseEntry[];
 }
 
@@ -53,7 +52,6 @@ export interface CellResult {
   response: string;
   reason: string;
   citations: CitationDetails | null;
-  traps: TrapDetails;
   expected?: {
     includes: Array<{ value: string; satisfied: boolean }>;
     excludes: Array<{ value: string; satisfied: boolean }>;
@@ -67,6 +65,12 @@ export interface CellResult {
     paths: Array<{ value: string; satisfied: boolean }>;
     options: Array<{ value: string; satisfied: boolean }>;
     constraints: Array<{ value: string; satisfied: boolean }>;
+    anyOf: Array<{
+      label: string;
+      values: string[];
+      satisfied: boolean;
+      matched: string[];
+    }>;
     satisfied: number;
     total: number;
   };
@@ -94,7 +98,6 @@ export interface ScenarioResult {
   response: string | null;
   reason: string | null;
   citations: CitationDetails | null;
-  traps: TrapDetails | null;
   /** Per-surface evaluations. Present iff scenario.compareSurfaces declared. */
   surfaces?: SurfaceResult[];
   /** Per-cell evaluations. Present iff scenario.matrix declared. */
@@ -121,6 +124,12 @@ export interface ScenarioResult {
     }>;
     options: Array<{ value: string; satisfied: boolean }>;
     constraints: Array<{ value: string; satisfied: boolean }>;
+    anyOf: Array<{
+      label: string;
+      values: string[];
+      satisfied: boolean;
+      matched: string[];
+    }>;
     satisfied: number;
     total: number;
   };
@@ -163,9 +172,9 @@ export interface CheckReport {
   /**
    * Implementation-readiness diagnostics derived from scenario results.
    * Pure function of the rest of the report; #22 / step 4 of #19.
-   * Reads existing fields (grouped expected, existence flags, trap
-   * firings, axis comparisons); does not change scoring. Absent when
-   * no diagnostic pattern applied.
+   * Reads existing fields (grouped expected, existence flags, axis
+   * comparisons); does not change scoring. Absent when no diagnostic
+   * pattern applied.
    */
   readiness?: {
     diagnostics: Array<{
@@ -173,8 +182,7 @@ export interface CheckReport {
         | "grouped_check_pass"
         | "source_comparison"
         | "toolset_comparison"
-        | "interface_comparison"
-        | "trap_attribution";
+        | "interface_comparison";
       message: string;
       scenario: string;
       cells: Array<{

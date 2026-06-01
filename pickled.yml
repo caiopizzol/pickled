@@ -1,292 +1,84 @@
 # 🥒 pickled.yml - public-docs dogfood for pickled itself
 
-tool:
-  name: "pickled"
-  description: "Agent legibility checker for developer tools"
+product:
+  name: pickled
+  description: Agent legibility checker for developer tools
 
-docs:
-  sources:
-    # Live public docs (apps/docs deployed to docs.pickled.dev). These are
-    # the surfaces a real outside agent reads about pickled, so the main
-    # dogfood scenarios run against them. URL sources are fetched at check
-    # time.
-    public_docs_full: https://docs.pickled.dev/llms-full.txt
-    public_docs_getting_started: https://docs.pickled.dev/getting-started
+# The public surfaces a real outside agent reads to learn about pickled.
+# URL sources are fetched at check time; path sources are read from disk.
+sources:
+  docs: https://docs.pickled.dev/llms-full.txt
+  getting_started: https://docs.pickled.dev/getting-started
+  llms: ./llms.txt
 
-    # Root llms.txt is also public product context, kept as a router
-    # surface alongside the docs site so the matrix can compare what the
-    # docs site says against what the canonical llms.txt at the repo root
-    # says. Auto-discovered by `pickled audit` regardless of registration;
-    # registering it lets scenarios use it as a source explicitly.
-    llms: ./llms.txt
-
-    # Policy / brand docs that intentionally cite banned phrases as
-    # examples. They are not used as scenario sources; they live here so
-    # the per-file audit.traps override prevents false positives from the
-    # trap pipeline below.
-    brand:
-      path: ./brand.md
-      audit:
-        traps: [ai_powered]
-    agents:
-      path: ./AGENTS.md
-      audit:
-        traps: [ai_powered, freshness_score]
-
-    # Deliberately stale fixture used only by the trap pipeline smoke
-    # scenario. The audit must NOT cross-reference declared traps against
-    # this file or every declared trap would fire.
-    stale:
-      path: ./dogfood/stale-source.md
-      audit:
-        traps: false
-
-    # NOTE: a `core_src` codebase source used to live here for the
-    # implementation-readiness probe's `expected.paths` existence check
-    # (#21). Removed when the probe was reframed to ask a public-docs
-    # DX question - public user docs should not teach internal scorer
-    # paths, so the path check was misplaced. Re-register `core_src`
-    # (or any codebase glob) if/when a contributor-mode scenario lands
-    # that asks about modifying pickled internals.
-
-targets:
+# The agents that answer. `quick` is the cheap default; the two API agents
+# run the same question through the Anthropic and OpenAI servers so the
+# positioning answer can be compared across three providers. The API agents
+# need ANTHROPIC_API_KEY_PICKLED / OPENAI_API_KEY_PICKLED at run time.
+agents:
   quick:
-    category: cli
     provider: claude-code
     model: claude-haiku-4-5
     maxTurns: 5
-
-  thorough:
-    category: cli
-    provider: claude-code
-    model: sonnet
-    maxTurns: 15
-
-  codex:
-    category: cli
-    provider: codex-cli
-    model: gpt-5.5
-
-  # Direct Anthropic API target. Opt-in; invoke explicitly with
-  # `pickled check --target anthropic_api` for the CLI-agent-vs-direct-API
-  # comparison.
   anthropic_api:
-    category: api
     provider: anthropic
     model: claude-haiku-4-5
     temperature: 0
     maxTokens: 4096
-
-  # Direct OpenAI Responses API target. Sits alongside anthropic_api so
-  # the matrix can run the same scenario across all three current web
-  # mechanisms (claude-code WebSearch/WebFetch, anthropic web_search,
-  # openai web_search). Opt-in via `--target openai_api` for non-matrix
-  # scenarios; matrix scenarios that include it in `matrix.interfaces`
-  # invoke it whenever they run.
   openai_api:
-    category: api
     provider: openai
     model: gpt-5.2
     temperature: 0
     maxTokens: 4096
 
-# Default matrix target is `quick` only. Codex stays opt-in via
-# `pickled check --target codex` so the default dogfood is cheap and
-# readable.
-matrix:
-  target: [quick]
+# Named context paths. Each pairs a source with a tool mode. This is the
+# whole point of pickled: ask the same question down different paths and
+# see which one gets the agent to the right answer.
+access:
+  prior: { source: none, tools: none } # model memory, no context
+  injected: { source: docs, tools: none } # docs content injected
+  from_llms: { source: llms, tools: none } # root llms.txt injected
+  onboarding: { source: getting_started, tools: none } # getting-started page injected
+  discover: { source: none, tools: web } # open web discovery
+  directed: { source: docs, tools: web } # docs URL as a hint, reached with web
 
-toolsets:
-  none: {}
-  web:
-    webSearch: true
-    webFetch: true
-  # Generic MCP toolset. Opt-in; the dogfood scenarios below do not use
-  # MCP by default because it needs CONTEXT7_API_KEY and depends on
-  # external indexing. Dispatch with
-  # `pickled check --target quick --toolset context7_mcp` to exercise it.
-  context7_mcp:
-    mcpServers:
-      context7:
-        type: http
-        url: https://mcp.context7.com/mcp
-        headers:
-          CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
+questions:
+  # Positioning across the full context gradient, on three agents. The
+  # `prior` cells answer from model memory; `injected` reads the docs;
+  # `discover` and `directed` reach the live site through web tools.
+  # "agent" is the load-bearing noun, and a real summary names what the
+  # tool checks (legibility / understanding / context).
+  - id: positioning
+    ask: In one or two sentences, what does pickled do?
+    agents: [quick, anthropic_api, openai_api]
+    access: [prior, injected, discover, directed]
+    checks:
+      mustMention: [agent]
+      anyOf:
+        - label: names the capability
+          values: [legible, legibility, understand, comprehend, context]
+      mustNotMention: [magic dashboard, brand tracker]
 
-scenarios:
-  # What does Pickled do? - positioning across two public surfaces and two
-  # tool paths. The `none` cells inject the source and ask the agent to
-  # summarize; the `web` cells get only the URL as a hint and must use
-  # WebSearch / WebFetch to reach it (tool-use provenance vetoes cells
-  # that answer from model prior knowledge). "agent" is the load-bearing
-  # noun in any honest summary. Excludes catch brand-banned phrases.
-  - name: "What does Pickled do?"
-    prompt: "In one or two sentences, what does pickled do?"
-    matrix:
-      interfaces: [quick]
-      sources: [public_docs_full, llms]
-      toolsets: [none, web]
-    expected:
-      includes:
-        - "agent"
-      excludes:
-        - "AI-powered"
-        - "freshness score"
-    verifiers:
-      sources: [public_docs_full]
+  # Onboarding: a developer reading the docs should leave with the install
+  # form, a pickled.yml, and the run command. A stale `npm install` form
+  # means the agent drifted off the registered docs.
+  - id: install
+    ask: How do I install pickled and run my first check?
+    agents: [quick]
+    access: [onboarding, injected]
+    checks:
+      mustMention: [bunx @pickled-dev/cli, pickled.yml, check .]
+      mustNotMention: [magic dashboard, npm install @pickled-dev/cli]
 
-  # Install and run a first check - the practical onboarding test. Both
-  # cells inject the source (toolset: none); a real user reading the docs
-  # should walk away with the `bunx @pickled-dev/cli` install form, a
-  # `pickled.yml`, and `pickled check .` as the run command. The excludes
-  # catch a stale `npm install` form that would indicate the agent went
-  # off the registered docs.
-  - name: "Install and run a first check"
-    prompt: "How do I install pickled and run my first check?"
-    matrix:
-      interfaces: [quick]
-      sources: [public_docs_full, public_docs_getting_started]
-      toolsets: [none]
-    expected:
-      includes:
-        - "bunx @pickled-dev/cli"
-        - "pickled.yml"
-        - "check ."
-      excludes:
-        - "AI-powered"
-        - "npm install @pickled-dev/cli"
-    verifiers:
-      sources: [public_docs_full]
-
-  # Implementation-readiness probe (Step 2 dogfood of #19). Asks the
-  # agent the kind of pre-implementation question a developer would ask
-  # before writing a pickled.yml from scratch, and scores the answer
-  # with grouped expected checks so the receipt can say WHAT kind of
-  # comprehension failed (symbol vs option vs constraint) rather than
-  # rolling everything under "missing includes". Scoring substrate is
-  # the same substring matcher includes already uses; the split is
-  # presentational. See issue #19 for the design.
-  - name: "Implementation-readiness: declare a web cell"
-    prompt: "I want to add a matrix scenario that runs my docs URL through a web toolset on Claude Code. Which symbols, config options, and constraints matter before I write the YAML?"
-    matrix:
-      interfaces: [quick]
-      # Only the public docs are injected. The test question is "can
-      # the agent read the docs and name the right config/symbols/
-      # constraints?" - a public-docs DX question, not a contributor/
-      # internals question. Earlier draft of this scenario tacked
-      # `expected.paths: ["scorers/expected.ts"]` on as a mechanics
-      # demo for #21's existence verifier, but public docs should not
-      # teach internal scorer paths and the substring miss was an
-      # unfair signal. The path check belongs in a (future)
-      # contributor-mode scenario backed by a `core_src` registration.
-      sources: [public_docs_full]
-      toolsets: [none]
-    expected:
-      symbols:
-        - "matrix"
-        - "toolsets"
-      options:
-        - "webSearch"
-      constraints:
-        - "discovery"
-      excludes:
-        - "AI-powered"
-    verifiers:
-      sources: [public_docs_full]
-
-  # Which toolsets work today? - coverage of the matrix toolset axis as
-  # currently shipped. The three shapes (none / web / mcp) are documented
-  # at docs.pickled.dev/toolsets. Provider matrix as of cli-v0.25.0:
-  # - none: every provider
-  # - web:  claude-code, anthropic, openai
-  # - mcp:  claude-code, openai
-  # Firecrawl is mentioned in the proposals but not shipped; if an agent
-  # claims it as a working toolset, that is the exact "false support
-  # claim" we want to catch.
-  - name: "Which toolsets work today?"
-    prompt: "Which toolset shapes does pickled run today, and which interface do they need?"
-    matrix:
-      interfaces: [quick]
-      sources: [public_docs_full]
-      toolsets: [none]
-    expected:
-      includes:
-        - "none"
-        - "web"
-        - "mcp"
-        - "Claude Code"
-      excludes:
-        - "AI-powered"
-        - "Firecrawl"
-    verifiers:
-      sources: [public_docs_full]
-
-  # Model-prior vs discovery vs injected, on THREE interfaces:
-  #   - quick          = Claude Code (Haiku via Agent SDK, client web tools)
-  #   - anthropic_api  = Anthropic Messages API (Haiku direct, server-side
-  #                       web_search tool)
-  #   - openai_api     = OpenAI Responses API (gpt-5.2 direct, server-side
-  #                       web_search tool)
-  #
-  # Cells per interface:
-  #   [<int> · none · none]              -> model prior; no source, no tools
-  #   [<int> · none · web]               -> open discovery; web tools but
-  #                                          no canonical hint
-  #   [<int> · public_docs_full · none]  -> controlled baseline; source
-  #                                          content injected
-  #   [<int> · public_docs_full · web]   -> directed discovery; URL hint
-  #                                          plus web tools
-  #
-  # Same scenario, same expected/excludes, three web mechanisms. The
-  # [* · public_docs_full · web] triplet is the cross-provider
-  # comparison: one cell each of client-tool web research (claude-code),
-  # server-tool web research on Anthropic, and server-tool web research
-  # on OpenAI, comparable side by side. Provenance vetoes web cells
-  # that answer from prior knowledge without invoking the configured
-  # web tool (WebSearch/WebFetch on claude-code, web_search on the
-  # API targets).
-  - name: "Context availability gradient"
-    prompt: "In one or two sentences, what does pickled do?"
-    matrix:
-      interfaces: [quick, anthropic_api, openai_api]
-      sources: [none, public_docs_full]
-      toolsets: [none, web]
-    expected:
-      includes:
-        - "agent"
-      excludes:
-        - "AI-powered"
-        - "freshness score"
-    verifiers:
-      sources: [public_docs_full]
-
-  # Trap pipeline smoke. Reads a deliberately stale fixture and parrots it
-  # back, which should trip every declared trap and force NO with
-  # confidence zero. If this scenario ever scores YES, the trap matcher
-  # regressed. Internal engine regression, not a public-docs question.
-  - name: "Trap pipeline smoke"
-    prompt: "Using only the source registered as 'stale', repeat its description of pickled (including the example install command, the example target command, and what JSON output contains) verbatim."
-    requiredSources: [stale]
-    traps:
-      - id: ai_powered
-        pattern: '\bAI-powered\b'
-        flags: i
-        reason: "Brand bans 'AI-powered' in product copy."
-      - id: freshness_score
-        pattern: '\bfreshness\s+score\b'
-        flags: i
-        reason: "Legacy 'freshness score' branding; replaced by citation grounding."
-      - id: provider_as_target
-        pattern: '--target\s+claude-code'
-        reason: "Wrong --target example: claude-code is the provider, target names are matrix.target keys."
-      - id: json_human_label
-        # Catches affirmative claims that the JSON output includes the
-        # human label "Well grounded" (the stale-fixture form is "JSON
-        # output includes human-friendly labels like \"Well grounded\"").
-        # Stays sentence-scoped via [^.\n]{0,80}? so it does not span
-        # paragraphs and does not fire on the correct contract.
-        pattern: 'JSON\s+(?:output\s+)?includes?[^.\n]{0,80}?\bWell grounded\b'
-        flags: i
-        reason: "JSON output is raw; human labels live only in renderers."
+  # Coverage of the tool modes pickled ships today. Firecrawl is proposed
+  # but not shipped; an agent that claims it is the exact false-support
+  # answer pickled exists to catch.
+  - id: tool_modes
+    ask: Which tool modes can a pickled agent use today, and which agent or provider does each need?
+    agents: [quick]
+    access: [injected, from_llms]
+    checks:
+      mustMention: [none, web, mcp, Claude Code]
+      mustNotMention: [magic dashboard, Firecrawl]
 
 threshold: 60

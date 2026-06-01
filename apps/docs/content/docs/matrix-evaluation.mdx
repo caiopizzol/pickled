@@ -1,88 +1,71 @@
 ---
-title: Matrix evaluation
-description: Test what agents say about your product across interfaces, sources, and tool paths in one config.
+title: Access evaluation
+description: Compare how agents answer with model prior, injected sources, web tools, and MCP tools.
 ---
 
-A matrix scenario expands into one cell per `(interface × source × toolset)` tuple. Each cell runs independently and scores against its own contract, so the report shows where the agent does well and where it does not.
+Each question runs once per `(agent x access)` pair. That is the whole expansion.
 
-## Declare a matrix
+Use this when you want to know which context path carries the right answer:
+
+- **Prior**: no source, no tools. The agent answers from model memory.
+- **Injected**: a registered source is placed in the prompt.
+- **Web**: the agent must use web search.
+- **MCP**: the agent must use the declared MCP server.
+
+## Declare access paths
 
 ```yaml
-scenarios:
-  - name: Install
-    prompt: How do I install my-product?
-    matrix:
-      interfaces: [quick, codex]
-      sources: [readme, llms]
-      toolsets: [none, web]
-    expected:
-      includes: ["bunx my-product"]
+sources:
+  readme: ./README.md
+  llms: ./llms.txt
+
+agents:
+  quick:
+    provider: claude-code
+    model: claude-haiku-4-5
+
+access:
+  prior: { source: none, tools: none }
+  injected_llms: { source: llms, tools: none }
+  web: { source: none, tools: web }
+  docs_mcp:
+    source: llms
+    tools: mcp
+    servers:
+      docs:
+        url: https://docs.example.com/mcp
+
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [prior, injected_llms, web, docs_mcp]
+    checks:
+      mustMention: ["bunx my-product"]
 ```
 
-That scenario produces eight cells. Each cell label is `[interface · source · toolset]`.
+This produces four cells for one agent. Add another agent and it produces eight cells.
 
-`matrix.sources` accepts a reserved value `none` alongside registered source ids. A `none` cell gets no source content and no discovery hint. Combined with `toolset: none` it measures model prior (no source, no tools); combined with `toolset: web` or `toolset: mcp` it measures open discovery where the agent must find the answer from scratch with its configured tools.
+## How to read the result
 
-## Three toolset shapes
-
-- **`none`** is the deterministic baseline. Pickled injects the cell's active source content into the agent's prompt. Citation contract applies if `requiredSources` is declared.
-- **`web`** runs on Claude Code, the Anthropic API target, and the OpenAI API target. On Claude Code the cell scopes built-ins to `[WebSearch, WebFetch]` so the agent cannot fall back to filesystem; on the Anthropic API target the cell passes the server-side `web_search` tool (`web_search_20250305`) to `messages.create`; on the OpenAI API target the cell passes the `web_search` tool to `responses.create`. Source is NOT injected on any path; the cell scores on `expected.includes`/`excludes` plus tool-use provenance.
-- **`mcp`** runs on Claude Code and on the OpenAI API target. On Claude Code the configured MCP servers are passed to the Agent SDK natively (`tools: []` disables built-ins, `allowedTools: ["mcp__<server>__*"]` auto-permits); on the OpenAI API target each server becomes a hosted-MCP tool entry on `responses.create` (`type: "mcp"`, `server_label` = map key, `server_url` = `url`, `headers` forwarded). Provenance accepts any invocation of `mcp__<server>__*` regardless of provider.
-
-See [Toolsets](/toolsets) for the full shape of each profile.
-
-## Scoring
-
-Three signals compose per cell:
-
-1. **Trap firing** is a universal veto. Any matched trap forces `NO` with confidence `0`.
-2. **Citation** (in `none` cells with `requiredSources`) or **expected substrings** (in any cell with `expected.includes`/`excludes`) compose with worst-verdict + average-confidence.
-3. **Tool-use provenance** (in non-`none` cells): a cell that does not invoke at least one of the configured tools is hard-vetoed to `NO`, regardless of substance. An answer pulled from model prior knowledge cannot testify to the tool path the cell is meant to test.
-
-## Filter cells in CI
-
-The CLI accepts cell filters so a GitHub Actions matrix job can run exactly one cell at a time:
-
-```bash
-pickled check . \
-  --interface quick \
-  --source readme \
-  --toolset web \
-  --scenario "Install"
-```
-
-See [GitHub Actions](/github-actions) for a full matrix workflow.
+- `prior` fails, `injected_llms` passes: your source carries the answer.
+- `injected_llms` fails: the answer is missing or unclear in that source.
+- `injected_llms` passes, `web` fails: the source is good, but discovery is weak.
+- `web` or `docs_mcp` answers without using a tool: Pickled vetoes the cell to `NO` because the access path was not actually used.
 
 ## Plan, cap, and sample
 
-The matrix can grow expensive fast as you add interfaces and tool paths. Four flags help you stay in control without hand-editing axes:
-
-- `--plan` (dry run): expand the matrix, apply filters and sampling, print the cell list, and exit. Zero model calls. Useful before a paid run to see what would happen.
-- `--max-cells N`: hard cap on cells after filters and sampling. Exits non-zero before any model call if exceeded. Forces you to add filters or sample rather than silently spending on an oversized matrix.
-- `--sample N`: deterministic per-scenario sample. Picks up to N cells per matrix scenario; single-cell (non-matrix) scenarios always run as deterministic anchors.
-- `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` produce the same sample.
+Use `--plan` before a paid run:
 
 ```bash
-# See what would run, no model calls
 pickled check . --plan
-
-# Refuse to run a matrix larger than 10 cells
-pickled check . --max-cells 10
-
-# Sample 2 cells per scenario, reproducibly
-pickled check . --sample 2 --seed nightly-2026-05-24
 ```
 
-The receipt header (text and JSON) records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
+Limit or sample larger runs:
 
-## Readiness diagnostics
+```bash
+pickled check . --max-cells 10
+pickled check . --sample 2 --seed nightly-2026-06-01
+```
 
-After a run completes, pickled walks the per-cell receipts and emits a structured `readiness.diagnostics` summary. Each diagnostic is a pattern over fields already in the report (no model is asked to interpret receipts). v1 surfaces five patterns:
-
-- `grouped_check_pass` - a cell satisfied every entry across every declared `expected.{symbols,paths,options,constraints}` group; full readiness signal.
-- `source_comparison` - a named source answered while `source: none` (model prior) did not on the same `(interface, toolset)` axis; the docs are doing the comprehension work.
-- `toolset_comparison` - a tool-enabled cell answered while `toolset: none` did not on the same `(interface, source)` axis; the agent needed live discovery to reach the answer.
-- `interface_comparison` - at least one interface scored YES and another scored worse on the same `(source, toolset)`; provider-specific gap.
-- `trap_attribution` - one or more declared traps fired; hoisted to a scenario-level diagnostic so the reporter can show the stale-content pipeline is working at a glance.
-
-The terminal output prints a `Readiness diagnostics` block when at least one pattern applied; otherwise it stays silent. The JSON receipt carries the same diagnostics under `readiness.diagnostics` with structured `pattern` / `scenario` / `cells` fields so downstream tooling (CI status, dashboards) can consume them.
+`--sample` picks cells deterministically per question. The receipt records `expandedCells`, `selectedCells`, and `seed`.

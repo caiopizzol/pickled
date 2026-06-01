@@ -1,11 +1,11 @@
-import type { Answerable, TrapDetails } from "./scorers/index.js";
+import type { Answerable } from "./scorers/index.js";
 
 /**
  * One source of truth for how an evaluation maps to a user-facing label.
  *
- * The scenario verdict (answerable + trap state) determines the label family.
- * Confidence only refines YES into Well grounded vs Grounded. Confidence must
- * never upgrade PARTIAL, NO, Trap fired, or Error into a stronger label.
+ * The question verdict (answerable) determines the label family. Confidence
+ * only refines YES into Well grounded vs Grounded. Confidence must never
+ * upgrade PARTIAL, NO, or Error into a stronger label.
  *
  * Callers handle their own formatting (chalk colors, percent suffix, etc.).
  * This helper returns raw values so it stays portable across CLI, JSON, and
@@ -28,7 +28,6 @@ export interface ScenarioStatus {
 export interface Scoreable {
   answerable: Answerable;
   confidence: number;
-  traps: TrapDetails;
   error?: string;
 }
 
@@ -37,10 +36,6 @@ export function getScenarioStatus(input: Scoreable): ScenarioStatus {
 
   if (input.error) {
     return { icon: "✗", label: "Error", confidence, tone: "error" };
-  }
-
-  if (input.traps.fired.length > 0) {
-    return { icon: "✗", label: "Trap fired", confidence, tone: "error" };
   }
 
   if (input.answerable === "YES") {

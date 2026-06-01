@@ -27,8 +27,8 @@ Put the file under test the way you would put an API under test: send the input,
 
 The input is a question your `AGENTS.md` is supposed to answer. The output is what the agent says when that file is the only context it has. Then you check two things, both deterministically:
 
-- Did the answer come from the file you registered, and not from the model's training data? Citations are extracted by code, not judged by another model.
-- Did the answer trip a pattern you declared stale? Traps are matched as regex or substring. If one fires, the answer fails, full stop.
+- Did the answer include the exact terms the instruction requires?
+- Did the answer avoid the old or wrong terms that would send an agent down the wrong path?
 
 No model grades another model. The score is the score.
 
@@ -37,47 +37,36 @@ No model grades another model. The score is the score.
 Register `AGENTS.md` as a source, ask the question it should answer, and pin the contract:
 
 ```yaml
-tool:
+product:
   name: my-repo
   description: the repo your agents work in
 
-docs:
-  sources:
-    agents_md: ./AGENTS.md
+sources:
+  agents_md: ./AGENTS.md
 
-targets:
+agents:
   local:
-    category: cli
     provider: claude-code
     model: claude-haiku-4-5
 
-toolsets:
-  none: {}
+access:
+  injected: { source: agents_md, tools: none }
 
-scenarios:
-  - name: Package manager
-    prompt: What package manager does this repo use, and what installs dependencies?
-    requiredSources: [agents_md]
-    matrix:
-      interfaces: [local]
-      sources: [agents_md]
-      toolsets: [none]
-    expected:
-      includes: ["bun install"]
-    traps:
-      - id: npm_not_bun
-        match: "npm install"
-        reason: this repo uses Bun, not npm
-      - id: yarn_not_bun
-        match: "yarn add"
-        reason: this repo uses Bun, not yarn
+questions:
+  - id: package-manager
+    ask: What package manager does this repo use, and what installs dependencies?
+    agents: [local]
+    access: [injected]
+    checks:
+      mustMention: ["bun install"]
+      mustNotMention: ["npm install", "yarn add"]
 
 threshold: 100
 ```
 
-In this controlled cell, `AGENTS.md` is the only registered source content pickled injects. In a `none` toolset cell, `requiredSources` makes the answer fail unless it cites that file. The two output checks do different jobs: `expected.includes` asserts the answer you want, and `traps` catch the stale-but-plausible answer you do not, the `npm` or `yarn` a thin or outdated instruction file lets through. One says what right looks like; the other vetoes a confident wrong. Run it and you get a number per scenario, and a run that passes or fails against the threshold you set.
+In this controlled cell, `AGENTS.md` is the only registered source content pickled injects. `mustMention` asserts the answer you want. `mustNotMention` catches the stale-but-plausible answer you do not, the `npm` or `yarn` a thin or outdated instruction file lets through. Run it and you get a number per question, and a run that passes or fails against the threshold you set.
 
-Now your `AGENTS.md` has a test. When someone switches the repo to a different package manager and forgets to update the file, the scenario goes red. The instruction is no longer something you hope is true. It is something you check.
+Now your `AGENTS.md` has a test. When someone switches the repo to a different package manager and forgets to update the file, the question goes red. The instruction is no longer something you hope is true. It is something you check.
 
 ## Put it in CI
 
@@ -87,7 +76,7 @@ This is the internal case for testing agent legibility: not whether the outside 
 
 ## Try it on your own repo
 
-Point pickled at your `AGENTS.md` or `CLAUDE.md` and write one scenario for one instruction your agents keep getting wrong. See whether the file actually holds.
+Point pickled at your `AGENTS.md` or `CLAUDE.md` and write one question for one instruction your agents keep getting wrong. See whether the file actually holds.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

@@ -1,8 +1,8 @@
 # @pickled-dev/cli
 
-> Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.
+> Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
 
-The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check what agents say about your product. No LLM grades another LLM.
+The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check whether agents can answer from the product context you publish. No LLM grades another LLM.
 
 Full docs: [docs.pickled.dev](https://docs.pickled.dev/).
 
@@ -17,68 +17,67 @@ bunx @pickled-dev/cli <command>
 ## Commands
 
 - **`pickled init [path]`** writes a starter `pickled.yml`.
-- **`pickled audit [path]`** scans agent-facing files (`CLAUDE.md`, `AGENTS.md`, `llms.txt`) for broken refs, oversized sections, and stale-pattern matches. No LLM calls.
-- **`pickled check [path]`** runs the scenarios in `pickled.yml`, expands matrix cells, and scores each answer.
+- **`pickled test [path]`** scores `examples.pass` and `examples.fail` offline. No model calls.
+- **`pickled check [path]`** asks the configured agents and scores their answers.
+- **`pickled audit [path]`** scans agent-facing files for broken refs and oversized sections. No model calls.
 
 ## Minimum config
 
-A registered source is the truth Pickled is allowed to score against: a local file, a URL, or a codebase glob. Anything not registered does not count.
+A registered source is the context Pickled is allowed to use: a local file or a URL. Anything not registered does not count.
 
 ```yaml
-tool:
+product:
   name: my-product
-  description: short one-liner
+  description: short one-liner about what your product does
 
-docs:
-  sources:
-    readme: ./README.md
+sources:
+  readme: ./README.md
 
-targets:
+agents:
   quick:
-    category: cli
     provider: claude-code
     model: claude-haiku-4-5
 
-scenarios:
-  - name: Install
-    prompt: How do I install my-product?
-    requiredSources: [readme]
+access:
+  injected: { source: readme, tools: none }
 
-threshold: 60
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [injected]
+    checks:
+      mustMention: ["bunx my-product"]
+
+threshold: 80
 ```
 
-That gets you a single controlled-mode scenario. To compare across interfaces, sources, or tool paths (web / MCP), add `matrix:` and `toolsets:`. See [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation) and the [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml).
-
-## Matrix filters in CI
-
-`pickled check` accepts `--interface`, `--source`, and `--toolset` flags so a GitHub Actions matrix can fan out one cell per job. Full workflow examples in [GitHub Actions](https://docs.pickled.dev/github-actions).
+That runs one question with your README injected. Add more `access` paths to compare model prior, injected context, web discovery, and MCP discovery.
 
 ## Cost controls
 
-For paid model targets, the matrix can expand to hundreds of cells per scenario. Four flags keep that in check without hand-editing axes:
+For paid model targets, a run can expand to many `(agent x access)` cells. Three flags keep that in check:
 
 ```bash
-pickled check . --plan                              # dry-run: no model calls
-pickled check . --max-cells 10                      # hard fail if > 10 cells
-pickled check . --sample 2 --seed nightly-2026     # deterministic sample per scenario
+pickled check . --plan                           # dry run: no model calls
+pickled check . --max-cells 10                   # fail before spending
+pickled check . --sample 2 --seed nightly-2026  # deterministic sample per question
 ```
 
 The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample.
 
 ## Current support
 
-| Axis | Works today |
+| Concept | Works today |
 | --- | --- |
-| Sources | local files, URLs, codebase globs |
-| Toolsets | `none`, `web`, `mcp` |
-| Interfaces | Claude Code, Codex CLI, Anthropic API, OpenAI API |
+| Sources | local files, URLs |
+| Access tools | `none`, `web`, `mcp` |
+| Agents | Claude Code, Codex CLI, Anthropic API, OpenAI API |
 | Output | terminal, JSON, markdown audit reports |
 
 ## Read more
 
 - [Getting started](https://docs.pickled.dev/getting-started)
-- [Matrix evaluation](https://docs.pickled.dev/matrix-evaluation)
-- [Toolsets](https://docs.pickled.dev/toolsets)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
 - [GitHub Actions](https://docs.pickled.dev/github-actions)
 

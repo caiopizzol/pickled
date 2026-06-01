@@ -1,11 +1,11 @@
 ---
 title: GitHub Actions
-description: Run pickled in CI as one job per matrix cell.
+description: Run pickled in CI with offline checks, a dry plan, and a capped agent run.
 ---
 
-Pickled accepts cell filters on the CLI, which lets a GitHub Actions matrix split a scenario into one job per cell. Each job sees only the cell it owns, which gives a clean per-cell status badge.
+Use CI to keep the public context contract from drifting.
 
-## A minimal job
+## Minimal workflow
 
 ```yaml
 name: pickled
@@ -22,75 +22,39 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install
-      - run: bunx @pickled-dev/cli check .
+      - run: bunx @pickled-dev/cli test .
+      - run: bunx @pickled-dev/cli check . --plan
+      - run: bunx @pickled-dev/cli check . --max-cells 20
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-That runs every scenario in `pickled.yml` in one job. Set a `threshold` in `pickled.yml` to make the run pass or fail on the overall score.
+What each step does:
 
-## Split a matrix into separate jobs
+- `pickled test` scores example answers offline. It catches brittle checks before spending on a model run.
+- `pickled check --plan` prints the cells that would run. No model calls.
+- `pickled check --max-cells 20` refuses to run if the config expands beyond the cap.
 
-When you want each cell to surface as its own check, fan out via the workflow matrix and pass cell filters to the CLI.
+Set a `threshold` in `pickled.yml` when you want CI to fail on a low score.
+
+## Sample larger suites
+
+For a broad suite, sample first:
 
 ```yaml
-jobs:
-  cell:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        interface: [quick]
-        source: [readme, llms]
-        toolset: [none, web]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install
-      - name: pickled ${{ matrix.interface }}/${{ matrix.source }}/${{ matrix.toolset }}
-        run: |
-          bunx @pickled-dev/cli check . \
-            --interface ${{ matrix.interface }} \
-            --source ${{ matrix.source }} \
-            --toolset ${{ matrix.toolset }}
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+- run: bunx @pickled-dev/cli check . --sample 2 --seed pull-${{ github.event.pull_request.number || github.sha }}
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-That produces four jobs (one per cell), each named after the cell it runs. A PR check page shows them as four independent statuses.
-
-## Audit-only pre-flight
-
-`pickled audit` runs no LLM calls and is cheap. Use it as a pre-flight gate before the agent jobs:
-
-```yaml
-  audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install
-      - run: bunx @pickled-dev/cli audit . --fail-on error
-
-  cell:
-    needs: audit
-    runs-on: ubuntu-latest
-    # ... matrix as above
-```
-
-That fails fast on registered-source/trap mismatches before spending tokens on agent runs.
+The seed makes the sample reproducible. The receipt records `expandedCells`, `selectedCells`, and `seed`.
 
 ## Secrets
 
-- **`ANTHROPIC_API_KEY`** for Claude Code and Anthropic API targets.
-- **Per-MCP-server secrets** (e.g., `CONTEXT7_API_KEY`) referenced in `pickled.yml` via `${UPPER_SNAKE_CASE}` expansion. Bun auto-loads `.env` locally; in Actions, set them as job-level `env` from `${{ secrets.* }}`.
+- `ANTHROPIC_API_KEY` for Claude Code and Anthropic API agents.
+- `OPENAI_API_KEY` for OpenAI API agents.
+- MCP server secrets referenced in `pickled.yml` with `${UPPER_SNAKE_CASE}`.
 
-## Threshold
-
-Set a global threshold to make the run pass or fail on a single score:
-
-```yaml
-threshold: 60
-```
-
-Without a threshold, the report prints `Overall: N / 100` and the workflow always succeeds. The CLI only exits non-zero when a configured threshold is not met or when the run itself errors.
+Bun auto-loads `.env` locally. In Actions, pass secrets through the job `env`.

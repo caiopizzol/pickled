@@ -21,23 +21,23 @@ Core rule: write comments when they encode information the code does not already
 Weak:
 
 ```ts
-// Trap firing affects the score.
+// Provenance affects the score.
 ```
 
 Strong:
 
 ```ts
-// AIDEV-NOTE: Trap firing forces answerable to NO and confidence to 0,
-// regardless of citation grounding. See brand.md §Interface Feedback →
-// Verdict layers. Do not bypass this branch.
+// AIDEV-NOTE: A non-none cell that invokes none of its configured tools is
+// vetoed to NO with confidence 0 (provenance failure). See check.ts near
+// provenanceFailed. Model memory cannot testify to the tool path.
 ```
 
 Strong for non-local rules:
 
 ```ts
 // AIDEV-NOTE: Scenario verdict determines the label family. Confidence only
-// refines YES into Well grounded vs Grounded. Never upgrade PARTIAL, NO,
-// Trap fired, or Error. The single source of truth is getScenarioStatus in
+// refines YES into Well grounded vs Grounded. Never upgrade PARTIAL, NO, or
+// Error. The single source of truth is getScenarioStatus in
 // packages/core/src/report-status.ts.
 ```
 

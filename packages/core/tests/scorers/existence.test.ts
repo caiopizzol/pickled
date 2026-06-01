@@ -16,7 +16,6 @@ function codebaseSource(args: {
     source: "packages/core/src/**/*.ts",
     type: "codebase",
     name: "core",
-    auditTraps: true,
     content: args.content ?? "",
     matchedFiles: args.matchedFiles ?? [],
   };
@@ -28,7 +27,6 @@ function urlSource(): ResolvedDocSource {
     source: "https://example.com/llms.txt",
     type: "url",
     name: "docs",
-    auditTraps: true,
     content: "doc text",
   };
 }

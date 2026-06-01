@@ -4,7 +4,7 @@ import {
   type ScenarioStatus,
   type StatusTone,
 } from "./report-status.js";
-import type { CheckReport, ScenarioResult } from "./types.js";
+import type { Answerable, CheckReport, ScenarioResult } from "./types.js";
 
 const LINE = "─".repeat(55);
 
@@ -37,7 +37,6 @@ function getResultStatus(result: ScenarioResult): {
   const status = getScenarioStatus({
     answerable: result.answerable ?? "NO",
     confidence: result.confidence ?? 0,
-    traps: result.traps ?? { fired: [], avoided: [] },
     error: result.error,
   });
   const color = toneToColor(status.tone);
@@ -78,7 +77,6 @@ function formatIds(ids: string[]): string {
 
 interface DetailFields {
   error?: string;
-  traps: { fired: { id: string; reason: string; matched: string }[] };
   reason: string;
   answerable: "YES" | "PARTIAL" | "NO";
   citations: { cited: string[]; missing: string[]; unknown: string[] };
@@ -92,13 +90,7 @@ function formatDetailFields(fields: DetailFields, indent: string): string[] {
     return lines;
   }
 
-  if (fields.traps.fired.length > 0) {
-    for (const hit of fields.traps.fired) {
-      lines.push(chalk.red(`${indent}trap: ${hit.id}`));
-      lines.push(chalk.dim(`${indent}reason: ${hit.reason}`));
-      lines.push(chalk.dim(`${indent}match: "${hit.matched}"`));
-    }
-  } else if (fields.reason && fields.answerable !== "YES") {
+  if (fields.reason && fields.answerable !== "YES") {
     lines.push(chalk.dim(`${indent}reason: ${fields.reason}`));
   }
 
@@ -123,11 +115,10 @@ function formatDetailFields(fields: DetailFields, indent: string): string[] {
 
 function formatDetails(result: ScenarioResult, indent: string): string[] {
   // Single-mode only. Compare-mode rendering happens in formatCheckReport.
-  if (!result.traps || !result.citations) return [];
+  if (!result.citations) return [];
   return formatDetailFields(
     {
       error: result.error,
-      traps: result.traps,
       reason: result.reason ?? "",
       answerable: result.answerable ?? "NO",
       citations: result.citations,
@@ -164,7 +155,6 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
     lines.push(
       ...formatDetailFields(
         {
-          traps: cell.traps,
           reason: cell.reason,
           answerable: cell.answerable,
           citations: cell.citations ?? {
@@ -194,6 +184,14 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
       if (banned.length > 0) {
         lines.push(
           chalk.dim(`${indent}  expected.excludes hit: ${banned.join(", ")}`),
+        );
+      }
+      const anyOfMissed = cell.expected.anyOf
+        .filter((g) => !g.satisfied)
+        .map((g) => g.label);
+      if (anyOfMissed.length > 0) {
+        lines.push(
+          chalk.dim(`${indent}  anyOf unmet: ${anyOfMissed.join(", ")}`),
         );
       }
     }
@@ -236,7 +234,6 @@ function formatCompareBlock(result: ScenarioResult, indent: string): string[] {
     lines.push(
       ...formatDetailFields(
         {
-          traps: surface.traps,
           reason: surface.reason,
           answerable: surface.answerable,
           citations: surface.citations,
@@ -249,38 +246,27 @@ function formatCompareBlock(result: ScenarioResult, indent: string): string[] {
 }
 
 function getSummaryGuidance(scenarios: ScenarioResult[]): string {
-  // Aggregate across all evaluations, including per-surface ones in compare
-  // mode. Each surface counts as its own data point for guidance purposes,
+  // Count every evaluation that did not fully ground, across matrix cells
+  // and compare-mode surfaces. Each cell/surface is its own data point,
   // mirroring the run-level score aggregation.
-  let trapCount = 0;
-  let missingCount = 0;
-  let unknownCount = 0;
+  let weak = 0;
+  const tally = (answerable: Answerable | null): void => {
+    if (answerable !== "YES") weak++;
+  };
   for (const result of scenarios) {
     if (result.surfaces) {
-      for (const s of result.surfaces) {
-        trapCount += s.traps.fired.length;
-        missingCount += s.citations.missing.length;
-        unknownCount += s.citations.unknown.length;
-      }
-      continue;
-    }
-    if (result.traps) trapCount += result.traps.fired.length;
-    if (result.citations) {
-      missingCount += result.citations.missing.length;
-      unknownCount += result.citations.unknown.length;
+      for (const s of result.surfaces) tally(s.answerable);
+    } else if (result.cells) {
+      for (const c of result.cells) tally(c.answerable);
+    } else {
+      tally(result.answerable);
     }
   }
 
-  if (trapCount > 0 && missingCount + unknownCount > 0) {
-    return "Review fired traps and citation gaps.";
+  if (weak > 0) {
+    return "Review the answers that fell short of their checks.";
   }
-  if (trapCount > 0) {
-    return "Review fired traps before trusting this surface.";
-  }
-  if (missingCount + unknownCount > 0) {
-    return "Review missing and unknown citations.";
-  }
-  return "Citations hold. No declared traps fired.";
+  return "Every answer met its checks.";
 }
 
 function formatOverall(
@@ -324,12 +310,12 @@ export function formatCheckReport(
   }
 
   // In plan/dry-run mode no scenarios are scored (summary.total is 0), so
-  // report the count of distinct scenarios that produced planned cells.
+  // report the count of distinct questions that produced planned cells.
   const scenarioCount =
     report.plan?.cells != null
       ? new Set(report.plan.cells.map((c) => c.scenario)).size
       : summary.total;
-  lines.push(`Scenarios: ${chalk.dim(String(scenarioCount))}`);
+  lines.push(`Questions: ${chalk.dim(String(scenarioCount))}`);
   if (report.plan) {
     const { expandedCells, selectedCells, seed } = report.plan;
     const sampled = selectedCells < expandedCells;
@@ -383,7 +369,7 @@ export function formatCheckReport(
     }
 
     for (const [scenarioName, scenarioResults] of byScenario) {
-      lines.push(`Scenario: ${scenarioName}`);
+      lines.push(`Question: ${scenarioName}`);
 
       for (const result of scenarioResults) {
         if (result.cells) {
@@ -400,7 +386,7 @@ export function formatCheckReport(
     }
   } else {
     for (const result of results) {
-      lines.push(`Scenario: ${result.scenario.name}`);
+      lines.push(`Question: ${result.scenario.name}`);
       if (result.cells) {
         lines.push(...formatMatrixBlock(result, "  "));
       } else if (result.surfaces) {

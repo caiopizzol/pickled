@@ -15,7 +15,7 @@ That is a gap you can close with the CI you already run.
 
 ## Make agent understanding a check, not a hope
 
-The move is the same one you made for code: run the check on every change, and fail the build when it regresses. With a deterministic eval (citations by code, traps by regex, expected substrings, no model judging another), the scoring path is deterministic, so a failure points to a contract that broke, not a judge that reinterpreted the answer. A flaky score makes a useless gate. A contract makes a real one.
+The move is the same one you made for code: run the check on every change, and fail the build when it regresses. With a deterministic eval (`mustMention`, `mustNotMention`, `anyOf`, tool-use provenance, no model judging another), the scoring path is deterministic, so a failure points to a contract that broke, not a judge that reinterpreted the answer. A flaky score makes a useless gate. A contract makes a real one.
 
 Two tiers keep it fast and cheap:
 
@@ -26,29 +26,22 @@ on:
   pull_request:
 
 jobs:
-  audit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
-      - run: bunx @pickled-dev/cli audit . --fail-on error
-
   check:
-    needs: audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx @pickled-dev/cli check .
+      - run: bunx @pickled-dev/cli test .
+      - run: bunx @pickled-dev/cli check . --plan
+      - run: bunx @pickled-dev/cli check . --max-cells 20
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-The `audit` job runs no model calls. It is a cheap pre-flight that catches structural problems and registered-source or trap mismatches, and it fails fast before you spend a single token. Only if it passes does the `check` job run your scenarios against a real agent. Set a `threshold` in `pickled.yml` and the run passes or fails on the overall score.
+`pickled test` runs no model calls. It scores your declared example answers and catches brittle checks before you spend a single token. `pickled check --plan` prints the cells that would run. Only then does the capped `check` run your questions against a real agent. Set a `threshold` in `pickled.yml` and the run passes or fails on the overall score.
 
-One caveat if your repo is public: GitHub does not pass secrets to workflows triggered from fork pull requests, so a `check` job that needs `ANTHROPIC_API_KEY` will not run on those. The token-free `audit` job has no such limit. Gate every PR, forks included, on `audit`, and run the full `check` on push to branches you control or on trusted internal PRs.
+One caveat if your repo is public: GitHub does not pass secrets to workflows triggered from fork pull requests, so a `check` job that needs `ANTHROPIC_API_KEY` will not run on those. Keep the token-free `test` and `plan` steps on every PR, and run the full `check` on push to branches you control or on trusted internal PRs.
 
 That is the whole gate. A PR that weakens your `AGENTS.md` or breaks an answer your `llms.txt` is supposed to give now goes red, in the PR, before it ships.
 
@@ -58,7 +51,7 @@ Stale prompt surface is product debt, and debt you cannot see is the dangerous k
 
 It also changes how the team treats those files. A `CLAUDE.md` with a test is no longer a document someone updates when they remember. It is a contract with a consequence. People keep it current because the build makes them.
 
-And because the audit tier is free and the check tier is bounded by your matrix, you can afford to run it on every pull request, not as an occasional manual sweep. The point of a gate is that nothing gets past it.
+And because examples are free and the check run is bounded by `--max-cells` or `--sample`, you can afford to run it on every pull request, not as an occasional manual sweep. The point of a gate is that nothing gets past it.
 
 ## Try it
 

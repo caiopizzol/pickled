@@ -30,7 +30,6 @@ export type {
   Target,
   TargetCategory,
   ToolsetConfig,
-  Trap,
   VerifierConfig,
 } from "./types.js";
 export { normalizeDocSource } from "./types.js";

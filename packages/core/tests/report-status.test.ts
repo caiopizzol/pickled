@@ -10,7 +10,6 @@ function makeResult(overrides: Partial<ScenarioResult> = {}): ScenarioResult {
     response: "",
     reason: "",
     citations: { cited: [], required: [], missing: [], unknown: [] },
-    traps: { fired: [], avoided: [] },
     ...overrides,
   };
 }
@@ -41,29 +40,6 @@ describe("getScenarioStatus", () => {
     expect(status.label).toBe("Partially grounded");
     expect(status.icon).toBe("⚠");
     expect(status.tone).toBe("warning");
-  });
-
-  test("trap fired with high confidence still renders Trap fired", () => {
-    const status = getScenarioStatus(
-      makeResult({
-        answerable: "YES",
-        confidence: 100,
-        traps: {
-          fired: [
-            {
-              id: "old_api",
-              reason: "Deprecated",
-              matched: "old()",
-              snippet: "old()",
-            },
-          ],
-          avoided: [],
-        },
-      }),
-    );
-    expect(status.label).toBe("Trap fired");
-    expect(status.icon).toBe("✗");
-    expect(status.tone).toBe("error");
   });
 
   test("NO renders Ungrounded", () => {

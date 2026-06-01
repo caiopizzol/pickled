@@ -1,11 +1,11 @@
 ---
 title: Getting started
-description: Install pickled, write a minimal pickled.yml, and run your first check.
+description: Install pickled, write a pickled.yml, and run your first check.
 ---
 
 ## Install
 
-Pickled runs on Bun. Install the CLI globally or use `bunx` for one-off runs:
+Pickled runs on Bun. Use `bunx` for one-off runs, or install the CLI globally:
 
 ```bash
 bunx @pickled-dev/cli init
@@ -13,34 +13,46 @@ bunx @pickled-dev/cli init
 
 This writes a starter `pickled.yml` in the current directory.
 
-## Minimum config
+## The smallest config
 
-A minimum scenario needs a tool name, at least one registered source, and at least one of: `requiredSources`, `expected`, or `traps`.
+A config needs a `product`, at least one `agent`, one named `access` path, and one `question` carrying at least one check.
 
 ```yaml
-tool:
+product:
   name: my-product
   description: short one-liner about what your product does
 
-docs:
-  sources:
-    readme: ./README.md
+sources:
+  readme: ./README.md
 
-targets:
+agents:
   quick:
-    category: cli
     provider: claude-code
     model: claude-haiku-4-5
 
-threshold: 80
+access:
+  injected: { source: readme, tools: none }
 
-scenarios:
-  - name: Install
-    prompt: How do I install my-product?
-    requiredSources: [readme]
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [injected]
+    checks:
+      mustMention: ["bunx my-product"]
+
+threshold: 80
 ```
 
-`threshold` is optional. Set it to make the run pass or fail on the overall score; omit it to see the score without a pass/fail verdict.
+`threshold` is optional. Set it to make the run pass or fail on the overall score; omit it to see the score with no verdict.
+
+## Preview the run
+
+`--plan` walks the expansion and prints the cells without calling any model:
+
+```bash
+bunx @pickled-dev/cli check . --plan
+```
 
 ## Run a check
 
@@ -48,36 +60,56 @@ scenarios:
 bunx @pickled-dev/cli check .
 ```
 
-Pickled spawns the configured target, hands it the prompt with the registered source content injected, and scores the response against the citation contract. A successful run looks like:
+Pickled spawns the agent, injects the registered source, asks the question, and checks the answer:
 
 ```
-Scenario: Install
+Question: install
   ✓ Well grounded (100%)
-    cited: [readme]
 
 Overall: 100 / 100 · threshold 80 · run passes
-Citations hold. No declared traps fired.
+Every answer met its checks.
 ```
 
-## Add a matrix
+## Compare context paths
 
-To compare how different surfaces hold up, expand the scenario across an axis:
+The point of pickled is the comparison. Add a no-context path and run the same question down both:
 
 ```yaml
-scenarios:
-  - name: Install
-    prompt: How do I install my-product?
-    requiredSources: [readme]
-    matrix:
-      interfaces: [quick]
-      sources: [readme, llms]
-      toolsets: [none]
+access:
+  prior: { source: none, tools: none } # model memory only
+  injected: { source: readme, tools: none } # your README injected
+
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [prior, injected]
+    checks:
+      mustMention: ["bunx my-product"]
 ```
 
-This produces one cell per `(interface × source × toolset)` combination. The [Matrix evaluation](/matrix-evaluation) page describes the full design and the `web` and `mcp` toolset shapes.
+Now `pickled check .` runs two cells. If `prior` fails and `injected` passes, your README is doing the work. If `prior` already passes, the model knew it without your docs. If `injected` fails, the answer is not in the source you registered: fix the context.
+
+## Reach the live site with tools
+
+Add a `web` access path to make the agent discover the answer instead of reading injected content:
+
+```yaml
+access:
+  web: { source: none, tools: web }
+```
+
+A `web` (or `mcp`) cell that answers without invoking a tool is vetoed to `NO`: model memory does not count as evidence for a tool path.
+
+## Score example answers offline
+
+`pickled test` scores `examples.pass` / `examples.fail` strings against a question's checks with zero model calls, so you can catch brittle checks before a paid run:
+
+```bash
+bunx @pickled-dev/cli test .
+```
 
 ## Next steps
 
-- Read about [matrix evaluation](/matrix-evaluation) to test discovery surfaces.
 - Read the [pickled.yml reference](/pickled-yml) for every field.
 - Wire pickled into CI with [GitHub Actions](/github-actions).

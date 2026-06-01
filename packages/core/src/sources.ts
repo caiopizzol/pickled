@@ -13,11 +13,7 @@ function isUrl(source: string): boolean {
   return source.startsWith("http://") || source.startsWith("https://");
 }
 
-async function fetchUrl(
-  id: string,
-  url: string,
-  auditTraps: boolean | string[],
-): Promise<ResolvedDocSource> {
+async function fetchUrl(id: string, url: string): Promise<ResolvedDocSource> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -31,7 +27,6 @@ async function fetchUrl(
     content,
     name: new URL(url).hostname + new URL(url).pathname,
     type: "url",
-    auditTraps,
   };
 }
 
@@ -39,7 +34,6 @@ async function readFile(
   id: string,
   filePath: string,
   cwd: string,
-  auditTraps: boolean | string[],
 ): Promise<ResolvedDocSource> {
   const resolved = path.isAbsolute(filePath)
     ? filePath
@@ -55,7 +49,6 @@ async function readFile(
     content,
     name: path.basename(resolved),
     type: "file",
-    auditTraps,
   };
 }
 
@@ -63,7 +56,6 @@ async function loadCodebase(
   id: string,
   entry: DocSourceEntry,
   cwd: string,
-  auditTraps: boolean | string[],
   onProgress?: (msg: string) => void,
 ): Promise<ResolvedDocSource> {
   const includeGlob = new Glob(entry.path);
@@ -110,7 +102,6 @@ async function loadCodebase(
     content,
     name: `${matched.length} file${matched.length === 1 ? "" : "s"} in ${entry.path}`,
     type: "codebase",
-    auditTraps,
     matchedFiles: matched,
   };
 }
@@ -121,17 +112,11 @@ export async function fetchSource(
   cwd: string,
   onProgress?: (msg: string) => void,
 ): Promise<ResolvedDocSource> {
-  const { path: srcPath, auditTraps } = normalizeDocSource(source);
+  const { path: srcPath } = normalizeDocSource(source);
   const explicitType = typeof source !== "string" ? source.type : undefined;
 
   if (explicitType === "codebase") {
-    return loadCodebase(
-      id,
-      source as DocSourceEntry,
-      cwd,
-      auditTraps,
-      onProgress,
-    );
+    return loadCodebase(id, source as DocSourceEntry, cwd, onProgress);
   }
   if (explicitType === "url") {
     if (!isUrl(srcPath)) {
@@ -139,7 +124,7 @@ export async function fetchSource(
         `Source "${id}" declares type: url but path "${srcPath}" is not an http(s) URL. Use type: file for local paths, or omit type to auto-detect.`,
       );
     }
-    return fetchUrl(id, srcPath, auditTraps);
+    return fetchUrl(id, srcPath);
   }
   if (explicitType === "file") {
     if (isUrl(srcPath)) {
@@ -147,10 +132,10 @@ export async function fetchSource(
         `Source "${id}" declares type: file but path "${srcPath}" is an http(s) URL. Use type: url for remote paths, or omit type to auto-detect.`,
       );
     }
-    return readFile(id, srcPath, cwd, auditTraps);
+    return readFile(id, srcPath, cwd);
   }
-  if (isUrl(srcPath)) return fetchUrl(id, srcPath, auditTraps);
-  return readFile(id, srcPath, cwd, auditTraps);
+  if (isUrl(srcPath)) return fetchUrl(id, srcPath);
+  return readFile(id, srcPath, cwd);
 }
 
 export async function fetchAllSources(

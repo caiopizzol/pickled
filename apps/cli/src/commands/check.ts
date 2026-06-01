@@ -21,13 +21,13 @@ export interface CheckOptions {
   source?: string;
   /** Matrix cell filter: run only cells with this toolset name. */
   toolset?: string;
-  /** Run only the named scenario. Designed for CI matrix one-job-per-cell. */
+  /** Run only the named question id. */
   scenario?: string;
   /** Dry-run: expand and report planned cells without running adapters. */
   plan?: boolean;
   /** Hard cap on selected cells; exits non-zero before any run if exceeded. */
   maxCells?: string;
-  /** Deterministic per-scenario sample size. */
+  /** Deterministic per-question sample size. */
   sample?: string;
   /** Seed for --sample. */
   seed?: string;
@@ -54,7 +54,7 @@ export async function check(
   }
 
   // Apply --target override before runCheck. The helper validates the name
-  // and drops scenarios whose explicit target does not match (their author
+  // and drops questions whose explicit target does not match (their author
   // declared a different target; silently rerouting would violate intent).
   if (options.target) {
     const before = config.scenarios.length;
@@ -70,7 +70,7 @@ export async function check(
     if (dropped > 0 && !json) {
       log(
         chalk.dim(
-          `Skipping ${dropped} scenario(s) with explicit target != "${options.target}"`,
+          `Skipping ${dropped} question(s) with explicit target != "${options.target}"`,
         ),
       );
     }
@@ -86,7 +86,7 @@ export async function check(
     log(chalk.bold("pickled check"));
     log("");
     log(chalk.dim(`   Tool: ${tool.name}`));
-    log(chalk.dim(`   Scenarios: ${config.scenarios.length}`));
+    log(chalk.dim(`   Questions: ${config.scenarios.length}`));
     for (const s of config.scenarios) {
       log(chalk.dim(`   - ${s.name}`));
     }
@@ -101,9 +101,9 @@ export async function check(
   }
 
   // 2. Run check
-  // --target bridges to cellFilter.interface for matrix scenarios when
+  // --target bridges to cellFilter.interface for matrix questions when
   // --interface is not also set. Keeps "pickled check --target codex"
-  // doing the intuitive thing across both non-matrix and matrix scenarios:
+  // doing the intuitive thing across both non-matrix and matrix questions:
   // narrow the top-level matrix.target (via overrideTarget above) AND
   // narrow matrix.interfaces to the same name. Explicit --interface wins
   // if both are passed.
@@ -152,7 +152,7 @@ export async function check(
   }
 
   // 3. Check threshold (skipped in plan / dry-run mode: a planning
-  // report has no scenario scores to compare against, and a non-zero
+  // report has no question scores to compare against, and a non-zero
   // exit there would defeat the purpose of a free pre-flight).
   const thresholdFailed = shouldFailThreshold({
     plan: options.plan === true,
@@ -177,7 +177,7 @@ export async function check(
         ),
       );
       console.error(
-        chalk.dim("Review failed scenarios before trusting this surface."),
+        chalk.dim("Review failed questions before trusting this surface."),
       );
     }
     process.exit(1);
@@ -187,7 +187,7 @@ export async function check(
 /**
  * Whether the run should exit non-zero on threshold. Dry-run (`--plan`)
  * always passes the threshold gate because the planning report has no
- * scenario scores; failing here would defeat the free pre-flight.
+ * question scores; failing here would defeat the free pre-flight.
  */
 export function shouldFailThreshold(args: {
   plan: boolean;

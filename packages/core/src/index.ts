@@ -45,14 +45,8 @@ export type {
   Citation,
   CitationScore,
   ScoreInput,
-  TrapDetails,
-  TrapHit,
 } from "./scorers/index.js";
-export {
-  parseCitations,
-  scoreCitations,
-  scoreTraps,
-} from "./scorers/index.js";
+export { parseCitations, scoreCitations } from "./scorers/index.js";
 
 // Sources
 export { fetchAllSources, fetchSource } from "./sources.js";

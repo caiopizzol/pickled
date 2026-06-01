@@ -19,9 +19,7 @@ program
 
 program
   .command("audit")
-  .description(
-    "Static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.",
-  )
+  .description("Static scan of agent-context files. No LLM calls.")
   .argument("[path]", "Path to your project (default: current directory)", ".")
   .addOption(
     new Option("--format <name>", "Output format")
@@ -39,60 +37,29 @@ program
 
 program
   .command("check")
-  .description("Run agent scenarios against registered sources")
-  .argument("[path]", "Path to your project (default: current directory)", ".")
+  .description("Run product questions against registered sources")
+  .argument("[path]", "Project path", ".")
   .option("--json", "Output as JSON")
   .option("-o, --output <file>", "Save report to file")
   .option("-v, --verbose", "Show detailed progress")
-  .option(
-    "-t, --threshold <percent>",
-    "Minimum score % to pass (overrides config)",
-  )
-  .option(
-    "--target <name>",
-    "Restrict to the named target. Overrides matrix.target for non-matrix scenarios; for matrix scenarios, also filters cells by interface unless --interface is explicitly set.",
-  )
-  .option(
-    "--scenario <name>",
-    "Run only the named scenario (for CI matrix one-job-per-cell usage)",
-  )
-  .option(
-    "--interface <name>",
-    "Matrix cell filter: run only cells with this interface. Takes precedence over --target for matrix cells.",
-  )
-  .option(
-    "--source <name>",
-    "Matrix cell filter: run only cells with this source id",
-  )
-  .option(
-    "--toolset <name>",
-    "Matrix cell filter: run only cells with this toolset name",
-  )
-  .option(
-    "--plan",
-    "Dry-run: expand the matrix, apply filters and sampling, print the cell list, exit. Makes zero model calls.",
-  )
-  .option(
-    "--max-cells <n>",
-    "Hard cap on the number of cells (after filters and sampling). Exits non-zero before any model call if exceeded.",
-  )
-  .option(
-    "--sample <n>",
-    "Deterministic per-scenario sample. Picks N cells per matrix scenario; single-cell scenarios always run.",
-  )
-  .option(
-    "--seed <value>",
-    'Seed for --sample. Defaults to "default" so reruns without --seed are reproducible.',
-  )
+  .option("-t, --threshold <percent>", "Minimum score to pass")
+  .option("--target <name>", "Filter by target")
+  .option("--scenario <name>", "Run only the named question id")
+  .option("--interface <name>", "Filter by interface")
+  .option("--source <name>", "Filter by source")
+  .option("--toolset <name>", "Filter by access tool")
+  .option("--plan", "Print planned cells. No model calls.")
+  .option("--max-cells <n>", "Abort if planned cells exceed N")
+  .option("--sample <n>", "Sample N cells per question")
+  .option("--seed <value>", "Seed for --sample")
   .action(check);
 
 program
   .command("test")
-  .description(
-    "Score declared example answers against each scenario's checks, offline. No model calls.",
-  )
+  .summary("Check example answers offline")
+  .description("Check example answers offline. No model calls.")
   .argument("[path]", "Path to your project (default: current directory)", ".")
-  .option("--scenario <name>", "Test only the named scenario")
+  .option("--scenario <name>", "Test only the named question id")
   .action(test);
 
 await program.parseAsync();

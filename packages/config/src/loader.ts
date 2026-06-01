@@ -1,5 +1,7 @@
 import YAML from "yaml";
-import type { CheckConfig, Trap } from "./types.js";
+import type { PublicConfig } from "./public-types.js";
+import { compilePublicConfig, validatePublicConfig } from "./transform.js";
+import type { CheckConfig } from "./types.js";
 
 export async function loadConfig(dir: string): Promise<CheckConfig> {
   const configPath = `${dir}/pickled.yml`;
@@ -9,18 +11,21 @@ export async function loadConfig(dir: string): Promise<CheckConfig> {
     throw new Error(`pickled.yml not found in ${dir}`);
   }
 
-  let parsed: CheckConfig;
+  let pub: PublicConfig;
   try {
     const content = await file.text();
-    parsed = YAML.parse(content) as CheckConfig;
+    pub = YAML.parse(content) as PublicConfig;
   } catch (error) {
     throw new Error(`Failed to parse pickled.yml: ${error}`);
   }
 
-  parsed = expandEnvVars(parsed) as CheckConfig;
-
-  validate(parsed);
-  return parsed;
+  // Pipeline: parse -> expand ${ENV} -> validate the public schema ->
+  // compile to the internal CheckConfig -> internal validate (backstop).
+  pub = expandEnvVars(pub) as PublicConfig;
+  validatePublicConfig(pub);
+  const config = compilePublicConfig(pub);
+  validate(config);
+  return config;
 }
 
 // Substitute `${VAR}` patterns in any string value with `process.env.VAR`.
@@ -158,7 +163,6 @@ function validate(config: CheckConfig): void {
     }
     validateScenarioTargetRef(scenario.name, scenario.target, targetNames);
     validateScenarioContextRef(scenario.name, scenario.context, contextNames);
-    validateTraps(scenario.name, scenario.traps);
     validateCompareSurfaces(scenario.name, scenario.compareSurfaces, sourceIds);
     validateScenarioMatrix(
       scenario.name,
@@ -172,8 +176,6 @@ function validate(config: CheckConfig): void {
     validateExamples(scenario.name, scenario.examples);
     validateActionableContract(scenario);
   }
-
-  validateAuditTrapsSuppression(config);
 }
 
 const DEFAULT_REF = "default";
@@ -242,50 +244,6 @@ function validateTopLevelMatrixRefs(
       throw new Error(
         `pickled.yml: matrix.context references unknown context "${ref}". Declared contexts: ${declared}.`,
       );
-    }
-  }
-}
-
-/**
- * Cross-source check for list-form audit.traps suppression. Enforces global
- * trap-id uniqueness (across all scenarios) and validates that every listed
- * suppression id references a real declared trap. Only runs if at least one
- * source uses the list form; configs that only use boolean forms keep the
- * existing per-scenario uniqueness rule for backward compatibility.
- */
-function validateAuditTrapsSuppression(config: CheckConfig): void {
-  if (!config.docs?.sources) return;
-  const suppressors: Array<{ id: string; list: string[] }> = [];
-  for (const [sourceId, value] of Object.entries(config.docs.sources)) {
-    if (typeof value === "string") continue;
-    const traps = value.audit?.traps;
-    if (Array.isArray(traps)) {
-      suppressors.push({ id: sourceId, list: traps });
-    }
-  }
-  if (suppressors.length === 0) return;
-
-  const declared = new Map<string, string>();
-  for (const scenario of config.scenarios) {
-    for (const trap of scenario.traps ?? []) {
-      const prior = declared.get(trap.id);
-      if (prior !== undefined) {
-        throw new Error(
-          `pickled.yml: trap id "${trap.id}" is declared in both scenario "${prior}" and scenario "${scenario.name}". Globally unique trap ids are required when any source uses list-form audit.traps suppression. Rename one of the traps.`,
-        );
-      }
-      declared.set(trap.id, scenario.name);
-    }
-  }
-
-  for (const { id: sourceId, list } of suppressors) {
-    for (const trapId of list) {
-      if (!declared.has(trapId)) {
-        const known = [...declared.keys()].join(", ") || "(none)";
-        throw new Error(
-          `pickled.yml: docs.sources["${sourceId}"].audit.traps lists unknown trap id "${trapId}". Declared trap ids: ${known}`,
-        );
-      }
     }
   }
 }
@@ -460,10 +418,15 @@ function validateActionableContract(scenario: {
     paths?: string[];
     options?: string[];
     constraints?: string[];
+    anyOf?: Array<{ label: string; values: string[] }>;
   };
-  traps?: Trap[];
   compareSurfaces?: string[][];
-  matrix?: { interfaces?: string[]; sources?: string[]; toolsets?: string[] };
+  matrix?: {
+    interfaces?: string[];
+    sources?: string[];
+    toolsets?: string[];
+    accessPairs?: Array<{ source: string | null; toolset: string }>;
+  };
 }): void {
   const hasCitation = scenario.requiredSources !== undefined;
   // Any non-empty expected group counts as an actionable contract. The
@@ -477,6 +440,7 @@ function validateActionableContract(scenario: {
     "paths",
     "options",
     "constraints",
+    "anyOf",
   ] as const;
   const hasExpected =
     scenario.expected !== undefined &&
@@ -484,23 +448,26 @@ function validateActionableContract(scenario: {
       const arr = scenario.expected?.[field];
       return arr !== undefined && arr.length > 0;
     });
-  const hasTraps = scenario.traps !== undefined && scenario.traps.length > 0;
-  if (!hasCitation && !hasExpected && !hasTraps) {
+  if (!hasCitation && !hasExpected) {
     throw new Error(
-      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources, expected checks (includes/excludes/symbols/paths/options/constraints), or traps. A scenario with nothing to check has no verdict.`,
+      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources or expected checks (includes/excludes/symbols/paths/options/constraints/anyOf). A scenario with nothing to check has no verdict.`,
     );
   }
   // Non-none cells skip the citation contract (source is not injected; the
   // agent uses tools to discover the answer). So requiredSources alone is
   // not actionable for those cells, the verdict would default to YES with
-  // no real evidence beyond tool-use provenance. Require expected or traps
+  // no real evidence beyond tool-use provenance. Require expected checks
   // when the matrix declares any non-none toolset.
-  const nonNoneToolsets = (scenario.matrix?.toolsets ?? []).filter(
+  const declaredToolsets = [
+    ...(scenario.matrix?.toolsets ?? []),
+    ...(scenario.matrix?.accessPairs ?? []).map((p) => p.toolset),
+  ];
+  const nonNoneToolsets = [...new Set(declaredToolsets)].filter(
     (t) => t !== "none",
   );
-  if (nonNoneToolsets.length > 0 && !hasExpected && !hasTraps) {
+  if (nonNoneToolsets.length > 0 && !hasExpected) {
     throw new Error(
-      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has no expected checks or traps. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected (any of includes/excludes/symbols/paths/options/constraints) or traps, or restrict matrix.toolsets to ["none"].`,
+      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has no expected checks. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected (any of includes/excludes/symbols/paths/options/constraints/anyOf), or restrict access to a no-tools path.`,
     );
   }
 }
@@ -567,44 +534,6 @@ function validateDocSourceEntry(id: string, value: unknown): void {
     throw new Error(
       `pickled.yml: docs.sources["${id}"] object form requires a non-empty 'path' field`,
     );
-  }
-  if (entry.audit !== undefined) {
-    if (typeof entry.audit !== "object" || entry.audit === null) {
-      throw new Error(
-        `pickled.yml: docs.sources["${id}"].audit must be an object`,
-      );
-    }
-    const audit = entry.audit as Record<string, unknown>;
-    if (audit.traps !== undefined) {
-      const traps = audit.traps;
-      if (typeof traps === "boolean") {
-        // boolean form is always valid
-      } else if (Array.isArray(traps)) {
-        if (traps.length === 0) {
-          throw new Error(
-            `pickled.yml: docs.sources["${id}"].audit.traps cannot be an empty array; use true (scan all) or false (skip all) instead`,
-          );
-        }
-        for (let i = 0; i < traps.length; i++) {
-          if (typeof traps[i] !== "string") {
-            throw new Error(
-              `pickled.yml: docs.sources["${id}"].audit.traps[${i}] must be a string trap id`,
-            );
-          }
-        }
-      } else {
-        throw new Error(
-          `pickled.yml: docs.sources["${id}"].audit.traps must be a boolean or an array of trap ids`,
-        );
-      }
-    }
-    for (const key of Object.keys(audit)) {
-      if (key !== "traps") {
-        throw new Error(
-          `pickled.yml: docs.sources["${id}"].audit has unknown field "${key}"`,
-        );
-      }
-    }
   }
   if (entry.type !== undefined) {
     if (
@@ -673,7 +602,6 @@ function validateDocSourceEntry(id: string, value: unknown): void {
   for (const key of Object.keys(entry)) {
     if (
       key !== "path" &&
-      key !== "audit" &&
       key !== "type" &&
       key !== "exclude" &&
       key !== "maxBytes"
@@ -681,103 +609,6 @@ function validateDocSourceEntry(id: string, value: unknown): void {
       throw new Error(
         `pickled.yml: docs.sources["${id}"] has unknown field "${key}"`,
       );
-    }
-  }
-}
-
-const FORBIDDEN_FLAGS = new Set(["g", "y"]);
-const ALLOWED_FLAGS = new Set(["i", "m", "s", "u", "v"]);
-
-function validateTraps(scenarioName: string, traps: Trap[] | undefined): void {
-  if (traps === undefined) return;
-  if (!Array.isArray(traps)) {
-    throw new Error(
-      `pickled.yml: scenario "${scenarioName}" has non-array 'traps'`,
-    );
-  }
-  const seenIds = new Set<string>();
-  for (const trap of traps) {
-    if (!trap.id || typeof trap.id !== "string") {
-      throw new Error(
-        `pickled.yml: scenario "${scenarioName}" has a trap missing 'id'`,
-      );
-    }
-    if (seenIds.has(trap.id)) {
-      throw new Error(
-        `pickled.yml: scenario "${scenarioName}" has duplicate trap id "${trap.id}"`,
-      );
-    }
-    seenIds.add(trap.id);
-    if (!trap.reason || typeof trap.reason !== "string") {
-      throw new Error(
-        `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" requires non-empty 'reason'`,
-      );
-    }
-    if (
-      trap.auditSeverity !== undefined &&
-      trap.auditSeverity !== "warning" &&
-      trap.auditSeverity !== "error"
-    ) {
-      throw new Error(
-        `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" auditSeverity must be "warning" or "error"`,
-      );
-    }
-    const hasMatch = typeof trap.match === "string";
-    const hasPattern = typeof trap.pattern === "string";
-    if (hasMatch === hasPattern) {
-      throw new Error(
-        `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" must set exactly one of 'match' or 'pattern'`,
-      );
-    }
-    if (hasMatch) {
-      if (trap.match === "") {
-        throw new Error(
-          `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" has empty 'match'`,
-        );
-      }
-      if (trap.flags !== undefined) {
-        throw new Error(
-          `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" sets 'flags' without 'pattern'`,
-        );
-      }
-    } else {
-      const pattern = trap.pattern;
-      if (typeof pattern !== "string") {
-        throw new Error(
-          `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" must set 'pattern'`,
-        );
-      }
-      if (pattern === "") {
-        throw new Error(
-          `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" has empty 'pattern'`,
-        );
-      }
-      if (trap.flags !== undefined) {
-        if (typeof trap.flags !== "string") {
-          throw new Error(
-            `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" has non-string 'flags'`,
-          );
-        }
-        for (const ch of trap.flags) {
-          if (FORBIDDEN_FLAGS.has(ch)) {
-            throw new Error(
-              `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" uses forbidden regex flag "${ch}" (g and y are not allowed)`,
-            );
-          }
-          if (!ALLOWED_FLAGS.has(ch)) {
-            throw new Error(
-              `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" uses unsupported regex flag "${ch}"`,
-            );
-          }
-        }
-      }
-      try {
-        new RegExp(pattern, trap.flags ?? "");
-      } catch (err) {
-        throw new Error(
-          `pickled.yml: scenario "${scenarioName}" trap "${trap.id}" has invalid regex pattern: ${err instanceof Error ? err.message : err}`,
-        );
-      }
     }
   }
 }

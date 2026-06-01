@@ -1,9 +1,9 @@
 ---
 title: pickled
-description: Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.
+description: Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
 ---
 
-Pickled is an open-source CLI that runs scenarios across a matrix of interfaces (Claude Code, Codex CLI, Anthropic API, OpenAI API), sources (READMEs, docs URLs, llms.txt, codebase globs), and toolsets (`none` / `web` / `mcp`), then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, must-not-mention, any-of, and tool-use provenance. No LLM grades another LLM.
 
 ## What pickled tests
 
@@ -12,14 +12,12 @@ Two audiences, one tool:
 - **External.** Vendors testing how outside-world agents understand their published product. Register your README, llms.txt, docs URLs, and the things you do not want agents to say. Pickled tells you whether the agent answered from your sources or made it up.
 - **Internal.** Engineering teams testing whether their own CLAUDE.md, AGENTS.md, JSDoc, comments, and runbooks steer their own agents correctly. This repo is the dogfood case.
 
-## How the matrix works
+## How scoring works
 
-A scenario expands into one cell per `(interface × source × toolset)` tuple. Each cell scores independently:
+A question runs once per `(agent × access)` pair. Each pair scores independently:
 
-- **Trap firing** is a universal veto. Any matched trap forces the cell to `NO` with confidence `0`.
-- **Citation contract** applies in controlled mode (`toolset: none`): the agent must cite registered source IDs.
-- **Expected substrings** apply in discovery mode (`toolset: web`, `toolset: mcp`): the response must include declared phrases and avoid excluded ones.
-- **Tool-use provenance** applies whenever a non-`none` toolset is configured: the agent must invoke at least one of the configured tools, or the cell is vetoed.
+- **Checks.** `mustMention` and `mustNotMention` are substrings the answer must or must not contain; `anyOf` groups are satisfied when the answer contains at least one value from each. Each check counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
+- **Tool-use provenance.** When an access path uses `web` or `mcp` tools, the agent must invoke at least one of them, or the cell is vetoed to `NO`. Model memory does not count as evidence for a tool path.
 
 ## Getting started
 
