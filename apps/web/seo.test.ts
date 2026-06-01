@@ -44,6 +44,25 @@ test("every blog post has the required frontmatter contract", async () => {
   }
 });
 
+test("blog posts have deterministic editorial order", async () => {
+  const loader = await read("lib/blog.ts");
+  expect(loader).toContain("frontmatter.order");
+
+  const orderedSlugs = [
+    "testing-public-product-context",
+    "testing-llms-txt",
+    "no-tool-web-mcp-agent-answers",
+    "deterministic-agent-evals",
+    "agent-evals-in-ci",
+    "testing-agents-md-claude-md",
+  ];
+
+  for (const [index, slug] of orderedSlugs.entries()) {
+    const raw = await read(`content/blog/${slug}.mdx`);
+    expect(raw).toContain(`order: ${index + 1}`);
+  }
+});
+
 test("homepage OG asset exists and is a real card", async () => {
   const file = Bun.file(join(import.meta.dir, "public/og-image.png"));
   expect(await file.exists()).toBe(true);
