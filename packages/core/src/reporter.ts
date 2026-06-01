@@ -323,7 +323,13 @@ export function formatCheckReport(
     lines.push(`Sources: ${chalk.dim("none registered")}`);
   }
 
-  lines.push(`Scenarios: ${chalk.dim(String(summary.total))}`);
+  // In plan/dry-run mode no scenarios are scored (summary.total is 0), so
+  // report the count of distinct scenarios that produced planned cells.
+  const scenarioCount =
+    report.plan?.cells != null
+      ? new Set(report.plan.cells.map((c) => c.scenario)).size
+      : summary.total;
+  lines.push(`Scenarios: ${chalk.dim(String(scenarioCount))}`);
   if (report.plan) {
     const { expandedCells, selectedCells, seed } = report.plan;
     const sampled = selectedCells < expandedCells;
