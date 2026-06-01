@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
 
-// These lock the SEO contract for the marketing site at the source level
-// (Vite copies index.html and public/ verbatim into dist). The sitemap
-// assertion specifically guards the regression where Vite's SPA catch-all
-// served index.html for /sitemap.xml.
+// These lock the SEO contract at the source level: public/ ships verbatim
+// and index.html's <head> is preserved through the build. The homepage
+// <body> is prerendered and validated in prerender.ts instead (artifact
+// level, since the rendered markup only exists after the build, and `verify`
+// runs tests before that build). The sitemap assertion guards the regression
+// where Vite's SPA catch-all served index.html for /sitemap.xml.
 const read = (p: string) => Bun.file(join(import.meta.dir, p)).text();
 
 test("sitemap.xml is XML, not the SPA shell", async () => {
