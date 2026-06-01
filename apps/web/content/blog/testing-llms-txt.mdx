@@ -58,7 +58,7 @@ scenarios:
 threshold: 80
 ```
 
-The `none` cell injects your `llms.txt` into the prompt and, because of `requiredSources`, fails unless the answer is grounded in that file. That is the content test: if it fails here, your `llms.txt` does not actually answer the question. The `web` cell injects nothing; it leaves your site as a discovery target and requires the agent to invoke a web tool to reach it. That is the discovery test: if it fails here while `none` passes, your content is fine but the agent never found the file.
+The `none` cell injects your `llms.txt` into the prompt and, because of `requiredSources`, fails unless the answer is grounded in that file. That is the content test: if it fails here, your `llms.txt` does not actually answer the question. The `web` cell injects nothing; it leaves your site as a discovery target and requires the agent to invoke a web tool to reach it. That is the discovery test: if it fails here while `none` passes, your content is fine but the agent did not reach it through the configured web path.
 
 Both cells check `expected.includes` for the answer you want. Citations are extracted by code; the `web` tool calls are real. No model grades another model. The score is the score.
 
@@ -70,7 +70,7 @@ Run this on the questions that matter most for your product, the ones where a wr
 
 ## Try it
 
-Point pickled at your `llms.txt` and write one scenario for a question it is supposed to answer. Run it once with the file injected and once with the agent forced to fetch it, and see which promise holds.
+Point pickled at your `llms.txt` and write one scenario for a question it is supposed to answer. Run it once with the file injected and once with the agent forced to reach it through web tools, and see which promise holds.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [Toolsets](https://docs.pickled.dev/toolsets)
