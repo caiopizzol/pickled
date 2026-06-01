@@ -69,7 +69,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy apps/web/dist --project-name=pickled-web
+          command: pages deploy apps/web/out --project-name=pickled-web
 
   # apps/docs is deliberately built only inside this deploy job, not in the
   # main `verify` job above. The Fumadocs static template currently sets

@@ -9,7 +9,7 @@
       "!**/dist",
       "!**/.next",
       "!**/.source",
-      "!apps/docs/out",
+      "!**/out",
       "!.claude"
     ]
   },
