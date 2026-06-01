@@ -1,27 +1,44 @@
 import path from "node:path";
 import chalk from "chalk";
 
-const TEMPLATE = `# pickled.yml - Agent legibility check for your product
+const TEMPLATE = `# pickled.yml - does an agent understand your product?
 
-tool:
-  name: "your-product"
-  description: "A short description of what your product does"
+product:
+  name: your-product
+  description: A short description of what your product does
 
-docs:
-  sources:
-    readme: ./README.md
-    # llms: https://your-site.example/llms.txt
+# The public context an outside agent can read about your product.
+sources:
+  readme: ./README.md
+  # docs: https://your-site.example/llms.txt
 
-scenarios:
-  - name: "Getting started"
-    prompt: "How do I install and set up this product?"
-    requiredSources: [readme]
+# The agent that answers. claude-code needs the Claude Code CLI installed.
+agents:
+  claude:
+    provider: claude-code
+    model: claude-haiku-4-5
 
-  - name: "Basic usage"
-    prompt: "Show me a basic example of using this product"
-    requiredSources: [readme]
+# Named context paths. Each pairs a source with a tool mode. The point is
+# to compare them: ask the same question down each path and see which one
+# gets the agent to the right answer.
+access:
+  prior: { source: none, tools: none } # no context, model memory only
+  injected: { source: readme, tools: none } # your README injected
 
-# Optional: fail CI if score falls below threshold
+questions:
+  - id: getting-started
+    ask: How do I install and set up this product?
+    agents: [claude]
+    access: [prior, injected]
+    checks:
+      # Edit these: phrases a correct answer must (or must not) contain.
+      mustMention: [install]
+      # mustNotMention: [deprecated-thing]
+      # anyOf:
+      #   - label: names the entry point
+      #     values: [quickstart, getting-started]
+
+# Optional: fail CI if the overall score falls below this.
 # threshold: 80
 `;
 
@@ -40,8 +57,9 @@ export async function init(targetPath: string): Promise<void> {
   console.log();
   console.log(chalk.dim("Next steps:"));
   console.log(
-    chalk.dim("  1. Edit pickled.yml: list your sources and scenarios"),
+    chalk.dim("  1. Edit pickled.yml: list your sources and questions"),
   );
-  console.log(chalk.dim("  2. Run: pickled check"));
+  console.log(chalk.dim("  2. Preview the run: pickled check --plan"));
+  console.log(chalk.dim("  3. Run it: pickled check"));
   console.log();
 }

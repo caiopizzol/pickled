@@ -1,69 +1,66 @@
 ---
-title: Toolsets
-description: Configure the tool path each matrix cell uses to reach an answer.
+title: Access tools
+description: Choose whether an agent gets injected context, web tools, or MCP tools.
 ---
 
-Toolsets name a tool configuration the matrix can iterate over. Three shapes ship today.
+An `access` path is a named `(source, tools)` pair. `tools` has three values today: `none`, `web`, and `mcp`.
 
-In `web` and `mcp` cells, local files and codebase globs are not read from disk by the agent; they are name-only hints unless the configured tools can reach the same content. Use `toolset: none` to test injected local context.
-
-## `none` (controlled baseline)
+## `tools: none`
 
 ```yaml
-toolsets:
-  none: {}
+access:
+  injected: { source: llms, tools: none }
 ```
 
-Source content is injected directly into the agent's prompt. The citation contract applies when `requiredSources` is set: the agent must cite at least one of the required source IDs.
+Pickled reads the registered source and injects it into the prompt. Use this to ask: "is this source enough to answer the question?"
 
-## `web` (Claude Code, Anthropic API, OpenAI API)
+Use `source: none` with `tools: none` for a model-prior baseline:
 
 ```yaml
-toolsets:
-  web:
-    webSearch: true
-    webFetch: true
+access:
+  prior: { source: none, tools: none }
 ```
 
-The cell asks the agent to research the answer with web tools. Source is NOT injected; the prompt names the active source as the discovery target. Tool-use provenance: the cell passes only if the agent invokes at least one of the configured web tools.
+That cell gets no registered context and no tools.
 
-The mechanism depends on the interface:
-
-- On Claude Code, the cell scopes the SDK's built-in tools to exactly `[WebSearch, WebFetch]` so Read, Edit, and Bash cannot leak as a fallback.
-- On the Anthropic API target, the cell passes the server-side `web_search` tool to `messages.create` (tool version `web_search_20250305`). The API has no separate fetch tool, so `webFetch: true` is ignored on this provider and `webSearch: true` is required.
-- On the OpenAI API target, the cell passes the `web_search` tool to `responses.create`. The API has no separate fetch tool either; `webSearch: true` is required and `webFetch: true` is a no-op. Provenance reads `web_search_call` output items and normalizes them to the same `web_search` provider-agnostic name.
-
-## `mcp` (Claude Code, OpenAI API)
+## `tools: web`
 
 ```yaml
-toolsets:
-  context7_mcp:
-    mcpServers:
-      context7:
-        type: http
-        url: https://mcp.context7.com/mcp
+access:
+  web: { source: none, tools: web }
+```
+
+The agent must use web search to reach the answer. Source content is not injected. A web cell that answers without invoking a web tool is vetoed to `NO`.
+
+Works today on:
+
+- Claude Code (`WebSearch` / `WebFetch`)
+- Anthropic API (`web_search`)
+- OpenAI API (`web_search`)
+
+## `tools: mcp`
+
+```yaml
+access:
+  docs_mcp:
+    source: llms
+    tools: mcp
+    servers:
+      docs:
+        url: https://docs.example.com/mcp
         headers:
-          CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
+          AUTH_TOKEN: ${AUTH_TOKEN}
 ```
 
-The toolset name (`context7_mcp` here) is user-chosen; Pickled has no server-specific knowledge. Any MCP server reachable via `stdio`, `http`, or `sse` can be declared the same way. Provenance accepts any invocation of `mcp__<server>__*` for any configured server, regardless of provider.
+The agent must use one of the declared MCP servers. Source content is not injected. An MCP cell that answers without invoking an MCP tool is vetoed to `NO`.
 
-The wiring depends on the interface:
+Works today on:
 
-- On Claude Code, the cell sets `tools: []` (built-ins disabled) and `allowedTools: ["mcp__<server>__*"]` (auto-permission); MCP tools come from the Agent SDK's native `mcpServers` config.
-- On the OpenAI API target, the cell passes one hosted-MCP tool entry per declared server to `responses.create` (`type: "mcp"`, `server_label` = the map key, `server_url` = `url`, `headers` forwarded). `require_approval: "never"` is set so non-interactive runs do not deadlock on approval prompts. The OpenAI hosted-MCP path requires HTTP transports; `stdio` MCP servers can only run on Claude Code.
+- Claude Code through the Agent SDK MCP config
+- OpenAI API through hosted MCP tools
 
-`${UPPER_SNAKE_CASE}` values in `pickled.yml` are expanded from `process.env` at load, so secrets stay out of the config file. Bun auto-loads `.env`.
+OpenAI hosted MCP supports HTTP transports. `stdio` MCP servers are only usable through Claude Code.
 
-## What "provenance" means
+## Secrets
 
-For non-`none` cells, the cell label promises "the agent reached this answer via the configured tool path." If the agent answers from model prior knowledge without invoking any of the configured tools, the cell is hard-vetoed to `NO` with confidence `0`, regardless of whether the response happens to satisfy `expected.includes`/`excludes`. The cell label has to be honest.
-
-## Mixed shapes are rejected
-
-Declaring both `webSearch`/`webFetch` flags and `mcpServers` on the same toolset is a load-time error: Pickled cannot attribute provenance honestly across both. Declare separate toolsets per shape.
-
-## Interface restriction
-
-- `web` runs on `claude-code` (client tools `WebSearch`/`WebFetch`), `anthropic` (server-side `web_search`), and `openai` (server-side `web_search`) today. Codex CLI lands per release.
-- `mcp` runs on `claude-code` (Agent SDK native) and `openai` (hosted-MCP on Responses) today. Anthropic and other providers land per release.
+`${UPPER_SNAKE_CASE}` values are expanded from `process.env` when the config loads. Bun auto-loads `.env` locally. In CI, pass secrets through the job environment.

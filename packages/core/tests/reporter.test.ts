@@ -31,7 +31,6 @@ function makeReport(): CheckReport {
           missing: [],
           unknown: [],
         },
-        traps: { fired: [], avoided: [] },
         allResponses: [
           { type: "initial", text: "initial draft" },
           { type: "final", text: "final answer" },
@@ -39,43 +38,6 @@ function makeReport(): CheckReport {
       },
     ],
     summary: { total: 1, answered: 1, unanswered: 0, score: 100 },
-  };
-}
-
-function makeTrapReport(): CheckReport {
-  return {
-    ...makeReport(),
-    scenarios: [
-      {
-        scenario: {
-          name: "Error handling",
-          prompt: "How do I get error messages?",
-          requiredSources: ["readme", "llms"],
-        },
-        answerable: "NO",
-        confidence: 0,
-        response: "Use ZodError.format().\n\n## Sources\n- [readme]\n- [llms]",
-        reason: 'Trap fired: "old_v2_api" (Deprecated in Zod 4)',
-        citations: {
-          cited: ["readme", "llms"],
-          required: ["readme", "llms"],
-          missing: [],
-          unknown: [],
-        },
-        traps: {
-          fired: [
-            {
-              id: "old_v2_api",
-              reason: "Deprecated in Zod 4; use z.treeifyError()",
-              matched: "ZodError.format()",
-              snippet: "Use ZodError.format().",
-            },
-          ],
-          avoided: [],
-        },
-      },
-    ],
-    summary: { total: 1, answered: 0, unanswered: 1, score: 0 },
   };
 }
 
@@ -165,23 +127,11 @@ describe("formatCheckReport", () => {
     expect(text).toContain("pickled check");
     expect(text).toContain("Tool: t");
     expect(text).toContain("Sources: [readme]");
-    expect(text).toContain("Scenario: s");
+    expect(text).toContain("Question: s");
     expect(text).toContain("✓ Well grounded (100%)");
     expect(text).toContain("cited: [readme]");
     expect(text).toContain("Overall: 100 / 100 · threshold 80 · run passes");
     expect(text).not.toContain("🥒");
-  });
-
-  test("prints trap evidence before the overall failure", () => {
-    const text = formatCheckReport(makeTrapReport(), { threshold: 80 });
-    expect(text).toContain("Scenario: Error handling");
-    expect(text).toContain("✗ Trap fired (0%)");
-    expect(text).toContain("trap: old_v2_api");
-    expect(text).toContain("reason: Deprecated in Zod 4; use z.treeifyError()");
-    expect(text).toContain('match: "ZodError.format()"');
-    expect(text).toContain("cited: [readme], [llms]");
-    expect(text).toContain("Overall: 0 / 100 · threshold 80 · run fails");
-    expect(text).toContain("Review fired traps before trusting this surface.");
   });
 
   test("plan mode reports the planned scenario count, not the scored count", () => {
@@ -210,8 +160,8 @@ describe("formatCheckReport", () => {
       },
     };
     const text = formatCheckReport(report, { threshold: 80 });
-    expect(text).toContain("Scenarios: 1");
-    expect(text).not.toContain("Scenarios: 0");
+    expect(text).toContain("Questions: 1");
+    expect(text).not.toContain("Questions: 0");
     expect(text).toContain("Cells: 2");
   });
 
@@ -276,13 +226,7 @@ describe("formatCheckReport golden fixtures", () => {
     expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
   });
 
-  test("trap fired with threshold (run fails)", () => {
-    expect(
-      stripAnsi(formatCheckReport(makeTrapReport(), { threshold: 80 })),
-    ).toMatchSnapshot();
-  });
-
-  test("ungrounded scenario (NO, no trap, missing citation)", () => {
+  test("ungrounded scenario (NO, missing citation)", () => {
     const base = makeReport();
     const first = base.scenarios[0];
     if (!first) throw new Error("makeReport should produce a scenario");

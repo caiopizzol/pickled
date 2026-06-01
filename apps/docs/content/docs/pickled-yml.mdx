@@ -3,134 +3,113 @@ title: pickled.yml reference
 description: Every field the loader accepts, with the rules each one enforces.
 ---
 
-The full schema lives in `packages/config/src/types.ts`. This page covers the fields you reach for first.
+A `pickled.yml` has five required top-level keys: `product`, `sources`, `agents`, `access`, and `questions`, plus an optional `threshold`. Checks and example answers live inside each question.
 
-## `tool`
+## `product`
 
 ```yaml
-tool:
+product:
   name: my-product
   description: short one-liner about what your product does
 ```
 
 Both fields are required. They flow into the system prompt so the agent knows what it is being asked about.
 
-## `docs.sources`
+## `sources`
 
-A registered source is the truth Pickled is allowed to score against: a local file, a URL, or a codebase glob. Anything not registered does not count.
-
-A map of source ID to source definition.
+A registered source is the public context Pickled may score against: a local file or a URL. Anything not registered does not count.
 
 ```yaml
-docs:
-  sources:
-    readme: ./README.md
-    llms: ./llms.txt
-    docs_url: https://example.com/docs
-    core_src:
-      type: codebase
-      path: "packages/core/src/**/*.ts"
-      exclude: ["**/*.test.ts"]
-    docs_with_overrides:
-      path: ./AGENTS.md
-      audit:
-        traps: [ai_powered, freshness_score]
+sources:
+  readme: ./README.md
+  llms: ./llms.txt
+  docs: https://example.com/llms-full.txt
 ```
 
-Source values can be:
+A map of source id to a path or URL string. Local paths are read from disk; URLs are fetched at check time. The id `none` is reserved (it names the no-context path), so the loader rejects a source called `none`.
 
-- A path string (local file).
-- A URL string (fetched at check time).
-- An object with `type: "codebase"` (codebase loader: glob over the local repo).
-- An object with `path` + `audit` (per-source audit overrides).
+## `agents`
 
-Use local files for repo docs and agent instructions, URLs for published docs and hosted bundles, and codebase globs for groups of files such as JSDoc, comments, or per-package agent docs.
-
-## `targets`
-
-Named target configurations the matrix can iterate over.
+The agents that answer. Each needs a `provider` and a `model`.
 
 ```yaml
-targets:
+agents:
   quick:
-    category: cli
     provider: claude-code
     model: claude-haiku-4-5
     maxTurns: 5
-  thorough:
-    category: cli
-    provider: claude-code
-    model: sonnet
-    maxTurns: 15
-  anthropic_api:
-    category: api
+  api:
     provider: anthropic
     model: claude-haiku-4-5
     temperature: 0
     maxTokens: 4096
 ```
 
-API targets reject CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`) at load time. Pin the model explicitly: aliases like `haiku` can resolve to different versions across SDK upgrades and break reproducibility.
+Providers: `claude-code` and `codex-cli` (CLI agents), `anthropic` and `openai` (API agents). Pin the model explicitly: aliases like `haiku` can resolve to different versions across SDK upgrades and break reproducibility. API agents accept `temperature` and `maxTokens`; CLI agents accept `maxTurns`. Mixing the two is rejected at load.
 
-## `toolsets`
+## `access`
 
-Named toolset profiles. See [Toolsets](/toolsets) for shapes.
+A named context path: a `(source, tools)` pair. This is what you compare across runs. The id `none` is reserved.
 
 ```yaml
-toolsets:
-  none: {}
-  web:
-    webSearch: true
-    webFetch: true
+access:
+  prior: { source: none, tools: none } # no context, model memory only
+  injected: { source: docs, tools: none } # docs content injected
+  web: { source: none, tools: web } # open web discovery
   docs_mcp:
-    mcpServers:
+    source: docs
+    tools: mcp
+    servers:
       docs:
-        type: http
         url: https://docs.example.com/mcp
         headers:
           AUTH_TOKEN: ${AUTH_TOKEN}
 ```
 
-## `scenarios`
+- `source` is a registered source id, or `none` for no context.
+- `tools` is `none` (the source is injected into the prompt), `web` (the agent uses web search), or `mcp` (the agent uses the declared MCP servers).
+- `servers` is required when `tools: mcp` and rejected otherwise. HTTP transports only.
 
-A scenario needs `name`, `prompt`, and at least one of: `requiredSources`, `expected`, or `traps`. Matrix scenarios with any non-`none` toolset also need `expected` or `traps` (non-`none` cells skip the citation contract).
+With `tools: none` the source content is injected and the agent answers from it. With `tools: web` or `mcp` nothing is injected: the agent must reach the answer with its tools, and a cell that answers without invoking one is vetoed to `NO`.
+
+## `questions`
 
 ```yaml
-scenarios:
-  - name: Install
-    prompt: How do I install my-product?
-    requiredSources: [readme]
-    matrix:
-      interfaces: [quick]
-      sources: [readme, llms]
-      toolsets: [none]
-    expected:
-      includes: ["bunx my-product"]
-      excludes: ["AI-powered", "seamless"]
-    traps:
-      - id: old_install_path
-        match: "npm install my-product-cli"
-        reason: package was renamed in 1.0
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick, api]
+    access: [prior, injected, web]
+    checks:
+      mustMention: ["bunx my-product"]
+      mustNotMention: ["npm install my-product-cli"]
+      anyOf:
+        - label: names the entry point
+          values: [quickstart, getting-started]
 ```
 
-`traps` are deterministic stale-answer detectors. Firing any trap forces the cell to `NO` with confidence `0`.
+Each question runs once per `(agent × access)` pair. A question needs an `id`, an `ask`, at least one `agent`, at least one `access`, and at least one check.
 
-`matrix.sources` accepts the reserved value `none` alongside registered source ids. A `none` cell receives no source content and no canonical-source hint: with `toolset: none` it measures model prior; with `toolset: web` or `mcp` it measures open discovery (the agent must reach the answer with its tools, no hint). `docs.sources` rejects `none` as a key so the sentinel never collides with a real source.
+### `checks`
 
-## Env-var expansion
+- `mustMention` - every listed substring must appear in the answer.
+- `mustNotMention` - none of the listed substrings may appear.
+- `anyOf` - each group is satisfied when at least one of its `values` appears. A group is `{ label, values }`; the label names the group in the receipt.
 
-String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding `process.env` entry at load. Missing env vars become empty strings so the failure surfaces at the call site (e.g., a 401 from the MCP server) rather than at config load. Bun auto-loads `.env`.
+Each entry counts as one check. The cell score is the share of checks satisfied; the verdict is `YES` (all), `PARTIAL` (some), or `NO` (none).
 
-## Testing checks offline (`examples` + `pickled test`)
+### `examples`
 
-Add sample answers to a scenario and score them with no model calls:
+Optional per-question sample answers, scored offline by `pickled test` with no model calls.
 
 ```yaml
-scenarios:
-  - name: Install
-    prompt: How do I install my-product?
-    expected:
-      includes: ["bunx my-product"]
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [injected]
+    checks:
+      mustMention: ["bunx my-product"]
     examples:
       pass:
         - "Install it with `bunx my-product`."
@@ -138,13 +117,25 @@ scenarios:
         - "Run `npm install my-product-cli`."
 ```
 
-`pickled test` scores each `examples.pass` / `examples.fail` string against the scenario's `expected` and `traps` with the same matchers a real run uses, makes zero model calls, and exits non-zero if any example does not behave as declared. A `pass` example a check rejects means the check is too strict; a `pass` example a trap fires on means the trap is over-broad. Citation / `requiredSources` is not scored, since an example has no injected source.
+A `pass` example must satisfy every check; a `fail` example must miss at least one. A `pass` a check rejects means the check is too strict; a `fail` that satisfies everything means the check is too weak. Run with `pickled test .`.
+
+## `threshold`
+
+```yaml
+threshold: 80
+```
+
+Optional. When set, the run passes or fails on the overall score. Omit it to see `Overall: X / 100` with no pass/fail verdict.
+
+## Env-var expansion
+
+String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding `process.env` entry at load. Missing env vars become empty strings so the failure surfaces at the call site (e.g., a 401 from the MCP server) rather than at config load. Bun auto-loads `.env`.
 
 ## What pickled rejects at load
 
-- A scenario with no actionable contract (no `requiredSources`, `expected`, or `traps`).
-- A matrix scenario whose toolsets include a non-`none` profile but the scenario has only `requiredSources` (the citation contract does not apply, so the cell has no scoring path).
-- A toolset that declares both `webSearch`/`webFetch` flags and `mcpServers`.
-- A `docs.sources` entry keyed `none` (reserved as the no-context sentinel for `matrix.sources`).
-- API targets that set CLI-only fields.
-- Unpinned codex-cli models (the CLI's default can change without notice).
+- A source or access path named `none` (reserved for the no-context path).
+- An agent with an unknown provider, or one missing `provider` / `model`.
+- `tools: mcp` without a `servers` map, or `servers` on a non-`mcp` access path.
+- A question with no checks (`mustMention` / `mustNotMention` / `anyOf` all empty).
+- A question referencing an agent or access path that is not declared.
+- API agents that set CLI-only fields, or a `codex-cli` agent without a pinned model.

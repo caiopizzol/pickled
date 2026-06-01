@@ -11,7 +11,7 @@ language: en
 
 ### Overview
 
-Pickled is an open-source CLI that tests whether AI agents actually understand your product. It runs scenarios across a matrix of interfaces, sources, and toolsets, then scores each cell with deterministic checks: expected facts, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks. Checks are `mustMention`, `mustNotMention`, `anyOf`, and tool-use provenance. No LLM grades another LLM.
 
 Pickled started as a freshness checker for developer tool docs. It got rewritten when the real problem became clear, and the real problem has three surfaces, not one.
 
@@ -21,7 +21,7 @@ Pickled started as a freshness checker for developer tool docs. It got rewritten
 
 The same product can be legible in one agent surface and illegible in another, because each one gets a different slice. Pickled measures that per surface.
 
-**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources (anything an agent can read), scenarios (the questions), traps (the stale patterns), and toolsets (the tool paths the agent has). The framework expands each scenario into cells, runs each cell against its configured interface, and scores the answer with deterministic checks: expected substrings, declared traps, citation grounding in controlled cells, and tool-use provenance in tool-enabled cells. Receipts per cell.
+**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, access paths, questions, and checks. The framework runs each question once per `(agent x access)` pair and scores the answer with deterministic checks. Receipts per cell.
 
 **The problem.** Every API-backed product now has multiple readers. Some are people. Some are agents. The agents get different context bundles depending on which surface they live in, and each one fails in characteristic ways:
 
@@ -29,11 +29,11 @@ The same product can be legible in one agent surface and illegible in another, b
 - **Stale context.** The agent saw an old version of the truth.
 - **Contradictory context.** Two sources disagree, and the agent picks the wrong one.
 - **Overbroad context.** A vague rule overrides a specific one.
-- **Surface-specific drift.** The same scenario passes on one agent surface and fails on another because they received different context bundles.
+- **Surface-specific drift.** The same question passes on one agent surface and fails on another because they received different context bundles.
 
-Generic eval frameworks ask "did the model produce the expected output?" Documentation platforms ask "is the page published?" Pickled asks the specific question those tools usually don't: can this agent, on this surface, use this product's actually-declared sources to answer this scenario without tripping a known stale pattern?
+Generic eval frameworks ask "did the model produce the expected output?" Documentation platforms ask "is the page published?" Pickled asks the specific question those tools usually don't: can this agent, on this surface, use this product's actually-declared context to answer this product question correctly?
 
-**Transformation.** Before: you hope AI gets your product right and find out from angry GitHub issues. After: you have a deterministic score, per surface, per scenario, that fails CI when it drops.
+**Transformation.** Before: you hope AI gets your product right and find out from angry GitHub issues. After: you have a deterministic score, per surface, per question, that fails CI when it drops.
 
 **Long-term ambition.** Become the standard CI check for agent legibility across API-backed products.
 
@@ -54,14 +54,14 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 **Structural differentials.**
 
-- **Deterministic by contract.** The core score is parsed, not judged. Citations are extracted by code. Declared traps are matched as regex or substring. No LLM judges the answer.
+- **Deterministic by contract.** The core score is parsed, not judged. Citations are extracted by code. Checks are matched as substrings. No LLM judges the answer.
 - **Registered source contract.** You declare what counts as the product's truth. Pickled does not magically introspect; it grades against the sources you registered. The contract is the strength.
-- **Tool-specific scenarios.** The questions are your product's questions, not a generic benchmark.
-- **Per-surface scoring.** The same scenario can pass on one surface and fail on another. Pickled reports per-surface results because legibility is per-surface, not global.
-- **Trap-aware.** A grounded answer can still be wrong. Declared traps fire when matched, and any firing forces the result to NO with confidence zero, regardless of how well the answer was grounded.
+- **Product-specific questions.** The questions are your product's questions, not a generic benchmark.
+- **Per-surface scoring.** The same question can pass on one surface and fail on another. Pickled reports per-surface results because legibility is per-surface, not global.
+- **Checks you control.** A grounded answer can still be wrong. You declare what the answer must mention, must not mention, or must satisfy one of, and the check is matched deterministically.
 - **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Antigravity CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
 - **Source-agnostic.** Registers anything an agent can read. Public docs, private docs, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. URLs or local paths.
-- **The report is the receipt.** Each run produces a structured artifact: scenario, target, response, registered sources cited, unknown sources invented, traps that fired, threshold result. The run fails on the receipt, not on a vibe.
+- **The report is the receipt.** Each run produces a structured artifact: question, agent, access path, response, registered sources cited, checks satisfied and missed, threshold result. The run fails on the receipt, not on a vibe.
 - **CLI-first. CI-native. No dashboard required.**
 - **Open source. MIT.**
 
@@ -69,7 +69,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 ### Personality
 
-**Archetype.** The Inspector and the Pickler, layered. The Inspector is the voice: rigorous, distrustful of self-grading, demands citations, calm and dry. The Pickler is the metaphor: pickles aren't fresh, pickles are *preserved*, which is what you want your product to be inside agent memory.
+**Archetype.** The Inspector and the Pickler, layered. The Inspector is the voice: rigorous, distrustful of self-grading, demands receipts, calm and dry. The Pickler is the metaphor: pickles aren't fresh, pickles are *preserved*, which is what you want your product to be inside agent memory.
 
 **Attributes.** Rigorous. Deterministic. Plain. Dev-first. Opinionated. Slightly wry.
 
@@ -86,7 +86,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 - Not a vendor.
 - Not a platform.
-- Not "AI-powered."
+- Not hype copy.
 - Not a freshness emoji parade.
 - Not a Salesforce-shaped pitch.
 - Not a generic evals library that happens to handle tools.
@@ -98,7 +98,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 - You will know how AI sees your product, per surface.
 - Scoring will be deterministic by contract.
 - The check will run in CI.
-- The truth will be cited, not assumed.
+- The truth will be checked, not assumed.
 
 **Two audiences.** Pickled is built for two use cases that share the same machinery.
 
@@ -107,7 +107,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 The second case is not secondary. It is where prompt surface becomes product-critical, and it is the bridge between pickled and benchmarks like comment-bench and agents-md-bench.
 
-**Base message.** Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.
+**Base message.** Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
 
 This is the one-sentence description used as the lead line in `README.md`, `apps/cli/README.md`, and the homepage hero subtitle. Keep it verbatim across surfaces so the npm page, the GitHub repo overview, and any external write-up all read the same. When the product story shifts (new axis, new signal, new scoring rule), update this line first and propagate; do not let READMEs drift from it.
 
@@ -134,9 +134,9 @@ This is the one-sentence description used as the lead line in `README.md`, `apps
 
 We're an open-source CLI for testing what AI agents actually understand about your product.
 
-We run on the agent surfaces your product actually reaches. Today, Claude Code and Codex CLI. Designed for future targets like Antigravity CLI, Amazon Q, Cursor, hosted API agents, and whatever else lands. We pull from every kind of context an agent could read on the way there. Your README. Your llms.txt. Your CLAUDE.md. Your AGENTS.md. Your JSDoc. Your inline comments. Your internal handbook. We run the same scenarios across each agent surface, against the same registered sources, and trip on the declared stale patterns you told us to watch for.
+We run on the agent surfaces your product actually reaches. Today, Claude Code and Codex CLI. Designed for future targets like Antigravity CLI, Amazon Q, Cursor, hosted API agents, and whatever else lands. We pull from every kind of context an agent could read on the way there. Your README. Your llms.txt. Your CLAUDE.md. Your AGENTS.md. Your JSDoc. Your inline comments. Your internal handbook. We run the same questions across each agent surface and score the answers against checks you declared.
 
-Nothing here is graded by another model. Citations are extracted by code. Declared traps are matched as regex or substring. The score is the score.
+Nothing here is graded by another model. Citations are extracted by code. Checks are matched as substrings. The score is the score.
 
 Agent legibility is not a checkbox. It is behavior under test.
 
@@ -198,7 +198,7 @@ Not a content problem. Not a model problem. A legibility problem, across surface
 
 So we test it.
 
-We ask the question. We register the source. We run the agent. We check the citation. We trap the stale answer before it escapes.
+We ask the question. We register the source. We run the agent. We check the answer. We hold it to the contract you declared.
 
 Agent legibility is not a checkbox.
 It is behavior under test.
@@ -212,11 +212,11 @@ pickled
 
 ### Message Pillars
 
-**Scoring is deterministic by contract.** The score is parsed, not judged. Citations are extracted by code. Declared traps fire when matched, deterministically. No LLM judges the answer. The score is the score.
+**Scoring is deterministic by contract.** The score is parsed, not judged. Citations are extracted by code. Checks are matched deterministically. No LLM judges the answer. The score is the score.
 
 **Registered source contract.** Pickled does not magically introspect your product. You declare what counts as the truth: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. Anything an agent reads can be registered as a source. Anything not registered does not count. The contract is the strength.
 
-**Per-surface legibility.** The same scenario can pass on one agent surface and fail on another, because each surface gets a different context bundle. Pickled scores per surface. One config. Many surfaces. One score per surface.
+**Per-surface legibility.** The same question can pass on one agent surface and fail on another, because each surface gets a different context bundle. Pickled scores per surface. One config. Many surfaces. One score per surface.
 
 **Three-surface taxonomy.** Agent surface (where the interaction happens). Context surface (what the agent can read). Prompt surface (the subset that actively steers behavior). Pickled treats them as distinct because they fail differently.
 
@@ -226,11 +226,11 @@ pickled
 - Stale context: the agent saw an old version.
 - Contradictory context: two sources disagree and the agent picked the wrong one.
 - Overbroad context: a vague rule overrode a specific one.
-- Surface-specific drift: the same scenario passed elsewhere.
+- Surface-specific drift: the same question passed elsewhere.
 
-**Trap-awareness.** A grounded answer can still be wrong. Declared traps catch the stale patterns you've already moved past. Traps fire when matched, deterministically.
+**Checks you control.** A grounded answer can still be wrong. You declare what the answer must mention, must not mention, or must satisfy one of, and the check is matched deterministically.
 
-**The report is the receipt.** Each run leaves an artifact: scenario, target, response, sources cited, sources missing, sources invented, traps that fired, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
+**The report is the receipt.** Each run leaves an artifact: question, agent, access path, response, sources cited, checks satisfied and missed, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
 
 **Internal-team use is first-class.** Pickled is for teams testing how the outside world's agents understand their product, and for teams testing whether their own context steers their own agents correctly inside their own codebase. Comments are prompt surface. Stale prompt surface is product debt, not harmless prose.
 
@@ -252,7 +252,7 @@ pickled
 - Stale prompt surface is product debt, not harmless prose.
 - A grounded answer can still be wrong.
 - Anything an agent reads can be registered as a source.
-- Declared traps fire when matched, deterministically.
+- Checks are matched deterministically.
 - The report is the receipt.
 - One config. Many surfaces. One score per surface.
 - Test the brine before you ship the jar.
@@ -265,7 +265,7 @@ Pickled should be dryly playful, not silly. The joke is preservation, proof, and
 
 Play is allowed in footer sign-offs, empty states, success states, small labels, CLI microcopy, and one or two campaign lines per page.
 
-Play is not allowed in scoring semantics, trap behavior, error states, competitive claims, setup instructions, or anything that explains whether a run passed or failed.
+Play is not allowed in scoring semantics, check behavior, error states, competitive claims, setup instructions, or anything that explains whether a run passed or failed.
 
 Use pickle language as punctuation:
 
@@ -284,19 +284,18 @@ Every interface should use the same feedback grammar: CLI, CI logs, web demos, a
 **Default structure.**
 
 1. Command or screen name.
-2. Scope metadata: tool, sources, scenarios, target or surface when relevant.
-3. Scenario result.
+2. Scope metadata: product, sources, questions, agent, or access path when relevant.
+3. Question result.
 4. Evidence lines.
 5. Overall score and threshold result.
 6. One next-action sentence.
 
-**Scenario result grammar.**
+**Question result grammar.**
 
-- `Scenario: Error handling`
+- `Question: Error handling`
 - `✓ Well grounded (92%)`
 - `✓ Grounded (84%)`
 - `⚠ Partially grounded (65%)`
-- `✗ Trap fired (0%)`
 - `✗ Ungrounded (0%)`
 - `✗ Error`
 
@@ -305,9 +304,8 @@ Every interface should use the same feedback grammar: CLI, CI logs, web demos, a
 - `cited: [readme], [llms]`
 - `missing: [llms]`
 - `unknown: [old-docs]`
-- `trap: old_v2_api`
-- `reason: Deprecated in Zod 4; use z.treeifyError()`
-- `match: "ZodError.format()"`
+- `reason: missing includes: "z.treeifyError"`
+- `reason: hit excludes: "ZodError.format()"`
 
 **Overall grammar.**
 
@@ -321,12 +319,12 @@ Use `run passes` and `run fails` everywhere. Do not switch between `CI fails`, `
 
 Pickled has two verdicts. They are orthogonal. Renderers must not conflate them.
 
-- **Scenario verdict** answers whether one scenario satisfied the source and trap contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as the human labels above: `Well grounded`, `Grounded`, `Partially grounded`, `Trap fired`, `Ungrounded`, `Error`.
+- **Question verdict** answers whether one question satisfied its check contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as the human labels above: `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, `Error`.
 - **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
 
-The scenario verdict determines the label family. Confidence may refine `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90), but it must never upgrade `PARTIAL`, `NO`, `Trap fired`, or `Error`. A partial answer at 95% confidence is still `Partially grounded`, not `Well grounded`. The categorical signal wins.
+The question verdict determines the label family. Confidence may refine `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90), but it must never upgrade `PARTIAL`, `NO`, or `Error`. A partial answer at 95% confidence is still `Partially grounded`, not `Well grounded`. The categorical signal wins.
 
-Implementation rule: one shared helper (`getScenarioStatus`) returns the label, icon, and tone. Both progress output and final report consume it. Neither computes the label from raw confidence.
+Implementation rule: one shared helper returns the label, icon, and tone. Both progress output and final report consume it. Neither computes the label from raw confidence.
 
 **Feedback tone.**
 
@@ -344,17 +342,14 @@ Implementation rule: one shared helper (`getScenarioStatus`) returns the label, 
 pickled check
 Tool: zod
 Sources: [readme], [llms]
-Scenarios: 1
+Questions: 1
 
-Scenario: Error handling
-  ✗ Trap fired (0%)
-  trap: old_v2_api
-  reason: Deprecated in Zod 4; use z.treeifyError()
-  match: "ZodError.format()"
-  cited: [readme], [llms]
+Question: Error handling
+  ⚠ Partially grounded (50%)
+  reason: missing includes: "z.treeifyError"
 
-Overall: 0 / 100 · threshold 80 · run fails
-Review fired traps before trusting this surface.
+Overall: 50 / 100 · threshold 80 · run fails
+Review the answers that fell short of their checks.
 ```
 
 ### Release Notes
@@ -369,9 +364,9 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **Bullet shape.** One sentence per change. Lead with what changed for the user, not the implementation. Bold the feature name. Use a hyphen, never an em dash, to join the name and the description.
 
-**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `scenario verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `trap` (not `regression check` or `assertion`).
+**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `question verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `check` (the `mustMention` / `mustNotMention` / `anyOf` contract; not `assertion` or `regression check`).
 
-**Honesty constraints.** No absolutes. A smoke test `catches regressions in trap behavior`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
+**Honesty constraints.** No absolutes. A smoke test `catches regressions in the example contract`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
 
 **Skip.** Version bumps, CI tweaks that affect no user behavior, and code that exists only in proposals or drafts. The plugin's system prompt already says this; reinforce it here so the model has two signals pointing the same way.
 
@@ -381,12 +376,12 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 ### What's New
 
 - **llms.txt as public agent surface** - Agents can read pickled's contracts, targets, verdict layers, JSON contract, and source requirements at `/llms.txt`.
-- **Brand and spec scenarios** - Five new dogfood scenarios covering Verdict layers, JSON contract, Target semantics, Agent context contract, and Comment policy.
-- **Trap pipeline smoke test** - A deliberately stale fixture and matching scenario catch regressions in the trap matcher end to end.
+- **Brand and spec questions** - Five new dogfood questions covering verdict layers, JSON contract, target semantics, agent context contract, and comment policy.
+- **anyOf checks** - A question can require the answer to satisfy at least one value from a group, not every one.
 
 ### Improvements
 
-- **Dogfood stability** - Anchored JSON contract and Basic usage scenarios to their canonical sources to remove citation flake.
+- **Dogfood stability** - Anchored JSON contract and Basic usage questions to their canonical sources to remove source-contract flake.
 - **llms.txt drift guard** - CI verifies the public llms.txt stays in sync with the repo root.
 - **Scoped API keys** - Split Anthropic key by workflow (release vs agent-dogfood) for cleaner rotation and audit.
 - **Claude Agent SDK 0.3** - Upgraded from 0.2. No call-site changes.
@@ -396,7 +391,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **LinkedIn.**
 
-pickled is an open-source CLI that tests whether AI agents actually understand your product. It runs scenarios on real agent targets, starting with Claude Code and Codex CLI, against the registered sources your team controls: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, hosted source bundles, internal handbooks. Citations are extracted by code. Declared traps are matched deterministically. No LLM judges the answer. MIT.
+pickled is an open-source CLI that asks your product's real questions at real agents, starting with Claude Code and Codex CLI, down the context paths your team controls: README, llms.txt, docs, MCP servers, hosted source bundles, internal handbooks. Checks are matched deterministically. No LLM judges the answer. MIT.
 
 **Instagram.**
 
@@ -412,16 +407,16 @@ Open-source CLI. Tests what AI agents actually understand about your product. De
 
 **Website hero subhead.**
 
-An open-source CLI that tests what AI agents understand about your product. Today, on Claude Code and Codex CLI. Designed for the surfaces and sources that will keep landing. Citations are extracted by code. Declared traps fire when matched, deterministically. The score is the score.
+An open-source CLI that tests what AI agents understand about your product. Today, on Claude Code and Codex CLI. Designed for the surfaces and sources that will keep landing. Citations are extracted by code. Checks are matched deterministically. The score is the score.
 
 ### Tonal Rules
 
 1. Short sentences. Declarative. End on a verb or a noun, not an adjective.
-2. Use words a developer would say out loud. No "leverage", "unlock", "empower", "seamless", "holistic".
+2. Use words a developer would say out loud. No vendor-speak.
 3. Show, don't sell. A code block beats a paragraph.
 4. Second person when teaching. First person plural ("we") only when stating identity.
 5. The pickle metaphor is a wink, not a theme. One mention per page in body copy, max. Global chrome is exempt: the logo (🥒 in nav and footer), the footer sign-off ("Stay fresh."), and file-title marks at the top of `README.md` and `pickled.yml` are quiet structural repeats and do not count against the body-copy limit. Saturation is the failure mode the rule prevents, not presence.
-6. "AI" is fine. "AI-powered" is forbidden.
+6. "AI" is fine. Hype phrasing is not.
 7. Numbers are concrete. Never "up to X%" or "as much as X".
 8. If a sentence could appear on a Salesforce page, rewrite it.
 9. Cite when you make a claim. We're an eval framework. Practice it.
@@ -442,15 +437,15 @@ An open-source CLI that tests what AI agents understand about your product. Toda
 
 | We Say | We Never Say |
 |---|---|
-| "Test what agents actually understand." | "Unlock AI-powered product transformation." |
+| "Test what agents actually understand." | "Transform your product with agent magic." |
 | "Agent legibility, measured." | "Become AI-ready in minutes." |
 | "Citations or it didn't happen." | "Built on a proprietary AI scoring engine." |
-| "The score is the score." | "Get a holistic view of your AI surface." |
+| "The score is the score." | "See everything with one magic dashboard." |
 | "Deterministic by contract." | "Trust our intelligence layer." |
 | "Comments are prompt surface." | "Documentation lives outside the product." |
 | "One config. Many surfaces. One score per surface." | "Unified omnichannel evaluation suite." |
 | "Stale prompt surface is product debt." | "Optimize your content for AI ingestion." |
-| "Declared traps fire when matched, deterministically." | "Anomaly detected in your AI signal." |
+| "Checks are matched deterministically." | "Anomaly detected in your AI signal." |
 | "A pickle isn't fresh. A pickle is preserved." | "Stay fresh with cutting-edge AI insights." |
 
 ## Visual
@@ -469,14 +464,14 @@ The palette is electric, not earthy. The pickle here is preserved in glass under
 
 **Accent.**
 
-- Jar Label Yellow `#FFD740`. Warnings, traps-at-risk callouts, small editorial highlights. Pairs with electric green without competing.
+- Jar Label Yellow `#FFD740`. Warnings, at-risk callouts, small editorial highlights. Pairs with electric green without competing.
 - Jar Label Dark `#FFC400`. Hover and pressed states for accent surfaces.
 
 **Semantic.**
 
 - Success `#00E676` (same as primary).
 - Warning `#FFD740` (same as accent).
-- Spoil Pink `#FF4081`. Failing checks, fired traps, invalid citations, destructive states.
+- Spoil Pink `#FF4081`. Failing checks, invalid citations, destructive states.
 - Interface Blue `#64B5F6`. Target/interface metadata and neutral system information.
 
 **Backgrounds (dark by default).**
@@ -509,7 +504,7 @@ The palette is electric, not earthy. The pickle here is preserved in glass under
 
 - **Display.** Space Grotesk, 600–700. Headlines, section titles, strong product statements, campaign copy. The feel should be technical, compact, and slightly odd.
 - **Body.** DM Sans, 400–500. Paragraphs, UI copy, docs, cards, navigation. Keep line lengths moderate.
-- **Mono.** JetBrains Mono, 400–600 (Fira Code as fallback). CLI commands, source IDs, scenario names, target names, citations, config snippets, score numbers, report output. Mono text should feel like product evidence, not decoration.
+- **Mono.** JetBrains Mono, 400–600 (Fira Code as fallback). CLI commands, source IDs, question ids, agent names, citations, config snippets, score numbers, report output. Mono text should feel like product evidence, not decoration.
 
 The score number is always mono. Always. It is the receipt.
 
@@ -517,7 +512,7 @@ The score number is always mono. Always. It is the receipt.
 
 Skip photography. Use:
 
-- Real CLI output. The actual terminal, the actual score, the actual citation block.
+- Real CLI output. The actual terminal, the actual score, the actual evidence block.
 - Code blocks with real YAML configs from `pickled.yml`.
 - Abstract close-ups of jars, labels, brine, glass, and preservation only as texture, never as the main subject.
 

@@ -26,6 +26,17 @@ export interface CheckResult {
   existsInCodebase?: boolean | null;
 }
 
+/**
+ * Result of one `anyOf` group: satisfied iff at least one value appears.
+ * `matched` lists the values actually present (for debuggable failures).
+ */
+export interface AnyOfResult {
+  label: string;
+  values: string[];
+  satisfied: boolean;
+  matched: string[];
+}
+
 export interface ExpectedDetail {
   /** Substrings that were required to appear in the response. */
   includes: CheckResult[];
@@ -42,6 +53,8 @@ export interface ExpectedDetail {
   paths: CheckResult[];
   options: CheckResult[];
   constraints: CheckResult[];
+  /** Any-of groups: each counts as one check, satisfied if any value present. */
+  anyOf: AnyOfResult[];
   /** Number of declared checks satisfied (used for cell-score composition). */
   satisfied: number;
   /** Total declared checks (used for cell-score composition). */
@@ -65,7 +78,7 @@ const PRESENT_GROUPS: readonly PresentGroup[] = [
  * comprehension failed.
  *
  * Returns per-group satisfaction records plus aggregate counters the cell
- * scorer combines with citation / trap signals.
+ * scorer combines with citation signals.
  */
 export function scoreExpected(input: {
   response: string;
@@ -87,12 +100,30 @@ export function scoreExpected(input: {
     value,
     satisfied: !response.includes(value),
   }));
-  const allGroups = [includes, symbols, paths, options, constraints, excludes];
-  const satisfied = allGroups.reduce(
-    (sum, group) => sum + group.filter((c) => c.satisfied).length,
-    0,
-  );
-  const total = allGroups.reduce((sum, group) => sum + group.length, 0);
+  const anyOf: AnyOfResult[] = (expected?.anyOf ?? []).map((group) => {
+    const matched = group.values.filter((v) => response.includes(v));
+    return {
+      label: group.label,
+      values: group.values,
+      satisfied: matched.length > 0,
+      matched,
+    };
+  });
+  const checkGroups = [
+    includes,
+    symbols,
+    paths,
+    options,
+    constraints,
+    excludes,
+  ];
+  const satisfied =
+    checkGroups.reduce(
+      (sum, group) => sum + group.filter((c) => c.satisfied).length,
+      0,
+    ) + anyOf.filter((g) => g.satisfied).length;
+  const total =
+    checkGroups.reduce((sum, group) => sum + group.length, 0) + anyOf.length;
   return {
     includes,
     excludes,
@@ -100,6 +131,7 @@ export function scoreExpected(input: {
     paths,
     options,
     constraints,
+    anyOf,
     satisfied,
     total,
   };
@@ -131,6 +163,14 @@ export function formatExpectedNotes(detail: ExpectedDetail): string[] {
     .map((c) => `"${c.value}"`);
   if (bannedHit.length > 0) {
     missingByGroup.push({ label: "hit excludes", misses: bannedHit });
+  }
+  for (const group of detail.anyOf) {
+    if (!group.satisfied) {
+      missingByGroup.push({
+        label: `none of ${group.label}`,
+        misses: group.values.map((v) => `"${v}"`),
+      });
+    }
   }
   if (missingByGroup.length === 0) {
     return [`expected checks satisfied (${detail.satisfied}/${detail.total})`];

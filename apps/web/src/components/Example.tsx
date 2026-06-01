@@ -3,23 +3,30 @@ import { T, Terminal, TerminalLine } from "./Terminal";
 import "./Example.css";
 
 const configSnippet = `# pickled.yml
-tool:
+product:
   name: zod
   description: TypeScript-first schema validation
 
-docs:
-  sources:
-    readme: ./README.md
-    llms: https://zod.dev/llms.txt
+sources:
+  readme: ./README.md
+  llms: https://zod.dev/llms.txt
 
-scenarios:
-  - name: Error handling
-    prompt: How do I get error messages from failed validation?
-    requiredSources: [readme, llms]
-    traps:
-      - id: old_v2_api
-        match: "ZodError.format()"
-        reason: "Deprecated in Zod 4; use z.treeifyError()"
+agents:
+  quick:
+    provider: claude-code
+    model: claude-haiku-4-5
+
+access:
+  injected: { source: llms, tools: none }
+
+questions:
+  - id: error-handling
+    ask: How do I get error messages from failed validation?
+    agents: [quick]
+    access: [injected]
+    checks:
+      mustMention: ["z.treeifyError"]
+      mustNotMention: ["ZodError.format()"]
 
 threshold: 80`;
 
@@ -32,13 +39,13 @@ export function Example() {
             Developers aren't your only readers anymore
           </div>
           <h2 className="example-title">
-            One config. Your real docs. Your real traps.
+            One config. Your real docs. Your real checks.
           </h2>
           <p className="example-lede">
             Drop a <code className="inline">pickled.yml</code> next to your
-            sources. Declare what agents should cite, the scenarios they should
-            answer, and the stale patterns you've already moved past. Whether
-            agents reach your product through a public API, SDK docs,{" "}
+            sources. Declare the sources agents should use, the questions they
+            should answer, and the checks each answer must pass. Whether agents
+            reach your product through a public API, SDK docs,{" "}
             <code className="inline">llms.txt</code>,{" "}
             <code className="inline">CLAUDE.md</code>,{" "}
             <code className="inline">AGENTS.md</code>, JSDoc, or internal
@@ -68,25 +75,17 @@ export function Example() {
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Dim>Scenario: Error handling</T.Dim>
+              <T.Dim>Question: error-handling</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              &nbsp;&nbsp;<T.Error>✗ Trap fired</T.Error>{" "}
+              &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}
               <T.Muted>(0%)</T.Muted>
             </TerminalLine>
             <TerminalLine>
-              <T.Dim>&nbsp;&nbsp;&nbsp;&nbsp;trap: old_v2_api</T.Dim>
+              <T.Dim>{'    reason: missing includes: "z.treeifyError"'}</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              <T.Dim>
-                {"    reason: Deprecated in Zod 4; use z.treeifyError()"}
-              </T.Dim>
-            </TerminalLine>
-            <TerminalLine>
-              <T.Dim>{'    match: "ZodError.format()" in response'}</T.Dim>
-            </TerminalLine>
-            <TerminalLine>
-              <T.Dim>&nbsp;&nbsp;&nbsp;&nbsp;cited: [readme, llms]</T.Dim>
+              <T.Dim>{'    hit excludes: "ZodError.format()"'}</T.Dim>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
@@ -97,8 +96,8 @@ export function Example() {
         </div>
 
         <p className="example-receipt-note">
-          A grounded answer can still be wrong. The trap caught a deprecated Zod
-          4 API that the agent still recommends.
+          A plausible answer can still be wrong. The checks caught a deprecated
+          Zod 4 API the agent still recommends, and the replacement it left out.
         </p>
 
         <div className="example-foot">

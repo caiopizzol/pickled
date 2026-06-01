@@ -134,88 +134,6 @@ describe("runCheck (mocked target)", () => {
     });
   });
 
-  test("trap firing overrides citation YES to NO with confidence 0", async () => {
-    await withTempProject("# README", async (path) => {
-      const config: CheckConfig = {
-        tool: { name: "t", description: "d" },
-        docs: { sources: { readme: "./README.md" } },
-        scenarios: [
-          {
-            name: "Config",
-            prompt: "what does pickled.yml look like",
-            requiredSources: ["readme"],
-            traps: [
-              {
-                id: "old_schema",
-                match: "docs.source:",
-                reason: "removed singular schema",
-              },
-            ],
-          },
-        ],
-      };
-
-      const report = await runCheck(
-        { name: "t", description: "d", path },
-        config,
-        {
-          targetFactory: () =>
-            makeMockTarget(
-              "Use `docs.source: ./README.md` in pickled.yml.\n\n## Sources\n- [readme] the README",
-            ),
-        },
-      );
-
-      const r = report.scenarios[0]!;
-      expect(r.answerable).toBe("NO");
-      expect(r.confidence).toBe(0);
-      expect(r.traps.fired).toHaveLength(1);
-      expect(r.traps.fired[0]!.id).toBe("old_schema");
-      // Citation details preserved for debugging
-      expect(r.citations.cited).toEqual(["readme"]);
-      expect(r.reason).toContain("Trap fired");
-    });
-  });
-
-  test("trap avoided when response doesn't match", async () => {
-    await withTempProject("# README", async (path) => {
-      const config: CheckConfig = {
-        tool: { name: "t", description: "d" },
-        docs: { sources: { readme: "./README.md" } },
-        scenarios: [
-          {
-            name: "Config",
-            prompt: "schema",
-            requiredSources: ["readme"],
-            traps: [
-              {
-                id: "old_schema",
-                match: "docs.source:",
-                reason: "removed singular schema",
-              },
-            ],
-          },
-        ],
-      };
-
-      const report = await runCheck(
-        { name: "t", description: "d", path },
-        config,
-        {
-          targetFactory: () =>
-            makeMockTarget(
-              "Use `docs.sources:` (plural).\n\n## Sources\n- [readme] schema",
-            ),
-        },
-      );
-
-      const r = report.scenarios[0]!;
-      expect(r.answerable).toBe("YES");
-      expect(r.traps.fired).toEqual([]);
-      expect(r.traps.avoided).toEqual(["old_schema"]);
-    });
-  });
-
   test("penalizes fabricated citation IDs", async () => {
     await withTempProject("# README", async (path) => {
       const config: CheckConfig = {
@@ -376,7 +294,6 @@ describe("runCheck compare-surfaces mode", () => {
         expect(scenario.confidence).toBeNull();
         expect(scenario.response).toBeNull();
         expect(scenario.citations).toBeNull();
-        expect(scenario.traps).toBeNull();
       },
     );
   });
@@ -448,54 +365,6 @@ describe("runCheck compare-surfaces mode", () => {
         const surface = report.scenarios[0]!.surfaces![0]!;
         expect(surface.answerable).toBe("YES");
         expect(surface.citations.cited).toEqual(["llms"]);
-      },
-    );
-  });
-
-  test("trap fired in one surface does not affect another surface", async () => {
-    await withTempCompareProject(
-      { "README.md": "x", "stale.md": "y" },
-      async (path) => {
-        const config: CheckConfig = {
-          tool: { name: "t", description: "d" },
-          docs: { sources: { readme: "./README.md", stale: "./stale.md" } },
-          scenarios: [
-            {
-              name: "Install",
-              prompt: "how",
-              requiredSources: ["readme"],
-              compareSurfaces: [["readme"], ["stale"]],
-              traps: [
-                {
-                  id: "bad_phrase",
-                  match: "BAD_PHRASE",
-                  reason: "stale claim",
-                },
-              ],
-            },
-          ],
-        };
-        const report = await runCheck(
-          { name: "t", description: "d", path },
-          config,
-          {
-            targetFactory: () =>
-              makeSurfaceAwareTarget({
-                readme: "Clean answer.\n\n## Sources\n- [readme]",
-                stale: "BAD_PHRASE appears here.\n\n## Sources\n- [stale]",
-              }),
-          },
-        );
-        const surfaces = report.scenarios[0]!.surfaces!;
-        const readmeSurface = surfaces.find((s) =>
-          s.active.includes("readme"),
-        )!;
-        const staleSurface = surfaces.find((s) => s.active.includes("stale"))!;
-        expect(readmeSurface.answerable).toBe("YES");
-        expect(readmeSurface.traps.fired).toHaveLength(0);
-        expect(staleSurface.answerable).toBe("NO");
-        expect(staleSurface.traps.fired).toHaveLength(1);
-        expect(staleSurface.traps.fired[0]!.id).toBe("bad_phrase");
       },
     );
   });
@@ -1356,9 +1225,9 @@ describe("runCheck matrix mode", () => {
       );
       const cell = report.scenarios[0]!.cells![0]!;
       expect(cell.answerable).toBe("NO");
-      // Hard veto: provenance failure forces confidence 0, mirroring trap
-      // semantics. Cell cannot testify to the toolset axis even if the
-      // response happens to satisfy expected.includes.
+      // Hard veto: provenance failure forces confidence 0. Cell cannot
+      // testify to the toolset axis even if the response happens to satisfy
+      // expected.includes.
       expect(cell.confidence).toBe(0);
       expect(cell.reason).toMatch(/Provenance failed/);
       expect(cell.reason).toMatch(/configured but none of \[/);
@@ -1498,37 +1367,6 @@ describe("runCheck matrix mode", () => {
       const cell = report.scenarios[0]!.cells![0]!;
       expect(cell.answerable).toBe("YES");
       expect(cell.reason).not.toMatch(/configured but none of/);
-    });
-  });
-
-  test("trap firing vetoes a matrix cell to NO/0 regardless of expected hits", async () => {
-    await withTempProject("# README", async (path) => {
-      const config: CheckConfig = {
-        tool: { name: "t", description: "d" },
-        targets: { a: { category: "cli", provider: "claude-code" } },
-        docs: { sources: { readme: "./README.md" } },
-        scenarios: [
-          {
-            name: "Trap test",
-            prompt: "?",
-            matrix: { interfaces: ["a"] },
-            expected: { includes: ["pickled"] },
-            traps: [{ id: "bad", match: "BANNED", reason: "Stale claim" }],
-          },
-        ],
-      };
-      const report = await runCheck(
-        { name: "t", description: "d", path },
-        config,
-        {
-          targetFactory: () =>
-            makeMockTarget("pickled answer but BANNED phrase"),
-        },
-      );
-      const cell = report.scenarios[0]!.cells![0]!;
-      expect(cell.answerable).toBe("NO");
-      expect(cell.confidence).toBe(0);
-      expect(cell.traps.fired).toHaveLength(1);
     });
   });
 

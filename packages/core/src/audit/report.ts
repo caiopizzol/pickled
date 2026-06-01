@@ -112,25 +112,6 @@ export function renderAuditMarkdown(scan: ScanResult): string {
     }
   }
 
-  lines.push("## Registered-source trap matches\n");
-  lines.push(
-    "Catches stale claims in `docs.sources` against declared traps. Per-source suppression: `audit.traps: false` skips all traps; `audit.traps: [<trap_id>, ...]` skips only the listed traps and keeps scanning the rest.\n",
-  );
-  if (scan.sourceTrapMatches.length === 0) {
-    lines.push("None.\n");
-  } else {
-    for (const m of scan.sourceTrapMatches) {
-      lines.push(
-        `- **${m.sourceId}** (\`${m.sourcePath}:L${m.line}\`) - trap \`${m.trapId}\` matched \`${m.matched}\` (${m.severity})`,
-      );
-      lines.push(`  - reason: ${m.trapReason}`);
-      lines.push(
-        `  - fix: remove the stale claim, retire the trap, set \`audit.traps: ['${m.trapId}']\` to suppress just this one (other traps still apply), or set \`audit.traps: false\` if the source is deliberately stale`,
-      );
-    }
-    lines.push("");
-  }
-
   return lines.join("\n");
 }
 
@@ -239,22 +220,6 @@ export function renderAuditTerminal(scan: ScanResult): string {
     }
   }
   lines.push("");
-
-  lines.push("Registered-source trap matches");
-  if (scan.sourceTrapMatches.length === 0) {
-    lines.push("  none");
-  } else {
-    for (const m of scan.sourceTrapMatches) {
-      const sev = m.severity === "error" ? "error" : "warning";
-      lines.push(
-        `  [${sev}] ${m.sourceId} (${m.sourcePath}:L${m.line}): trap ${m.trapId} matched "${m.matched}"`,
-      );
-      lines.push(`    reason: ${m.trapReason}`);
-      lines.push(
-        `    fix: remove the stale claim, retire the trap, set audit.traps: ['${m.trapId}'] to suppress just this trap (others still apply), or set audit.traps: false if deliberately stale`,
-      );
-    }
-  }
 
   return lines.join("\n");
 }

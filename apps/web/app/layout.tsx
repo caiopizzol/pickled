@@ -25,7 +25,7 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 const description =
-  "Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.";
+  "Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.";
 const title = "pickled - Test what agents actually understand";
 
 export const metadata: Metadata = {

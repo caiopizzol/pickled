@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://docs.pickled.dev"),
   title: { default: "pickled docs", template: "%s - pickled docs" },
   description:
-    "Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.",
+    "Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.",
   alternates: {
     canonical: "/",
   },

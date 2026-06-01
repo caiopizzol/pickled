@@ -13,9 +13,9 @@ import type { ToolInfo } from "../types.js";
  * agent on cells that do not actually have those tools.
  *
  * Pickled does not enforce citation grounding for discovery cells; scoring
- * relies on declared traps and `expected.includes`/`excludes` plus a
- * tool-use provenance check that the cell actually invoked at least one of
- * its configured tools. The prompt does not demand a `## Sources` block.
+ * relies on `expected.includes`/`excludes` plus a tool-use provenance check
+ * that the cell actually invoked at least one of its configured tools. The
+ * prompt does not demand a `## Sources` block.
  */
 export function buildDiscoveryPrompt(
   tool: ToolInfo,

@@ -103,28 +103,6 @@ export interface Context {
 }
 
 /**
- * A trap declares a plausible-wrong answer the agent might confidently produce.
- * Firing any trap forces the result to NO regardless of citation score.
- *
- * Exactly one of `match` (literal substring, case-sensitive) or `pattern`
- * (regex source) must be set. `flags` is only valid with `pattern`.
- */
-export interface Trap {
-  id: string;
-  reason: string;
-  match?: string;
-  pattern?: string;
-  flags?: string;
-  /**
-   * Severity when this trap matches a registered source via audit
-   * cross-reference. Defaults to "warning". Check-time semantics are
-   * unchanged: trap firing in an agent response always forces NO with
-   * confidence 0, regardless of this field.
-   */
-  auditSeverity?: "warning" | "error";
-}
-
-/**
  * Toolset profile. Names a tool configuration the matrix can iterate over.
  * `none` is the deterministic baseline cell (pickled injects sources; agent
  * has no tools). The `web` shape (`webSearch`/`webFetch` flags) runs on
@@ -153,6 +131,15 @@ export interface ScenarioMatrix {
   interfaces?: string[];
   sources?: string[];
   toolsets?: string[];
+  /**
+   * Explicit (source, toolset) cell pairs. When set, the runner iterates
+   * THESE pairs instead of the `sources × toolsets` cross-product (the
+   * fallback when this is absent). `source: null` keeps its legacy meaning
+   * (no source axis declared); the public `access` model compiles the
+   * no-context path to the string `"none"`, never null. The public schema's
+   * `access` list compiles to this.
+   */
+  accessPairs?: Array<{ source: string | null; toolset: string }>;
 }
 
 /**
@@ -183,6 +170,13 @@ export interface ExpectedChecks {
   paths?: string[];
   options?: string[];
   constraints?: string[];
+  /**
+   * Any-of groups: each group is satisfied iff AT LEAST ONE of its `values`
+   * appears (substring). Contributes exactly +1 to the check total per group.
+   * Use when several answers are equally valid (e.g. any of a set of valid
+   * hook names). The public schema exposes this as `checks.anyOf`.
+   */
+  anyOf?: Array<{ label: string; values: string[] }>;
 }
 
 /**
@@ -206,19 +200,13 @@ export interface Scenario {
    * Source IDs (from docs.sources) the answer must cite. Use `[]` to allow
    * any registered source as a valid citation without requiring a specific
    * one. Omit entirely to skip citation scoring (matrix scenarios that
-   * score on `expected` or `traps` instead). At least one of
-   * `requiredSources`, `expected`, `traps`, or `compareSurfaces` must be
-   * declared on the scenario. Non-none matrix cells skip citation scoring
-   * because the source is not injected, so they need `expected` or `traps`
-   * regardless of whether `requiredSources` is also set.
+   * score on `expected` instead). At least one of `requiredSources`,
+   * `expected`, or `compareSurfaces` must be declared on the scenario.
+   * Non-none matrix cells skip citation scoring because the source is not
+   * injected, so they need `expected` regardless of whether `requiredSources`
+   * is also set.
    */
   requiredSources?: string[];
-
-  /**
-   * Optional traps. Each is a deterministic stale-answer detector; firing
-   * any trap forces the scenario to NO with confidence 0.
-   */
-  traps?: Trap[];
 
   /**
    * Compare-surfaces mode. Each entry is a list of source IDs forming
@@ -238,7 +226,7 @@ export interface Scenario {
 
   /**
    * Deterministic substring checks applied to the agent's response.
-   * Contributes to per-cell scoring alongside traps and citation scoring.
+   * Contributes to per-cell scoring alongside citation scoring.
    */
   expected?: ExpectedChecks;
 
@@ -251,13 +239,12 @@ export interface Scenario {
 
   /**
    * Sample answers for `pickled test` to score offline, with no model calls.
-   * Each `pass` string must satisfy the scenario's `expected` checks and trip
-   * no `traps`; each `fail` string must NOT (a check missing or a trap fired).
-   * Catches brittle/over-specific checks and false-firing traps before a paid
-   * run. Only the deterministic text contract (`expected` + `traps`) is scored;
-   * citation/`requiredSources` is not, since an example has no source-injection
-   * context. `pass`/`fail` are the forward-facing vocabulary (see the planned
-   * questions/checks/examples model); the field name does not change with it.
+   * Each `pass` string must satisfy the scenario's `expected` checks; each
+   * `fail` string must NOT (at least one check missing). Catches brittle or
+   * over-specific checks before a paid run. Only the deterministic `expected`
+   * contract is scored; citation/`requiredSources` is not, since an example
+   * has no source-injection context. `pass`/`fail` map to the public
+   * checks/examples model.
    */
   examples?: ScenarioExamples;
 }
@@ -301,26 +288,12 @@ export interface DocSourceEntry {
    * Ignored for other types.
    */
   maxBytes?: number;
-  audit?: {
-    /**
-     * Controls the audit's trap cross-reference rule for this source:
-     * - `true` (default when omitted): scan with every declared trap.
-     * - `false`: scan with no traps. Use for deliberately stale fixtures.
-     * - `string[]`: scan with every declared trap EXCEPT those listed by
-     *   id. Use for policy docs that intentionally cite specific banned
-     *   phrases as examples; future traps still apply.
-     * Other audit rules (broken refs, line budgets, etc.) are unaffected
-     * by this field. The list form requires every trap id across all
-     * scenarios to be globally unique; the loader enforces this.
-     */
-    traps?: boolean | string[];
-  };
 }
 
 export interface DocsConfig {
   /**
    * Named sources, keyed by ID. Value is either a file path / URL (string
-   * form) or a `DocSourceEntry` object with optional audit metadata.
+   * form) or a `DocSourceEntry` object.
    */
   sources: Record<string, string | DocSourceEntry>;
 }
@@ -328,13 +301,6 @@ export interface DocsConfig {
 /** Canonical normalized form of a docs.sources entry. */
 export interface NormalizedDocSource {
   path: string;
-  /**
-   * Resolved audit-traps directive for this source:
-   * - `true`: scan with every declared trap.
-   * - `false`: skip all traps for this source.
-   * - `string[]`: scan with every declared trap except those listed by id.
-   */
-  auditTraps: boolean | string[];
 }
 
 /** Normalize a string or object docs.sources entry to the canonical form. */
@@ -342,24 +308,18 @@ export function normalizeDocSource(
   value: string | DocSourceEntry,
 ): NormalizedDocSource {
   if (typeof value === "string") {
-    return { path: value, auditTraps: true };
+    return { path: value };
   }
-  return { path: value.path, auditTraps: value.audit?.traps ?? true };
+  return { path: value.path };
 }
 
-/** A loaded source with its registry ID, original location, and audit metadata. */
+/** A loaded source with its registry ID and original location. */
 export interface ResolvedDocSource extends DocSource {
   id: string;
   source: string;
   /**
-   * Audit trap cross-reference directive carried from the config. See
-   * NormalizedDocSource.auditTraps for the three-way union semantics.
-   */
-  auditTraps: boolean | string[];
-  /**
    * For `type: codebase` sources, the relative paths of every file the
-   * glob expanded to. Used by the audit's trap cross-reference rule for
-   * per-file finding attribution. Absent for file and URL sources.
+   * glob expanded to. Absent for file and URL sources.
    */
   matchedFiles?: string[];
 }

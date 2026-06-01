@@ -4,11 +4,11 @@ Router for agents working on `pickled`. Keep this file short. Real specs live in
 
 ## What pickled is
 
-An open-source CLI that tests whether AI agents actually understand a product, by running scenarios against real agent targets, checking that answers cite registered sources, and matching declared traps against the response. Scoring is deterministic by contract. No LLM grades another LLM.
+An open-source CLI that tests whether AI agents actually understand a product. It runs questions against real agent targets down declared context paths and checks each answer against a deterministic contract: must-mention, must-not-mention, any-of checks, and tool-use provenance. No LLM grades another LLM.
 
 ## Where the rules live
 
-- **Voice, brand, interface contracts** → [`brand.md`](./brand.md). Read before writing any user-facing copy, CLI output, docs, or release notes.
+- **Voice, brand, product contracts** → [`brand.md`](./brand.md). Read before writing any user-facing copy, CLI output, docs, or release notes.
 - **Comments** → [`comment-policy.md`](./comment-policy.md). Read before adding, removing, or rewording comments.
 - **Product overview and example config** → [`README.md`](./README.md).
 - **CLI usage** → [`apps/cli/README.md`](./apps/cli/README.md).
@@ -17,12 +17,12 @@ An open-source CLI that tests whether AI agents actually understand a product, b
 
 These are the rules new edits most often break. Each lives in a single source of truth; do not paraphrase them here.
 
-1. **Scenario verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
-2. **Trap firing forces `answerable = NO` and `confidence = 0`**, regardless of citation grounding. See `check.ts` near the `trapFired` branch and `brand.md` §Interface Feedback.
-3. **Scenario verdict determines the label family.** Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, Trap fired, or Error. See `packages/core/src/report-status.ts`.
-4. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. See `reporter.ts` near `formatOverall`.
-5. **JSON output stays raw.** It carries machine fields (`answerable`, `confidence`, `traps`, `citations`), not derived human labels. Human labels are derived in each renderer.
-6. **Registered source contract.** Only sources declared in `pickled.yml`'s `docs.sources` count for scoring. The contract is the strength, not the limitation.
+1. **Question verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
+2. **Question verdict determines the label family.** Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, or Error. See `packages/core/src/report-status.ts`.
+3. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. See `reporter.ts` near `formatOverall`.
+4. **JSON output stays raw.** It carries machine fields (`answerable`, `confidence`, `citations`), not derived human labels. Human labels are derived in each renderer.
+5. **Registered source contract.** Only sources declared in `pickled.yml`'s `sources` count for scoring. The contract is the strength, not the limitation.
+6. **A non-none access path skips citation scoring.** When a question reaches a source through `web`/`mcp` tools (not injection), the verdict rests on the `checks` plus a tool-use provenance veto, not on `## Sources` citations. See `check.ts` near `provenanceFailed`.
 
 ## Runtime and toolchain
 
@@ -71,7 +71,7 @@ Surface the conflict before silently choosing one side. Brand contracts and verd
 
 ## What not to do
 
-- Do not re-introduce "freshness score" wording in product surfaces. It survives only as the footer sign-off `Stay fresh.` and in trap test fixtures.
+- Do not re-introduce "freshness score" wording in product surfaces. It survives only as the footer sign-off `Stay fresh.`.
 - Do not introduce new pickle emoji 🥒 uses. Established chrome stays: nav logo, footer logo, footer sign-off, file-title marks at the top of `README.md` and `pickled.yml`. The canonical rule lives in `brand.md` Tonal Rule 5.
 - Do not use em dashes (`—`). Use hyphens, periods, colons, or parentheses.
 - Do not commit `AI-powered`, `unlock`, `seamless`, or `holistic` in any user-facing copy.

@@ -15,34 +15,57 @@ const base = {
     symbols: ["SuperDocUIProvider"],
     paths: ["superdoc/ui/react"],
   },
-  traps: [
-    { id: "legacy", pattern: "createHeadlessToolbar\\s*\\(", reason: "legacy" },
-  ],
 };
-
-test("flags a pass example that trips a trap (the false-fire we hit on SuperDoc)", () => {
-  const report = runExampleTests(
-    withScenario({
-      ...base,
-      examples: {
-        pass: [
-          "Use SuperDocUIProvider from superdoc/ui/react. Avoid createHeadlessToolbar() (legacy).",
-        ],
-      },
-    }),
-  );
-  expect(report.mismatches).toBe(1);
-  const result = report.scenarios[0].results[0];
-  expect(result.ok).toBe(false);
-  expect(result.reasons.join(" ")).toContain("trap fired: legacy");
-});
 
 test("a clean pass example passes", () => {
   const report = runExampleTests(
     withScenario({
       ...base,
-      traps: [],
       examples: { pass: ["Use SuperDocUIProvider from superdoc/ui/react."] },
+    }),
+  );
+  expect(report.mismatches).toBe(0);
+});
+
+test("flags a pass example that misses a required check", () => {
+  const report = runExampleTests(
+    withScenario({
+      ...base,
+      examples: { pass: ["SuperDocUIProvider is the entry point."] },
+    }),
+  );
+  expect(report.mismatches).toBe(1);
+  const result = report.scenarios[0].results[0];
+  expect(result.ok).toBe(false);
+  expect(result.reasons.join(" ")).toContain("superdoc/ui/react");
+});
+
+test("anyOf: a pass example missing every value fails", () => {
+  const report = runExampleTests(
+    withScenario({
+      name: "S",
+      prompt: "p",
+      expected: {
+        anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+      },
+      examples: { pass: ["The agent answered from memory."] },
+    }),
+  );
+  expect(report.mismatches).toBe(1);
+  expect(report.scenarios[0].results[0].reasons.join(" ")).toContain(
+    "none of names a provider",
+  );
+});
+
+test("anyOf: a pass example with one value satisfies the group", () => {
+  const report = runExampleTests(
+    withScenario({
+      name: "S",
+      prompt: "p",
+      expected: {
+        anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+      },
+      examples: { pass: ["It used the openai responses API."] },
     }),
   );
   expect(report.mismatches).toBe(0);
@@ -63,7 +86,6 @@ test("flags a fail example that satisfies everything (check too weak)", () => {
   const report = runExampleTests(
     withScenario({
       ...base,
-      traps: [],
       examples: { fail: ["SuperDocUIProvider lives in superdoc/ui/react."] },
     }),
   );

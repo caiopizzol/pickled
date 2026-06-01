@@ -1,17 +1,16 @@
 import type { CheckConfig, Scenario } from "@pickled-dev/config";
 import { type PresentGroup, scoreExpected } from "./scorers/expected.js";
-import { scoreTraps } from "./scorers/traps.js";
 
 /**
  * Offline example testing. Scores `scenario.examples.pass` / `.fail` strings
- * against the scenario's deterministic text contract (`expected` + `traps`)
- * using the SAME scorers a real run uses. No model calls, no providers, no
- * citation/provenance (an example has no source-injection context).
+ * against the scenario's deterministic `expected` contract using the SAME
+ * scorer a real run uses. No model calls, no providers, no citation/
+ * provenance (an example has no source-injection context).
  *
  * A response satisfies the contract iff every declared `expected` check is
- * satisfied AND no trap fires. A `pass` example should satisfy it; a `fail`
- * example should not. A mismatch means a brittle/over-specific check or a
- * false-firing trap (caught before any paid run).
+ * satisfied. A `pass` example should satisfy it; a `fail` example should
+ * not. A mismatch means a brittle or over-specific check (caught before any
+ * paid run).
  */
 
 const PRESENT_GROUPS: readonly PresentGroup[] = [
@@ -29,7 +28,7 @@ export interface ExampleResult {
   contractPass: boolean;
   /** True when contractPass matches the declared kind. */
   ok: boolean;
-  /** Why the contract did (not) pass: unmet checks and/or fired traps. */
+  /** Why the contract did (not) pass: the unmet checks. */
   reasons: string[];
 }
 
@@ -60,11 +59,11 @@ function evaluate(
     if (!c.satisfied)
       reasons.push(`present (excluded): ${JSON.stringify(c.value)}`);
   }
-  const traps = scoreTraps({ response, traps: scenario.traps ?? [] });
-  for (const t of traps.fired) reasons.push(`trap fired: ${t.id}`);
+  for (const g of expected.anyOf) {
+    if (!g.satisfied) reasons.push(`none of ${g.label}`);
+  }
 
-  const contractPass =
-    expected.satisfied === expected.total && traps.fired.length === 0;
+  const contractPass = expected.satisfied === expected.total;
   return { contractPass, reasons };
 }
 

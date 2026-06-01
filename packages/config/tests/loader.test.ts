@@ -19,210 +19,172 @@ function makeDir(yml: string): string {
   return dir;
 }
 
-describe("loader: docs.sources maxBytes hard ceiling", () => {
-  test("rejects maxBytes greater than 4 MB", async () => {
+const VALID = `
+product:
+  name: pickled
+  description: Agent legibility checker
+sources:
+  docs: https://example.com/llms.txt
+agents:
+  quick:
+    provider: claude-code
+    model: claude-haiku-4-5
+    maxTurns: 5
+  api:
+    provider: openai
+    model: gpt-5.2
+    temperature: 0
+    maxTokens: 4096
+access:
+  prior: { source: none, tools: none }
+  injected: { source: docs, tools: none }
+  web: { source: none, tools: web }
+questions:
+  - id: positioning
+    ask: what does pickled do?
+    agents: [quick, api]
+    access: [prior, injected, web]
+    checks:
+      mustMention: [agent]
+      mustNotMention: [AI-powered]
+threshold: 60
+`;
+
+describe("loadConfig pipeline", () => {
+  test("compiles a valid new-schema config to the internal CheckConfig", async () => {
+    const dir = makeDir(VALID);
+    const config = await loadConfig(dir);
+    expect(config.tool.name).toBe("pickled");
+    expect(config.targets?.quick?.category).toBe("cli");
+    expect(config.targets?.api?.category).toBe("api");
+    expect(config.toolsets?.none).toEqual({});
+    expect(config.toolsets?.web).toEqual({ webSearch: true, webFetch: true });
+    expect(config.docs?.sources?.docs).toBe("https://example.com/llms.txt");
+    expect(config.threshold).toBe(60);
+    const s = config.scenarios[0]!;
+    expect(s.name).toBe("positioning");
+    expect(s.matrix?.interfaces).toEqual(["quick", "api"]);
+    expect(s.matrix?.accessPairs).toContainEqual({
+      source: "none",
+      toolset: "none",
+    });
+    expect(s.expected?.includes).toEqual(["agent"]);
+    expect(s.expected?.excludes).toEqual(["AI-powered"]);
+  });
+
+  test("throws when pickled.yml is missing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pickled-loader-"));
+    created.push(dir);
+    await expect(loadConfig(dir)).rejects.toThrow(/pickled\.yml not found/);
+  });
+
+  test("throws on malformed YAML", async () => {
+    const dir = makeDir("product: {{{ not yaml");
+    await expect(loadConfig(dir)).rejects.toThrow(/Failed to parse/);
+  });
+
+  test("expands ${ENV} in source values and mcp server headers", async () => {
+    process.env.PICKLED_TEST_TOKEN = "secret-123";
     const dir = makeDir(`
-tool: { name: t, description: d }
-docs:
-  sources:
-    code:
-      path: "src/**/*.ts"
-      type: codebase
-      maxBytes: 5242880
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: [code]
+product: { name: t, description: d }
+sources:
+  docs: https://example.com/llms.txt
+agents:
+  api: { provider: openai, model: gpt-5.2 }
+access:
+  mcp:
+    source: docs
+    tools: mcp
+    servers:
+      remote:
+        url: https://mcp.example.com/mcp
+        headers:
+          AUTH: \${PICKLED_TEST_TOKEN}
+questions:
+  - id: q
+    ask: a
+    agents: [api]
+    access: [mcp]
+    checks: { mustMention: [x] }
+`);
+    const config = await loadConfig(dir);
+    expect(config.toolsets?.mcp?.mcpServers?.remote?.headers?.AUTH).toBe(
+      "secret-123",
+    );
+    process.env.PICKLED_TEST_TOKEN = undefined;
+  });
+
+  test("surfaces a public validation error (question with no checks)", async () => {
+    const dir = makeDir(`
+product: { name: t, description: d }
+agents:
+  quick: { provider: claude-code, model: claude-haiku-4-5 }
+access:
+  prior: { source: none, tools: none }
+questions:
+  - id: q
+    ask: a
+    agents: [quick]
+    access: [prior]
+    checks: {}
 `);
     await expect(loadConfig(dir)).rejects.toThrow(
-      /exceeds the 4 MB hard ceiling/,
+      /needs at least one of checks/,
     );
   });
 
-  test("accepts maxBytes equal to 4 MB", async () => {
+  test("surfaces an unknown-agent reference in public vocabulary", async () => {
     const dir = makeDir(`
-tool: { name: t, description: d }
-docs:
-  sources:
-    code:
-      path: "src/**/*.ts"
-      type: codebase
-      maxBytes: 4194304
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: [code]
+product: { name: t, description: d }
+agents:
+  quick: { provider: claude-code, model: claude-haiku-4-5 }
+access:
+  prior: { source: none, tools: none }
+questions:
+  - id: q
+    ask: a
+    agents: [ghost]
+    access: [prior]
+    checks: { mustMention: [x] }
 `);
-    await expect(loadConfig(dir)).resolves.toBeDefined();
+    await expect(loadConfig(dir)).rejects.toThrow(/unknown agent "ghost"/);
   });
-});
 
-describe("loader: unknown scenario.target / scenario.context", () => {
-  test("rejects scenario.target that is not in declared targets", async () => {
+  test('rejects a source id named "none"', async () => {
     const dir = makeDir(`
-tool: { name: t, description: d }
-targets:
-  quick: { category: cli, provider: claude-code }
-scenarios:
-  - name: s
-    prompt: p
-    target: nonexistent
-    requiredSources: []
+product: { name: t, description: d }
+sources:
+  none: ./x.md
+agents:
+  quick: { provider: claude-code, model: claude-haiku-4-5 }
+access:
+  prior: { source: none, tools: none }
+questions:
+  - id: q
+    ask: a
+    agents: [quick]
+    access: [prior]
+    checks: { mustMention: [x] }
 `);
     await expect(loadConfig(dir)).rejects.toThrow(
-      /scenario "s" references unknown target "nonexistent"/,
+      /source id "none" is reserved/,
     );
   });
 
-  test("accepts scenario.target that resolves", async () => {
+  test("rejects a CLI-only field on an API agent (internal backstop)", async () => {
     const dir = makeDir(`
-tool: { name: t, description: d }
-targets:
-  quick: { category: cli, provider: claude-code }
-scenarios:
-  - name: s
-    prompt: p
-    target: quick
-    requiredSources: []
+product: { name: t, description: d }
+agents:
+  api: { provider: openai, model: gpt-5.2, maxTurns: 5 }
+access:
+  prior: { source: none, tools: none }
+questions:
+  - id: q
+    ask: a
+    agents: [api]
+    access: [prior]
+    checks: { mustMention: [x] }
 `);
-    await expect(loadConfig(dir)).resolves.toBeDefined();
-  });
-
-  test("accepts omitted scenario.target (zero-config default)", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).resolves.toBeDefined();
-  });
-
-  test('accepts scenario.target: "default"', async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-scenarios:
-  - name: s
-    prompt: p
-    target: default
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).resolves.toBeDefined();
-  });
-
-  test("rejects scenario.context that is not in declared contexts", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-contexts:
-  ide: { allowedTools: ["Read"] }
-scenarios:
-  - name: s
-    prompt: p
-    context: nonexistent
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).rejects.toThrow(
-      /scenario "s" references unknown context "nonexistent"/,
-    );
-  });
-
-  test("accepts scenario.context that resolves", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-contexts:
-  ide: { allowedTools: ["Read"] }
-scenarios:
-  - name: s
-    prompt: p
-    context: ide
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).resolves.toBeDefined();
-  });
-});
-
-describe("loader: top-level matrix.target / matrix.context refs", () => {
-  test("rejects matrix.target entries that are not in declared targets", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-targets:
-  quick: { category: cli, provider: claude-code }
-matrix:
-  target: [quick, nonexistent]
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).rejects.toThrow(
-      /matrix\.target references unknown target "nonexistent"/,
-    );
-  });
-
-  test("rejects matrix.context entries that are not in declared contexts", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-contexts:
-  ide: { allowedTools: ["Read"] }
-matrix:
-  context: [ide, nonexistent]
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).rejects.toThrow(
-      /matrix\.context references unknown context "nonexistent"/,
-    );
-  });
-
-  test('accepts "default" sentinel in matrix.target', async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-targets:
-  quick: { category: cli, provider: claude-code }
-matrix:
-  target: [quick, default]
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).resolves.toBeDefined();
-  });
-
-  test("rejects matrix.target as a bare string (not an array)", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-targets:
-  quick: { category: cli, provider: claude-code }
-matrix:
-  target: quick
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).rejects.toThrow(
-      /matrix\.target must be an array/,
-    );
-  });
-
-  test("rejects matrix.context as a bare string (not an array)", async () => {
-    const dir = makeDir(`
-tool: { name: t, description: d }
-contexts:
-  ide: { allowedTools: ["Read"] }
-matrix:
-  context: ide
-scenarios:
-  - name: s
-    prompt: p
-    requiredSources: []
-`);
-    await expect(loadConfig(dir)).rejects.toThrow(
-      /matrix\.context must be an array/,
-    );
+    await expect(loadConfig(dir)).rejects.toThrow(/maxTurns/);
   });
 });

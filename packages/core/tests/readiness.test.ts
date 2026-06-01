@@ -28,7 +28,6 @@ function cell(args: {
   toolset: string;
   answerable: Answerable;
   expected?: Partial<ReturnType<typeof emptyExpected>>;
-  trapsFired?: Array<{ id: string; reason: string }>;
 }): CellResult {
   return {
     cell: {
@@ -42,10 +41,6 @@ function cell(args: {
     response: "",
     reason: "",
     citations: null,
-    traps: {
-      fired: args.trapsFired ?? [],
-      avoided: [],
-    },
     expected: args.expected
       ? { ...emptyExpected(), ...args.expected }
       : undefined,
@@ -60,7 +55,6 @@ function scenario(name: string, cells: CellResult[]): ScenarioResult {
     response: null,
     reason: null,
     citations: null,
-    traps: null,
     cells,
     target: undefined,
     context: { name: "default" },
@@ -158,7 +152,6 @@ describe("grouped_check_pass", () => {
           response: "",
           reason: "",
           citations: null,
-          traps: null,
           expected: {
             includes: [],
             excludes: [],
@@ -454,49 +447,6 @@ describe("interface_comparison", () => {
     ]);
     const diags = summarizeReadiness(r).diagnostics.filter(
       (d) => d.pattern === "interface_comparison",
-    );
-    expect(diags).toEqual([]);
-  });
-});
-
-describe("trap_attribution", () => {
-  test("emits one diagnostic per scenario with at least one trap firing", () => {
-    const r = report([
-      scenario("Stale", [
-        cell({
-          interface: "a",
-          source: "x",
-          toolset: "none",
-          answerable: "NO",
-          trapsFired: [
-            { id: "ai_powered", reason: "..." },
-            { id: "freshness_score", reason: "..." },
-          ],
-        }),
-      ]),
-    ]);
-    const diags = summarizeReadiness(r).diagnostics.filter(
-      (d) => d.pattern === "trap_attribution",
-    );
-    expect(diags).toHaveLength(1);
-    expect(diags[0]?.message).toContain("Traps fired");
-    expect(diags[0]?.message).toContain("ai_powered");
-    expect(diags[0]?.message).toContain("freshness_score");
-  });
-
-  test("emits nothing when no traps fired", () => {
-    const r = report([
-      scenario("Clean", [
-        cell({
-          interface: "a",
-          source: "x",
-          toolset: "none",
-          answerable: "YES",
-        }),
-      ]),
-    ]);
-    const diags = summarizeReadiness(r).diagnostics.filter(
-      (d) => d.pattern === "trap_attribution",
     );
     expect(diags).toEqual([]);
   });

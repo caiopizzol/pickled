@@ -5,11 +5,11 @@ import type { CellResult, CheckReport, ScenarioResult } from "./types.js";
  * human-readable diagnoses from existing cell receipts. Reads only;
  * does not change scoring. Every diagnosis is a pattern over the
  * fields already in CheckReport (`expected.symbols/paths/options/
- * constraints`, `answerable`, `cell.{interface,source,toolset}`,
- * `traps.fired`); no model is asked to interpret receipts.
+ * constraints`, `answerable`, `cell.{interface,source,toolset}`); no
+ * model is asked to interpret receipts.
  *
- * v1 ships five "Group A" patterns - the ones the current pickled.yml
- * dogfood suite produces today. "Group B" patterns (codebase-vs-docs
+ * v1 ships four patterns - the ones the current pickled.yml dogfood
+ * suite produces today. "Group B" patterns (codebase-vs-docs
  * disagreement, declared-path-missing-from-codebase) need scenarios
  * that don't exist in the current suite; the substrate ships in #20/
  * #21 but no dogfood receipt covers them yet, so they wait for either
@@ -22,8 +22,7 @@ export type ReadinessPattern =
   | "grouped_check_pass"
   | "source_comparison"
   | "toolset_comparison"
-  | "interface_comparison"
-  | "trap_attribution";
+  | "interface_comparison";
 
 /** Coordinates of a matrix cell, for attribution in JSON consumers. */
 export interface CellCoord {
@@ -61,7 +60,6 @@ export function summarizeReadiness(report: CheckReport): ReadinessSummary {
     diagnostics.push(...findSourceComparison(scenario));
     diagnostics.push(...findToolsetComparison(scenario));
     diagnostics.push(...findInterfaceComparison(scenario));
-    diagnostics.push(...findTrapAttribution(scenario));
   }
   return { diagnostics };
 }
@@ -304,42 +302,4 @@ function findInterfaceComparison(
     });
   }
   return out;
-}
-
-// ---------------------------------------------------------------------
-// Pattern: trap_attribution
-//
-// For any scenario whose cells (or top-level single-mode result)
-// declared traps and had at least one fire, report the count and the
-// trap ids. Trap firing is already surfaced in the cell reason; the
-// readiness summary just hoists it to a scenario-level diagnostic so
-// the reporter can show "stale-content pipeline is working" at a
-// glance.
-// ---------------------------------------------------------------------
-function findTrapAttribution(scenario: ScenarioResult): ReadinessDiagnostic[] {
-  const fired = new Set<string>();
-  let count = 0;
-  const collectFrom = (
-    traps: { fired: Array<{ id: string }> } | null,
-  ): void => {
-    if (!traps) return;
-    for (const t of traps.fired) {
-      fired.add(t.id);
-      count++;
-    }
-  };
-  if (scenario.cells) {
-    for (const cell of scenario.cells) collectFrom(cell.traps);
-  } else {
-    collectFrom(scenario.traps);
-  }
-  if (count === 0) return [];
-  return [
-    {
-      pattern: "trap_attribution",
-      message: `Traps fired on "${scenario.scenario.name}": ${count} firing(s) across [${[...fired].join(", ")}]`,
-      scenario: scenario.scenario.name,
-      cells: [],
-    },
-  ];
 }
