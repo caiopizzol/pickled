@@ -3,6 +3,7 @@ title: "Stop letting one model grade another"
 description: "LLM-as-judge is the default for agent evals. For testing whether an agent understands your product, a deterministic contract is the honest measure. Here is why."
 date: 2026-06-01
 updated: 2026-06-01
+order: 4
 author: Caio Pizzol
 tags: [agent-evals, deterministic, llm-as-judge]
 ---
@@ -61,7 +62,7 @@ There are tasks where a judge model earns its place: summarization quality, crea
 
 ## The payoff is trust
 
-A deterministic score is reproducible, so it can gate CI. It costs no judge tokens, so you can run the whole question set on every change. And when it fails, it points at a specific contract that broke, not a number a model felt like emitting. That is what makes it something you can build a process on.
+A deterministic score is reproducible, so it can gate CI. It avoids an extra judge call, so the cost is the agent run itself. And when it fails, it points at a specific contract that broke, not a number a model felt like emitting. That is what makes it something you can build a process on.
 
 ## Try it
 

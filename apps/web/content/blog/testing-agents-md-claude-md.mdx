@@ -1,40 +1,24 @@
 ---
-title: "Does your AGENTS.md actually steer your agents?"
-description: "You wrote AGENTS.md and CLAUDE.md to steer your coding agents. Nothing tells you when they stop working. Here is how to put them under test."
+title: "Your AGENTS.md and CLAUDE.md, under the same test"
+description: "Pickled is mostly about public product context. The same source, access, question, and check model also puts your own internal steering files under test."
 date: 2026-06-01
 updated: 2026-06-01
+order: 6
 author: Caio Pizzol
 tags: [agents-md, claude-md, agent-evals, ci]
 ---
 
-You wrote an `AGENTS.md`. Maybe a `CLAUDE.md` too. You listed the package manager, the test command, the directories not to touch, the patterns you never want to see again. Then you trusted it.
+Pickled is primarily about public product context: can an outside agent reach the right answer about your product through your README, docs, llms.txt, or MCP surface? But the same `source / access / question / check` model also works on the files you write to steer your own coding agents, like `AGENTS.md` and `CLAUDE.md`. This is the secondary case: the same machinery pointed inward.
 
-Here is the uncomfortable question: do you know it works? Not "did the agent read it once." Does it still steer the agent today, after six months of edits, three new conventions, and one renamed directory?
+## Steering files are untested prompt surface
 
-For most teams the honest answer is no. The file is prompt surface, and prompt surface has no tests.
+You wrote an `AGENTS.md`: the package manager, the test command, the directories not to touch, the patterns you never want to see again. Then you trusted it. Your code has tests; that file has none. It can rot for months, and the only signal is an agent quietly running `npm` in a Bun repo or reintroducing the exact pattern you wrote a line to forbid.
 
-## Stale prompt surface is product debt
+A stale instruction is worse than a missing one. A missing one leaves the agent to its priors; a stale one is a confident wrong answer the next agent follows as policy.
 
-Your code has tests. When a function drifts from its contract, something goes red. Your agent instructions have nothing. An `AGENTS.md` can rot for months and the only signal is an agent quietly doing the wrong thing: running `npm` in a Bun repo, editing a generated file, reintroducing the exact pattern you wrote a line to forbid.
+## Put it under test
 
-A stale instruction is worse than a missing one. A missing instruction leaves the agent to its priors. A stale instruction is a confident, wrong answer the next agent follows. It reads as policy.
-
-The reason this debt is invisible is simple. Nobody runs the file. You write it for an agent, and then you never ask the agent whether it landed.
-
-## Testing it means asking, then checking by contract
-
-Put the file under test the way you would put an API under test: send the input, assert on the output.
-
-The input is a question your `AGENTS.md` is supposed to answer. The output is what the agent says when that file is the only context it has. Then you check two things, both deterministically:
-
-- Did the answer include the exact terms the instruction requires?
-- Did the answer avoid the old or wrong terms that would send an agent down the wrong path?
-
-No model grades another model. The score is the score.
-
-## What that looks like
-
-Register `AGENTS.md` as a source, ask the question it should answer, and pin the contract:
+Register the file as a source, ask the question it is supposed to answer, and pin the contract. No model grades another model: the answer is checked deterministically against the terms it must mention and the stale terms it must not.
 
 ```yaml
 product:
@@ -64,19 +48,11 @@ questions:
 threshold: 100
 ```
 
-In this controlled cell, `AGENTS.md` is the only registered source content pickled injects. `mustMention` asserts the answer you want. `mustNotMention` catches the stale-but-plausible answer you do not, the `npm` or `yarn` a thin or outdated instruction file lets through. Run it and you get a number per question, and a run that passes or fails against the threshold you set.
+With `tools: none`, `AGENTS.md` is the only content injected. `mustMention` asserts the answer you want; `mustNotMention` catches the stale-but-plausible `npm` or `yarn` a thin instruction file lets through. Wire it into CI and a drifting `AGENTS.md` fails the build before it ships, instead of surfacing as a confused agent three weeks later.
 
-Now your `AGENTS.md` has a test. When someone switches the repo to a different package manager and forgets to update the file, the question goes red. The instruction is no longer something you hope is true. It is something you check.
+## Same machinery, two directions
 
-## Put it in CI
-
-The point is not to run this once and feel reassured. It is to run it on every change to the files that steer your agents, the same way you run your unit tests. Wire it into your pipeline and a drifting `AGENTS.md` fails the build before it ships, instead of surfacing as a confused agent three weeks later.
-
-This is the internal case for testing agent legibility: not whether the outside world's agents understand your published product, but whether your own steering files still steer your own agents. Both are the same machinery. Both come down to the same idea: agent legibility is not a checkbox you tick when you write the file. It is behavior under test.
-
-## Try it on your own repo
-
-Point pickled at your `AGENTS.md` or `CLAUDE.md` and write one question for one instruction your agents keep getting wrong. See whether the file actually holds.
+Whether you are testing how the outside world's agents read your published product, or whether your own steering files still steer your own agents, it is one model: register the source, ask the question, check the answer by contract. Public context is the main event. Internal steering is the same test, pointed at your own repo.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

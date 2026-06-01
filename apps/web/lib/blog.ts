@@ -11,6 +11,7 @@ export interface PostFrontmatter {
   description: string;
   date: string;
   updated?: string;
+  order?: number;
   author: string;
   tags?: string[];
 }
@@ -44,5 +45,13 @@ export function getPost(slug: string): Post {
 export function getAllPosts(): Post[] {
   return getPostSlugs()
     .map(getPost)
-    .sort((a, b) => (a.frontmatter.date < b.frontmatter.date ? 1 : -1));
+    .sort((a, b) => {
+      const byDate = b.frontmatter.date.localeCompare(a.frontmatter.date);
+      if (byDate !== 0) return byDate;
+      const byOrder =
+        (a.frontmatter.order ?? Number.MAX_SAFE_INTEGER) -
+        (b.frontmatter.order ?? Number.MAX_SAFE_INTEGER);
+      if (byOrder !== 0) return byOrder;
+      return a.slug.localeCompare(b.slug);
+    });
 }
