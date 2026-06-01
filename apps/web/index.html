@@ -9,6 +9,23 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Fonts load without blocking first paint: fetched as print media, then
+       promoted to all on load. global.css no longer @imports them. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    rel="stylesheet"
+    media="print"
+    onload="this.media='all'"
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+  />
+  <noscript>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+    />
+  </noscript>
   <meta name="description" content="Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks." />
   <link rel="canonical" href="https://pickled.dev/" />
   <title>pickled - Test what agents actually understand</title>
@@ -29,6 +46,27 @@
   <meta name="twitter:title" content="pickled - Test what agents actually understand" />
   <meta name="twitter:description" content="Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks." />
   <meta name="twitter:image" content="https://pickled.dev/og-image.png" />
+
+  <!-- SoftwareApplication: pickled is a free open-source developer CLI. No
+       softwareVersion here on purpose, so this static markup never goes stale
+       against the published package. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "pickled",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "macOS, Linux, Windows",
+    "description": "Pickled runs real agent questions across a matrix of interfaces, sources, and toolsets, then scores the answers with deterministic checks.",
+    "url": "https://pickled.dev/",
+    "codeRepository": "https://github.com/caiopizzol/pickled",
+    "downloadUrl": "https://www.npmjs.com/package/@pickled-dev/cli",
+    "license": "https://opensource.org/licenses/MIT",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Person", "name": "Caio Pizzol" }
+  }
+  </script>
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-EF49SBB7Q7"></script>
