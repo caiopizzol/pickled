@@ -40,13 +40,15 @@ test("flags a pass example that misses a required check", () => {
   expect(result.reasons.join(" ")).toContain("superdoc/ui/react");
 });
 
-test("anyOf: a pass example missing every value fails", () => {
+test("mustMentionOneOf: a pass example missing every value fails", () => {
   const report = runExampleTests(
     withScenario({
       name: "S",
       prompt: "p",
       expected: {
-        anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+        mustMentionOneOf: [
+          { label: "names a provider", values: ["openai", "anthropic"] },
+        ],
       },
       examples: { pass: ["The agent answered from memory."] },
     }),
@@ -57,13 +59,15 @@ test("anyOf: a pass example missing every value fails", () => {
   );
 });
 
-test("anyOf: a pass example with one value satisfies the group", () => {
+test("mustMentionOneOf: a pass example with one value satisfies the group", () => {
   const report = runExampleTests(
     withScenario({
       name: "S",
       prompt: "p",
       expected: {
-        anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+        mustMentionOneOf: [
+          { label: "names a provider", values: ["openai", "anthropic"] },
+        ],
       },
       examples: { pass: ["It used the openai responses API."] },
     }),

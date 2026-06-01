@@ -114,16 +114,16 @@ export function validatePublicConfig(pub: PublicConfig): void {
     if (
       !c.mustMention?.length &&
       !c.mustNotMention?.length &&
-      !c.anyOf?.length
+      !c.mustMentionOneOf?.length
     ) {
       throw new Error(
-        `pickled.yml: question "${q.id}" needs at least one of checks.mustMention / mustNotMention / anyOf`,
+        `pickled.yml: question "${q.id}" needs at least one of checks.mustMention / mustMentionOneOf / mustNotMention`,
       );
     }
-    for (const g of c.anyOf ?? []) {
+    for (const g of c.mustMentionOneOf ?? []) {
       if (!g.label || !Array.isArray(g.values) || g.values.length === 0) {
         throw new Error(
-          `pickled.yml: question "${q.id}" anyOf groups need a label and non-empty values`,
+          `pickled.yml: question "${q.id}" mustMentionOneOf groups need a label and non-empty values`,
         );
       }
     }
@@ -139,7 +139,8 @@ export function validatePublicConfig(pub: PublicConfig): void {
  *   source "none" stays the string "none" (no-context sentinel, never null);
  *   tools: none maps to the shared internal toolset "none".
  * - questions -> scenarios with matrix.accessPairs; checks -> expected
- *   (mustMention->includes, mustNotMention->excludes, anyOf->anyOf).
+ *   (mustMention->includes, mustNotMention->excludes,
+ *   mustMentionOneOf->expected.mustMentionOneOf).
  */
 export function compilePublicConfig(pub: PublicConfig): CheckConfig {
   const targets: Record<string, Target> = {};
@@ -199,7 +200,8 @@ export function compilePublicConfig(pub: PublicConfig): CheckConfig {
     if (q.checks.mustMention?.length) expected.includes = q.checks.mustMention;
     if (q.checks.mustNotMention?.length)
       expected.excludes = q.checks.mustNotMention;
-    if (q.checks.anyOf?.length) expected.anyOf = q.checks.anyOf;
+    if (q.checks.mustMentionOneOf?.length)
+      expected.mustMentionOneOf = q.checks.mustMentionOneOf;
     const scenario: Scenario = {
       name: q.id,
       prompt: q.ask,

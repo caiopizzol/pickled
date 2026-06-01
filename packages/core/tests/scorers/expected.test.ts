@@ -76,14 +76,16 @@ describe("scoreExpected", () => {
     expect(r.total).toBe(3);
   });
 
-  test("anyOf group counts as one check, satisfied if any value is present", () => {
+  test("mustMentionOneOf group counts as one check, satisfied if any value is present", () => {
     const r = scoreExpected({
       response: "it used the openai responses API",
       expected: {
-        anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+        mustMentionOneOf: [
+          { label: "names a provider", values: ["openai", "anthropic"] },
+        ],
       },
     });
-    expect(r.anyOf).toEqual([
+    expect(r.mustMentionOneOf).toEqual([
       {
         label: "names a provider",
         values: ["openai", "anthropic"],
@@ -95,28 +97,32 @@ describe("scoreExpected", () => {
     expect(r.satisfied).toBe(1);
   });
 
-  test("anyOf group is unsatisfied when no value appears", () => {
+  test("mustMentionOneOf group is unsatisfied when no value appears", () => {
     const r = scoreExpected({
       response: "answered from memory",
       expected: {
-        anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+        mustMentionOneOf: [
+          { label: "names a provider", values: ["openai", "anthropic"] },
+        ],
       },
     });
-    expect(r.anyOf[0]?.satisfied).toBe(false);
-    expect(r.anyOf[0]?.matched).toEqual([]);
+    expect(r.mustMentionOneOf[0]?.satisfied).toBe(false);
+    expect(r.mustMentionOneOf[0]?.matched).toEqual([]);
     expect(r.total).toBe(1);
     expect(r.satisfied).toBe(0);
   });
 
-  test("anyOf composes with includes into one satisfied/total tally", () => {
+  test("mustMentionOneOf composes with includes into one satisfied/total tally", () => {
     const r = scoreExpected({
       response: "the agent read the docs",
       expected: {
         includes: ["agent"],
-        anyOf: [{ label: "capability", values: ["legible", "context"] }],
+        mustMentionOneOf: [
+          { label: "capability", values: ["legible", "context"] },
+        ],
       },
     });
-    // includes 1/1 + anyOf 0/1 (neither value present) = 1/2.
+    // includes 1/1 + mustMentionOneOf 0/1 (neither value present) = 1/2.
     expect(r.satisfied).toBe(1);
     expect(r.total).toBe(2);
   });
@@ -183,12 +189,12 @@ describe("formatExpectedNotes", () => {
     expect(line).toContain('missing options: "icon", "tooltip"');
   });
 
-  test("names an unsatisfied anyOf group by label", () => {
+  test("names an unsatisfied mustMentionOneOf group by label", () => {
     const notes = formatExpectedNotes(
       scoreExpected({
         response: "answered from memory",
         expected: {
-          anyOf: [
+          mustMentionOneOf: [
             { label: "names a provider", values: ["openai", "anthropic"] },
           ],
         },

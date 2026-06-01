@@ -666,7 +666,7 @@ async function runScenario(
           paths: expectedDetail.paths,
           options: expectedDetail.options,
           constraints: expectedDetail.constraints,
-          anyOf: expectedDetail.anyOf,
+          mustMentionOneOf: expectedDetail.mustMentionOneOf,
           satisfied: expectedDetail.satisfied,
           total: expectedDetail.total,
         }
@@ -1233,7 +1233,7 @@ async function runMatrixScenario(
               paths: expectedDetail.paths,
               options: expectedDetail.options,
               constraints: expectedDetail.constraints,
-              anyOf: expectedDetail.anyOf,
+              mustMentionOneOf: expectedDetail.mustMentionOneOf,
               satisfied: expectedDetail.satisfied,
               total: expectedDetail.total,
             }

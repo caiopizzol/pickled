@@ -157,20 +157,22 @@ describe("validatePublicConfig", () => {
     );
   });
 
-  test("rejects an anyOf group without a label or values", () => {
+  test("rejects a mustMentionOneOf group without a label or values", () => {
     const pub = base();
     pub.questions[0]!.checks = {
-      anyOf: [{ label: "", values: ["x"] }],
+      mustMentionOneOf: [{ label: "", values: ["x"] }],
     };
     expect(() => validatePublicConfig(pub)).toThrow(
-      /anyOf groups need a label/,
+      /mustMentionOneOf groups need a label/,
     );
   });
 
-  test("accepts a question whose only check is anyOf", () => {
+  test("accepts a question whose only check is mustMentionOneOf", () => {
     const pub = base();
     pub.questions[0]!.checks = {
-      anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+      mustMentionOneOf: [
+        { label: "names a provider", values: ["openai", "anthropic"] },
+      ],
     };
     expect(() => validatePublicConfig(pub)).not.toThrow();
   });
@@ -302,18 +304,22 @@ describe("compilePublicConfig", () => {
     ]);
   });
 
-  test("maps checks to expected (mustMention/mustNotMention/anyOf)", () => {
+  test("maps checks to expected (mustMention/mustMentionOneOf/mustNotMention)", () => {
     const pub = base();
     pub.questions[0]!.checks = {
       mustMention: ["agent"],
       mustNotMention: ["AI-powered"],
-      anyOf: [{ label: "capability", values: ["legible", "context"] }],
+      mustMentionOneOf: [
+        { label: "capability", values: ["legible", "context"] },
+      ],
     };
     const c = compilePublicConfig(pub);
     expect(c.scenarios[0]!.expected).toEqual({
       includes: ["agent"],
       excludes: ["AI-powered"],
-      anyOf: [{ label: "capability", values: ["legible", "context"] }],
+      mustMentionOneOf: [
+        { label: "capability", values: ["legible", "context"] },
+      ],
     });
   });
 

@@ -20,8 +20,8 @@ A question runs once per `(agent × access)` pair, and each pair is graded on it
 ## What it checks
 
 - **mustMention.** Substrings the answer must contain.
+- **mustMentionOneOf.** Groups where the answer must contain at least one value from each group.
 - **mustNotMention.** Substrings the answer must not contain.
-- **anyOf.** Groups where the answer must contain at least one value from each group.
 - **Tool paths are real.** A `web` or `mcp` access path that answers without invoking any of its tools is vetoed to `NO`. Model memory does not count as evidence for a tool path.
 - **No LLM grades another LLM.** Every signal is a substring check or a recorded tool invocation.
 

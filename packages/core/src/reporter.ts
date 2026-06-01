@@ -188,12 +188,14 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
           chalk.dim(`${indent}  expected.excludes hit: ${banned.join(", ")}`),
         );
       }
-      const anyOfMissed = cell.expected.anyOf
+      const mustMentionOneOfMissed = cell.expected.mustMentionOneOf
         .filter((g) => !g.satisfied)
         .map((g) => g.label);
-      if (anyOfMissed.length > 0) {
+      if (mustMentionOneOfMissed.length > 0) {
         lines.push(
-          chalk.dim(`${indent}  anyOf unmet: ${anyOfMissed.join(", ")}`),
+          chalk.dim(
+            `${indent}  missing one of: ${mustMentionOneOfMissed.join(", ")}`,
+          ),
         );
       }
     }

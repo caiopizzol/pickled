@@ -66,7 +66,7 @@ export interface CellResult {
     paths: Array<{ value: string; satisfied: boolean }>;
     options: Array<{ value: string; satisfied: boolean }>;
     constraints: Array<{ value: string; satisfied: boolean }>;
-    anyOf: Array<{
+    mustMentionOneOf: Array<{
       label: string;
       values: string[];
       satisfied: boolean;
@@ -125,7 +125,7 @@ export interface ScenarioResult {
     }>;
     options: Array<{ value: string; satisfied: boolean }>;
     constraints: Array<{ value: string; satisfied: boolean }>;
-    anyOf: Array<{
+    mustMentionOneOf: Array<{
       label: string;
       values: string[];
       satisfied: boolean;

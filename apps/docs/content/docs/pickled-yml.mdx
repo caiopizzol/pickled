@@ -82,10 +82,10 @@ questions:
     access: [prior, injected, web]
     checks:
       mustMention: ["bunx my-product"]
-      mustNotMention: ["npm install my-product-cli"]
-      anyOf:
+      mustMentionOneOf:
         - label: names the entry point
           values: [quickstart, getting-started]
+      mustNotMention: ["npm install my-product-cli"]
 ```
 
 Each question runs once per `(agent × access)` pair. A question needs an `id`, an `ask`, at least one `agent`, at least one `access`, and at least one check.
@@ -93,8 +93,8 @@ Each question runs once per `(agent × access)` pair. A question needs an `id`, 
 ### `checks`
 
 - `mustMention` - every listed substring must appear in the answer.
+- `mustMentionOneOf` - each group is satisfied when at least one of its `values` appears. A group is `{ label, values }`; the label names the group in the receipt.
 - `mustNotMention` - none of the listed substrings may appear.
-- `anyOf` - each group is satisfied when at least one of its `values` appears. A group is `{ label, values }`; the label names the group in the receipt.
 
 Each entry counts as one check. The cell score is the share of checks satisfied; the verdict is `YES` (all), `PARTIAL` (some), or `NO` (none).
 
@@ -136,6 +136,6 @@ String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding
 - A source or access path named `none` (reserved for the no-context path).
 - An agent with an unknown provider, or one missing `provider` / `model`.
 - `tools: mcp` without a `servers` map, or `servers` on a non-`mcp` access path.
-- A question with no checks (`mustMention` / `mustNotMention` / `anyOf` all empty).
+- A question with no checks (`mustMention` / `mustMentionOneOf` / `mustNotMention` all empty).
 - A question referencing an agent or access path that is not declared.
 - API agents that set CLI-only fields, or a `codex-cli` agent without a pinned model.

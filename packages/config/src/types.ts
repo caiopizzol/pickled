@@ -175,12 +175,13 @@ export interface ExpectedChecks {
   options?: string[];
   constraints?: string[];
   /**
-   * Any-of groups: each group is satisfied iff AT LEAST ONE of its `values`
-   * appears (substring). Contributes exactly +1 to the check total per group.
-   * Use when several answers are equally valid (e.g. any of a set of valid
-   * hook names). The public schema exposes this as `checks.anyOf`.
+   * One-of mention groups: each group is satisfied iff at least one of its
+   * `values` appears (substring). Contributes exactly +1 to the check total
+   * per group. Use when several answers are equally valid (e.g. multiple
+   * valid hook names). The public schema exposes this as
+   * `checks.mustMentionOneOf`.
    */
-  anyOf?: Array<{ label: string; values: string[] }>;
+  mustMentionOneOf?: Array<{ label: string; values: string[] }>;
 }
 
 /**

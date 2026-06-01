@@ -46,7 +46,7 @@ questions:
     access: [prior, injected, web]
     checks:
       mustMention: [agent]
-      anyOf:
+      mustMentionOneOf:
         - label: names the capability
           values: [legible, context]
       mustNotMention: [AI-powered]
@@ -106,13 +106,13 @@ describe("loadConfig (new public schema, via package export)", () => {
     });
   });
 
-  test("checks map to expected includes/excludes/anyOf", async () => {
+  test("checks map to expected includes/excludes/mustMentionOneOf", async () => {
     await withTempConfig(REALISTIC, async (dir) => {
       const config = await loadConfig(dir);
       const expected = config.scenarios[0]!.expected!;
       expect(expected.includes).toEqual(["agent"]);
       expect(expected.excludes).toEqual(["AI-powered"]);
-      expect(expected.anyOf).toEqual([
+      expect(expected.mustMentionOneOf).toEqual([
         { label: "names the capability", values: ["legible", "context"] },
       ]);
     });

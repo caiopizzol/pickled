@@ -16,7 +16,7 @@ That is a gap you can close with the CI you already run.
 
 ## Make agent understanding a check, not a hope
 
-The move is the same one you made for code: run the check on every change, and fail the build when it regresses. With a deterministic eval (`mustMention`, `mustNotMention`, `anyOf`, tool-use provenance, no model judging another), the scoring path is deterministic, so a failure points to a contract that broke, not a judge that reinterpreted the answer. A flaky score makes a useless gate. A contract makes a real one.
+The move is the same one you made for code: run the check on every change, and fail the build when it regresses. With a deterministic eval (`mustMention`, `mustMentionOneOf`, `mustNotMention`, tool-use provenance, no model judging another), the scoring path is deterministic, so a failure points to a contract that broke, not a judge that reinterpreted the answer. A flaky score makes a useless gate. A contract makes a real one.
 
 Two tiers keep it fast and cheap:
 

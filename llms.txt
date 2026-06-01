@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, must-not-mention, any-of, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, one-of mention, must-not-mention, and tool-use provenance. No LLM grades another LLM.
 
 ## Install
 
@@ -74,8 +74,8 @@ A question runs once per `(agent × access)` pair. An access path is a named `(s
 A question carries at least one check. Each entry counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
 
 - `mustMention` - substrings the answer must contain.
+- `mustMentionOneOf` - groups of `{ label, values }`; each group is satisfied when the answer contains at least one of its values.
 - `mustNotMention` - substrings the answer must not contain.
-- `anyOf` - groups of `{ label, values }`; each group is satisfied when the answer contains at least one of its values.
 
 ## Agents today
 

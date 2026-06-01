@@ -80,7 +80,7 @@ Each cell gets its own verdict, so the diagnosis is specific:
 
 Good checks name the load-bearing facts: the package name, provider component, import path, command, config key, or known-wrong API. They do not try to grade style.
 
-Use `mustMention` for the terms a correct answer must include. Use `mustNotMention` for known-wrong terms. Use `anyOf` when several terms are valid and you need at least one.
+Use `mustMention` for the terms a correct answer must include. Use `mustMentionOneOf` when several terms are valid and you need at least one. Use `mustNotMention` for known-wrong terms.
 
 That is enough to tell whether an agent reached the product fact you care about. No model grades another model. The receipt shows which agent, which source, which access path, and which checks passed.
 

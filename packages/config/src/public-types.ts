@@ -38,10 +38,10 @@ export interface PublicAccess {
 export interface PublicChecks {
   /** All must appear (substring). */
   mustMention?: string[];
+  /** Each group is satisfied if at least one of its values appears. */
+  mustMentionOneOf?: Array<{ label: string; values: string[] }>;
   /** None may appear (substring). */
   mustNotMention?: string[];
-  /** Each group is satisfied if at least one of its values appears. */
-  anyOf?: Array<{ label: string; values: string[] }>;
 }
 
 export interface PublicQuestion {

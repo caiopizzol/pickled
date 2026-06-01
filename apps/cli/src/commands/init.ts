@@ -34,7 +34,7 @@ questions:
       # Edit these: phrases a correct answer must (or must not) contain.
       mustMention: [install]
       # mustNotMention: [deprecated-thing]
-      # anyOf:
+      # mustMentionOneOf:
       #   - label: names the entry point
       #     values: [quickstart, getting-started]
 

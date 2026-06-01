@@ -418,7 +418,7 @@ function validateActionableContract(scenario: {
     paths?: string[];
     options?: string[];
     constraints?: string[];
-    anyOf?: Array<{ label: string; values: string[] }>;
+    mustMentionOneOf?: Array<{ label: string; values: string[] }>;
   };
   compareSurfaces?: string[][];
   matrix?: {
@@ -444,7 +444,7 @@ function validateActionableContract(scenario: {
     "paths",
     "options",
     "constraints",
-    "anyOf",
+    "mustMentionOneOf",
   ] as const;
   const hasExpected =
     scenario.expected !== undefined &&
@@ -454,7 +454,7 @@ function validateActionableContract(scenario: {
     });
   if (!hasCitation && !hasExpected) {
     throw new Error(
-      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources or expected checks (includes/excludes/symbols/paths/options/constraints/anyOf). A scenario with nothing to check has no verdict.`,
+      `pickled.yml: scenario "${scenario.name}" must declare at least one of requiredSources or expected checks (includes/excludes/symbols/paths/options/constraints/mustMentionOneOf). A scenario with nothing to check has no verdict.`,
     );
   }
   // Non-none cells skip the citation contract (source is not injected; the
@@ -471,7 +471,7 @@ function validateActionableContract(scenario: {
   );
   if (nonNoneToolsets.length > 0 && !hasExpected) {
     throw new Error(
-      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has no expected checks. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected (any of includes/excludes/symbols/paths/options/constraints/anyOf), or restrict access to a no-tools path.`,
+      `pickled.yml: scenario "${scenario.name}" declares non-none toolsets [${nonNoneToolsets.join(", ")}] but has no expected checks. Non-none cells skip the citation contract because the source is not injected, so requiredSources alone leaves them with no actionable answer contract. Add expected (includes/excludes/symbols/paths/options/constraints/mustMentionOneOf), or restrict access to a no-tools path.`,
     );
   }
 }
