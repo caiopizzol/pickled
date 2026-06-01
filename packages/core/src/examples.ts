@@ -59,7 +59,7 @@ function evaluate(
     if (!c.satisfied)
       reasons.push(`present (excluded): ${JSON.stringify(c.value)}`);
   }
-  for (const g of expected.anyOf) {
+  for (const g of expected.mustMentionOneOf) {
     if (!g.satisfied) reasons.push(`none of ${g.label}`);
   }
 

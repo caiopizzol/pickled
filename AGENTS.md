@@ -4,7 +4,7 @@ Router for agents working on `pickled`. Keep this file short. Real specs live in
 
 ## What pickled is
 
-An open-source CLI that tests whether AI agents actually understand a product. It runs questions against real agent targets down declared context paths and checks each answer against a deterministic contract: must-mention, must-not-mention, any-of checks, and tool-use provenance. No LLM grades another LLM.
+An open-source CLI that tests whether AI agents actually understand a product. It runs questions against real agent targets down declared context paths and checks each answer against a deterministic contract: must-mention, one-of mention, must-not-mention, and tool-use provenance. No LLM grades another LLM.
 
 ## Where the rules live
 

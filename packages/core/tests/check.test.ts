@@ -2118,6 +2118,44 @@ describe("runCheck plan + sample + max-cells", () => {
     });
   });
 
+  test("access names are part of sampled cell identity", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {} },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              accessPairs: [
+                { access: "injected", source: "readme", toolset: "none" },
+                { access: "also_injected", source: "readme", toolset: "none" },
+              ],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          sample: 1,
+          seed: "seed-x",
+          targetFactory: () => makeMockTarget("x"),
+        },
+      );
+      expect(report.plan?.expandedCells).toBe(2);
+      expect(report.plan?.selectedCells).toBe(1);
+      expect(report.scenarios[0]!.cells).toHaveLength(1);
+      expect(report.scenarios[0]!.cells![0]?.cell.access).toBeDefined();
+    });
+  });
+
   test("sample: N > matrix size runs every cell (no over-sampling)", async () => {
     await withTempProject("# README", async (path) => {
       const config = configWithMatrix(["a"], ["readme"], ["none"]); // 1 cell

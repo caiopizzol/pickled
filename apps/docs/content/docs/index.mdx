@@ -3,7 +3,7 @@ title: pickled
 description: Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
 ---
 
-Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, must-not-mention, any-of, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, one-of mention, must-not-mention, and tool-use provenance. No LLM grades another LLM.
 
 ## What pickled tests
 
@@ -16,7 +16,7 @@ Two audiences, one tool:
 
 A question runs once per `(agent × access)` pair. Each pair scores independently:
 
-- **Checks.** `mustMention` and `mustNotMention` are substrings the answer must or must not contain; `anyOf` groups are satisfied when the answer contains at least one value from each. Each check counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
+- **Checks.** `mustMention` substrings must appear; `mustMentionOneOf` groups need at least one value from each group; `mustNotMention` substrings must not appear. Each check counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
 - **Tool-use provenance.** When an access path uses `web` or `mcp` tools, the agent must invoke at least one of them, or the cell is vetoed to `NO`. Model memory does not count as evidence for a tool path.
 
 ## Getting started

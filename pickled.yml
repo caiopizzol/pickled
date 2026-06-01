@@ -54,7 +54,7 @@ questions:
     access: [prior, injected, discover, directed]
     checks:
       mustMention: [agent]
-      anyOf:
+      mustMentionOneOf:
         - label: names the capability
           values: [legible, legibility, understand, comprehend, context]
       mustNotMention: [magic dashboard, brand tracker]

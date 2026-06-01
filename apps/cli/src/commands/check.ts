@@ -1,6 +1,5 @@
 import path from "node:path";
 import type { CheckConfig } from "@pickled-dev/config";
-import { overrideTarget } from "@pickled-dev/config";
 import {
   formatCheckJSON,
   loadConfig,
@@ -14,15 +13,12 @@ export interface CheckOptions {
   output?: string;
   verbose?: boolean;
   threshold?: string;
-  target?: string;
-  /** Matrix cell filter: run only cells with this interface. */
-  interface?: string;
-  /** Matrix cell filter: run only cells with this source id. */
-  source?: string;
-  /** Matrix cell filter: run only cells with this toolset name. */
-  toolset?: string;
   /** Run only the named question id. */
-  scenario?: string;
+  question?: string;
+  /** Run only the named agent. */
+  agent?: string;
+  /** Run only the named access path. */
+  access?: string;
   /** Dry-run: expand and report planned cells without running adapters. */
   plan?: boolean;
   /** Hard cap on selected cells; exits non-zero before any run if exceeded. */
@@ -53,28 +49,9 @@ export async function check(
     process.exit(1);
   }
 
-  // Apply --target override before runCheck. The helper validates the name
-  // and drops questions whose explicit target does not match (their author
-  // declared a different target; silently rerouting would violate intent).
-  if (options.target) {
-    const before = config.scenarios.length;
-    try {
-      config = overrideTarget(config, options.target);
-    } catch (error) {
-      console.error(
-        chalk.red(error instanceof Error ? error.message : String(error)),
-      );
-      process.exit(1);
-    }
-    const dropped = before - config.scenarios.length;
-    if (dropped > 0 && !json) {
-      log(
-        chalk.dim(
-          `Skipping ${dropped} question(s) with explicit target != "${options.target}"`,
-        ),
-      );
-    }
-  }
+  validateNamedFilter(config, "question", options.question, listQuestions);
+  validateNamedFilter(config, "agent", options.agent, listAgents);
+  validateNamedFilter(config, "access", options.access, listAccessPaths);
 
   const tool = {
     name: config.tool.name,
@@ -101,22 +78,14 @@ export async function check(
   }
 
   // 2. Run check
-  // --target bridges to cellFilter.interface for matrix questions when
-  // --interface is not also set. Keeps "pickled check --target codex"
-  // doing the intuitive thing across both non-matrix and matrix questions:
-  // narrow the top-level matrix.target (via overrideTarget above) AND
-  // narrow matrix.interfaces to the same name. Explicit --interface wins
-  // if both are passed.
-  const effectiveInterfaceFilter = options.interface ?? options.target;
   const cellFilter =
-    effectiveInterfaceFilter || options.source || options.toolset
+    options.agent || options.access
       ? {
-          interface: effectiveInterfaceFilter,
-          source: options.source,
-          toolset: options.toolset,
+          interface: options.agent,
+          access: options.access,
         }
       : undefined;
-  const scenarioFilter = options.scenario ? [options.scenario] : undefined;
+  const scenarioFilter = options.question ? [options.question] : undefined;
 
   let sampleN: number | undefined;
   if (options.sample !== undefined) {
@@ -242,6 +211,48 @@ function parseThresholdValue(value: unknown, label: string): number {
   }
 
   throw new Error(`Invalid ${label}. Expected an integer from 0 to 100.`);
+}
+
+function validateNamedFilter(
+  config: CheckConfig,
+  label: "question" | "agent" | "access",
+  value: string | undefined,
+  list: (config: CheckConfig) => string[],
+): void {
+  if (!value) return;
+  const names = list(config);
+  if (names.includes(value)) return;
+  const available = names.length > 0 ? names.join(", ") : "(none)";
+  const plural =
+    label === "access"
+      ? "access paths"
+      : label === "question"
+        ? "questions"
+        : "agents";
+  console.error(
+    chalk.red(
+      `Unknown ${label}: "${value}". Available ${plural}: ${available}`,
+    ),
+  );
+  process.exit(1);
+}
+
+function listQuestions(config: CheckConfig): string[] {
+  return config.scenarios.map((s) => s.name);
+}
+
+function listAgents(config: CheckConfig): string[] {
+  return Object.keys(config.targets ?? {});
+}
+
+function listAccessPaths(config: CheckConfig): string[] {
+  const seen = new Set<string>();
+  for (const scenario of config.scenarios) {
+    for (const pair of scenario.matrix?.accessPairs ?? []) {
+      if (pair.access) seen.add(pair.access);
+    }
+  }
+  return [...seen];
 }
 
 function writeStdout(text: string): Promise<void> {

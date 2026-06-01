@@ -27,10 +27,10 @@ export interface CheckResult {
 }
 
 /**
- * Result of one `anyOf` group: satisfied iff at least one value appears.
+ * Result of one `mustMentionOneOf` group: satisfied iff at least one value appears.
  * `matched` lists the values actually present (for debuggable failures).
  */
-export interface AnyOfResult {
+export interface MustMentionOneOfResult {
   label: string;
   values: string[];
   satisfied: boolean;
@@ -53,8 +53,8 @@ export interface ExpectedDetail {
   paths: CheckResult[];
   options: CheckResult[];
   constraints: CheckResult[];
-  /** Any-of groups: each counts as one check, satisfied if any value present. */
-  anyOf: AnyOfResult[];
+  /** One-of mention groups: each counts as one check. */
+  mustMentionOneOf: MustMentionOneOfResult[];
   /** Number of declared checks satisfied (used for cell-score composition). */
   satisfied: number;
   /** Total declared checks (used for cell-score composition). */
@@ -100,7 +100,9 @@ export function scoreExpected(input: {
     value,
     satisfied: !response.includes(value),
   }));
-  const anyOf: AnyOfResult[] = (expected?.anyOf ?? []).map((group) => {
+  const mustMentionOneOf: MustMentionOneOfResult[] = (
+    expected?.mustMentionOneOf ?? []
+  ).map((group) => {
     const matched = group.values.filter((v) => response.includes(v));
     return {
       label: group.label,
@@ -121,9 +123,10 @@ export function scoreExpected(input: {
     checkGroups.reduce(
       (sum, group) => sum + group.filter((c) => c.satisfied).length,
       0,
-    ) + anyOf.filter((g) => g.satisfied).length;
+    ) + mustMentionOneOf.filter((g) => g.satisfied).length;
   const total =
-    checkGroups.reduce((sum, group) => sum + group.length, 0) + anyOf.length;
+    checkGroups.reduce((sum, group) => sum + group.length, 0) +
+    mustMentionOneOf.length;
   return {
     includes,
     excludes,
@@ -131,7 +134,7 @@ export function scoreExpected(input: {
     paths,
     options,
     constraints,
-    anyOf,
+    mustMentionOneOf,
     satisfied,
     total,
   };
@@ -164,7 +167,7 @@ export function formatExpectedNotes(detail: ExpectedDetail): string[] {
   if (bannedHit.length > 0) {
     missingByGroup.push({ label: "hit excludes", misses: bannedHit });
   }
-  for (const group of detail.anyOf) {
+  for (const group of detail.mustMentionOneOf) {
     if (!group.satisfied) {
       missingByGroup.push({
         label: `none of ${group.label}`,

@@ -157,20 +157,22 @@ describe("validatePublicConfig", () => {
     );
   });
 
-  test("rejects an anyOf group without a label or values", () => {
+  test("rejects a mustMentionOneOf group without a label or values", () => {
     const pub = base();
     pub.questions[0]!.checks = {
-      anyOf: [{ label: "", values: ["x"] }],
+      mustMentionOneOf: [{ label: "", values: ["x"] }],
     };
     expect(() => validatePublicConfig(pub)).toThrow(
-      /anyOf groups need a label/,
+      /mustMentionOneOf groups need a label/,
     );
   });
 
-  test("accepts a question whose only check is anyOf", () => {
+  test("accepts a question whose only check is mustMentionOneOf", () => {
     const pub = base();
     pub.questions[0]!.checks = {
-      anyOf: [{ label: "names a provider", values: ["openai", "anthropic"] }],
+      mustMentionOneOf: [
+        { label: "names a provider", values: ["openai", "anthropic"] },
+      ],
     };
     expect(() => validatePublicConfig(pub)).not.toThrow();
   });
@@ -240,7 +242,11 @@ describe("compilePublicConfig", () => {
     const prior = pairs?.find(
       (p) => p.toolset === "none" && p.source === "none",
     );
-    expect(prior).toEqual({ source: "none", toolset: "none" });
+    expect(prior).toEqual({
+      access: "prior",
+      source: "none",
+      toolset: "none",
+    });
     // Guard: no pair carries a null source for an injected/prior cell.
     expect(pairs?.some((p) => p.source === null)).toBe(false);
   });
@@ -252,6 +258,7 @@ describe("compilePublicConfig", () => {
     const c = compilePublicConfig(pub);
     expect(c.toolsets?.web).toEqual({ webSearch: true, webFetch: true });
     expect(c.scenarios[0]!.matrix?.accessPairs).toContainEqual({
+      access: "web",
       source: "none",
       toolset: "web",
     });
@@ -279,6 +286,7 @@ describe("compilePublicConfig", () => {
       KEY: "v",
     });
     expect(c.scenarios[0]!.matrix?.accessPairs).toContainEqual({
+      access: "docs_mcp",
       source: "docs",
       toolset: "docs_mcp",
     });
@@ -291,23 +299,27 @@ describe("compilePublicConfig", () => {
     expect(s.prompt).toBe("what does it do?");
     expect(s.matrix?.interfaces).toEqual(["quick"]);
     expect(s.matrix?.accessPairs).toEqual([
-      { source: "none", toolset: "none" },
-      { source: "docs", toolset: "none" },
+      { access: "prior", source: "none", toolset: "none" },
+      { access: "injected", source: "docs", toolset: "none" },
     ]);
   });
 
-  test("maps checks to expected (mustMention/mustNotMention/anyOf)", () => {
+  test("maps checks to expected (mustMention/mustMentionOneOf/mustNotMention)", () => {
     const pub = base();
     pub.questions[0]!.checks = {
       mustMention: ["agent"],
       mustNotMention: ["AI-powered"],
-      anyOf: [{ label: "capability", values: ["legible", "context"] }],
+      mustMentionOneOf: [
+        { label: "capability", values: ["legible", "context"] },
+      ],
     };
     const c = compilePublicConfig(pub);
     expect(c.scenarios[0]!.expected).toEqual({
       includes: ["agent"],
       excludes: ["AI-powered"],
-      anyOf: [{ label: "capability", values: ["legible", "context"] }],
+      mustMentionOneOf: [
+        { label: "capability", values: ["legible", "context"] },
+      ],
     });
   });
 

@@ -46,7 +46,7 @@ questions:
     access: [prior, injected, web]
     checks:
       mustMention: [agent]
-      anyOf:
+      mustMentionOneOf:
         - label: names the capability
           values: [legible, context]
       mustNotMention: [AI-powered]
@@ -86,9 +86,9 @@ describe("loadConfig (new public schema, via package export)", () => {
       expect(s.prompt).toContain("what does pickled do");
       expect(s.matrix?.interfaces).toEqual(["quick", "api"]);
       expect(s.matrix?.accessPairs).toEqual([
-        { source: "none", toolset: "none" },
-        { source: "docs", toolset: "none" },
-        { source: "none", toolset: "web" },
+        { access: "prior", source: "none", toolset: "none" },
+        { access: "injected", source: "docs", toolset: "none" },
+        { access: "web", source: "none", toolset: "web" },
       ]);
     });
   });
@@ -98,17 +98,21 @@ describe("loadConfig (new public schema, via package export)", () => {
       const config = await loadConfig(dir);
       const pairs = config.scenarios[0]!.matrix?.accessPairs ?? [];
       expect(pairs.some((p) => p.source === null)).toBe(false);
-      expect(pairs).toContainEqual({ source: "none", toolset: "none" });
+      expect(pairs).toContainEqual({
+        access: "prior",
+        source: "none",
+        toolset: "none",
+      });
     });
   });
 
-  test("checks map to expected includes/excludes/anyOf", async () => {
+  test("checks map to expected includes/excludes/mustMentionOneOf", async () => {
     await withTempConfig(REALISTIC, async (dir) => {
       const config = await loadConfig(dir);
       const expected = config.scenarios[0]!.expected!;
       expect(expected.includes).toEqual(["agent"]);
       expect(expected.excludes).toEqual(["AI-powered"]);
-      expect(expected.anyOf).toEqual([
+      expect(expected.mustMentionOneOf).toEqual([
         { label: "names the capability", values: ["legible", "context"] },
       ]);
     });

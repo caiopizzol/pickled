@@ -11,7 +11,7 @@ language: en
 
 ### Overview
 
-Pickled is an open-source CLI that asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks. Checks are `mustMention`, `mustNotMention`, `anyOf`, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks. Checks are `mustMention`, `mustMentionOneOf`, `mustNotMention`, and tool-use provenance. No LLM grades another LLM.
 
 Pickled started as a freshness checker for developer tool docs. It got rewritten when the real problem became clear, and the real problem has three surfaces, not one.
 
@@ -364,7 +364,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **Bullet shape.** One sentence per change. Lead with what changed for the user, not the implementation. Bold the feature name. Use a hyphen, never an em dash, to join the name and the description.
 
-**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `question verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `check` (the `mustMention` / `mustNotMention` / `anyOf` contract; not `assertion` or `regression check`).
+**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `question verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `check` (the `mustMention` / `mustMentionOneOf` / `mustNotMention` contract; not `assertion` or `regression check`).
 
 **Honesty constraints.** No absolutes. A smoke test `catches regressions in the example contract`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
 
@@ -377,7 +377,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 - **llms.txt as public agent surface** - Agents can read pickled's contracts, targets, verdict layers, JSON contract, and source requirements at `/llms.txt`.
 - **Brand and spec questions** - Five new dogfood questions covering verdict layers, JSON contract, target semantics, agent context contract, and comment policy.
-- **anyOf checks** - A question can require the answer to satisfy at least one value from a group, not every one.
+- **mustMentionOneOf checks** - A question can require the answer to satisfy at least one value from a group, not every one.
 
 ### Improvements
 

@@ -8,8 +8,6 @@ export {
 } from "./defaults.js";
 // Loader
 export { loadConfig } from "./loader.js";
-// Overrides
-export { overrideTarget } from "./override.js";
 export type {
   ApiProvider,
   CheckConfig,

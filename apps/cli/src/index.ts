@@ -43,11 +43,9 @@ program
   .option("-o, --output <file>", "Save report to file")
   .option("-v, --verbose", "Show detailed progress")
   .option("-t, --threshold <percent>", "Minimum score to pass")
-  .option("--target <name>", "Filter by target")
-  .option("--scenario <name>", "Run only the named question id")
-  .option("--interface <name>", "Filter by interface")
-  .option("--source <name>", "Filter by source")
-  .option("--toolset <name>", "Filter by access tool")
+  .option("--question <id>", "Run only the named question id")
+  .option("--agent <name>", "Run only the named agent")
+  .option("--access <name>", "Run only the named access path")
   .option("--plan", "Print planned cells. No model calls.")
   .option("--max-cells <n>", "Abort if planned cells exceed N")
   .option("--sample <n>", "Sample N cells per question")
@@ -59,7 +57,7 @@ program
   .summary("Check example answers offline")
   .description("Check example answers offline. No model calls.")
   .argument("[path]", "Path to your project (default: current directory)", ".")
-  .option("--scenario <name>", "Test only the named question id")
+  .option("--question <id>", "Test only the named question id")
   .action(test);
 
 await program.parseAsync();
