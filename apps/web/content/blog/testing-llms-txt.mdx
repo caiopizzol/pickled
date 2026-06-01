@@ -1,0 +1,77 @@
+---
+title: "You added llms.txt. Can an agent actually use it?"
+description: "An llms.txt is a promise to agents. Adding the file is not the same as the promise paying off. Here is how to put it under test."
+date: 2026-06-01
+updated: 2026-06-01
+author: Caio Pizzol
+tags: [llms-txt, agent-evals, ci]
+---
+
+You added an `llms.txt`. It felt like the right move: a clean, agent-readable map of your product, sitting at a well-known path. You shipped it and moved on.
+
+But adding the file is not the same as the file working. `llms.txt` is a promise to agents. The only way to know the promise pays off is to ask an agent a question your `llms.txt` is supposed to answer, and check what comes back.
+
+## Two ways an llms.txt quietly fails
+
+The first is content. You give an agent your `llms.txt` and it still answers wrong: the file is thin, ambiguous, or out of date, so the agent fills the gap with its training-data guess about how products like yours usually work. The file is present and useless.
+
+The second is discovery. The agent never reads your `llms.txt` at all. It answers from memory, or from whatever it scraped months ago, because nothing made it fetch the current file. The file is fine and unread.
+
+These are different failures and they need different tests. One asks "is the content good enough?" The other asks "can the agent even get to it?"
+
+## Test both, in the same scenario
+
+Register your `llms.txt` as a source and run one scenario across two toolsets: a `none` cell that hands the agent the file directly, and a `web` cell that makes the agent go find it.
+
+```yaml
+tool:
+  name: my-product
+  description: short one-liner
+
+docs:
+  sources:
+    llms: https://my-product.dev/llms.txt
+
+targets:
+  quick:
+    category: cli
+    provider: claude-code
+    model: claude-haiku-4-5
+
+toolsets:
+  none: {}
+  web:
+    webSearch: true
+    webFetch: true
+
+scenarios:
+  - name: Pricing
+    prompt: How is my-product priced?
+    requiredSources: [llms]
+    matrix:
+      interfaces: [quick]
+      sources: [llms]
+      toolsets: [none, web]
+    expected:
+      includes: ["free", "open source"]
+
+threshold: 80
+```
+
+The `none` cell injects your `llms.txt` into the prompt and, because of `requiredSources`, fails unless the answer is grounded in that file. That is the content test: if it fails here, your `llms.txt` does not actually answer the question. The `web` cell injects nothing; it leaves your site as a discovery target and requires the agent to invoke a web tool to reach it. That is the discovery test: if it fails here while `none` passes, your content is fine but the agent never found the file.
+
+Both cells check `expected.includes` for the answer you want. Citations are extracted by code; the `web` tool calls are real. No model grades another model. The score is the score.
+
+## Why this beats reading it yourself
+
+You can open your own `llms.txt` and nod at it. That tells you it looks complete. It does not tell you whether an agent, given a real question, produces the right answer from it, or whether it bothers to read it under conditions you do not control. The file is written for a reader you are not. Test it with that reader.
+
+Run this on the questions that matter most for your product, the ones where a wrong answer costs you a user, and put it in CI so a regression in your `llms.txt` fails the build instead of surfacing as a confidently wrong agent.
+
+## Try it
+
+Point pickled at your `llms.txt` and write one scenario for a question it is supposed to answer. Run it once with the file injected and once with the agent forced to fetch it, and see which promise holds.
+
+- [Getting started](https://docs.pickled.dev/getting-started)
+- [Toolsets](https://docs.pickled.dev/toolsets)
+- [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
