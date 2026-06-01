@@ -1,0 +1,92 @@
+---
+title: "Does your public product context answer real questions?"
+description: "Docs, README files, llms.txt, and MCP servers are the context agents use before they build with your product. Test the path that gives them the right answer."
+date: 2026-06-01
+updated: 2026-06-01
+author: Caio Pizzol
+tags: [product-context, documentation, agent-evals, ci]
+---
+
+Your product already has an agent-facing surface. It is your README, docs, `llms.txt`, examples, package page, and maybe an MCP server. Developers ask agents how to build with your product, and those agents reach for that surface before they write code.
+
+The hard part is that you do not control which path they use. One agent answers from memory. Another searches the web. Another reads your `llms.txt`. Another calls a docs MCP server. If those paths do not carry the same product facts, the agent can miss the point even when your docs look correct to you.
+
+Pickled tests that surface with real questions.
+
+## Start with the question a user would ask
+
+Do not start with every page you published. Start with one product question where a wrong answer hurts:
+
+- How do I install it?
+- Which package should I import?
+- How do I authenticate?
+- Which API should I use for this workflow?
+- What old API should I avoid?
+
+Then write the answer contract in product terms. The contract is not a vibe. It is a small set of checks that a correct answer must satisfy.
+
+## Test the paths separately
+
+Register the public sources and compare the paths an agent might use:
+
+```yaml
+product:
+  name: my-product
+  description: short one-liner
+
+sources:
+  llms: https://my-product.dev/llms.txt
+  docs: https://docs.my-product.dev/llms-full.txt
+
+agents:
+  quick:
+    provider: claude-code
+    model: claude-haiku-4-5
+
+access:
+  prior: { source: none, tools: none }
+  injected_llms: { source: llms, tools: none }
+  web_llms: { source: llms, tools: web }
+  docs_mcp:
+    source: docs
+    tools: mcp
+    servers:
+      docs:
+        url: https://docs.my-product.dev/mcp
+
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [prior, injected_llms, web_llms, docs_mcp]
+    checks:
+      mustMention: ["bunx my-product"]
+      mustNotMention: ["npm install my-product-cli"]
+
+threshold: 80
+```
+
+That one question runs four cells. `prior` tells you what the model thinks without context. `injected_llms` tests whether the file itself contains the answer. `web_llms` does not inject the file; it gives the agent the canonical URL and requires a real web tool call. `docs_mcp` requires a real MCP call.
+
+Each cell gets its own verdict, so the diagnosis is specific:
+
+- `prior` fails, `injected_llms` passes: your public context carries the answer.
+- `injected_llms` passes, `web_llms` fails: the content works, but web access does not.
+- `web_llms` passes, `docs_mcp` fails: your MCP path is not returning the same answer.
+- Everything fails: the product fact is probably missing or unclear everywhere.
+
+## Keep the contract small
+
+Good checks name the load-bearing facts: the package name, provider component, import path, command, config key, or known-wrong API. They do not try to grade style.
+
+Use `mustMention` for the terms a correct answer must include. Use `mustNotMention` for known-wrong terms. Use `anyOf` when several terms are valid and you need at least one.
+
+That is enough to tell whether an agent reached the product fact you care about. No model grades another model. The receipt shows which agent, which source, which access path, and which checks passed.
+
+## Try it
+
+Pick one question from your docs and run it across `prior`, an injected source, and one discovery path. The first useful result is not a perfect score. It is knowing which path is failing.
+
+- [Getting started](https://docs.pickled.dev/getting-started)
+- [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
+- [Access evaluation](https://docs.pickled.dev/matrix-evaluation)

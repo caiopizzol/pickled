@@ -1,6 +1,6 @@
 ---
-title: "Your agent-facing surface has no CI gate. Give it one."
-description: "Your code fails the build when it breaks. Your AGENTS.md, llms.txt, and docs drift silently. Here is how to gate agent understanding in CI."
+title: "Your public product context has no CI gate. Give it one."
+description: "Your code fails the build when it breaks. Your docs, README, llms.txt, and MCP surfaces drift silently. Here is how to gate agent understanding in CI."
 date: 2026-06-01
 updated: 2026-06-01
 author: Caio Pizzol
@@ -9,7 +9,7 @@ tags: [ci, agent-evals, github-actions]
 
 Your code has a gate. A test breaks, the build goes red, the PR does not merge. That gate is why you trust your codebase to change without rotting.
 
-The surface your agents read has no such gate. Your `AGENTS.md`, your `llms.txt`, your docs, your comments: they change every week, and nothing checks whether an agent still answers correctly afterward. The first signal that one drifted is a user watching an agent confidently get your product wrong.
+The surface your users' agents read has no such gate. Your README, `llms.txt`, docs, examples, and MCP server change every week, and nothing checks whether an agent still answers correctly afterward. The first signal that one drifted is a user watching an agent confidently get your product wrong.
 
 That is a gap you can close with the CI you already run.
 
@@ -43,19 +43,19 @@ jobs:
 
 One caveat if your repo is public: GitHub does not pass secrets to workflows triggered from fork pull requests, so a `check` job that needs `ANTHROPIC_API_KEY` will not run on those. Keep the token-free `test` and `plan` steps on every PR, and run the full `check` on push to branches you control or on trusted internal PRs.
 
-That is the whole gate. A PR that weakens your `AGENTS.md` or breaks an answer your `llms.txt` is supposed to give now goes red, in the PR, before it ships.
+That is the whole gate. A PR that weakens your docs or breaks an answer your `llms.txt` is supposed to give now goes red, in the PR, before it ships.
 
 ## What changes when it is a gate
 
 Stale prompt surface is product debt, and debt you cannot see is the dangerous kind. A CI gate turns an invisible, slow rot into a loud, immediate failure attached to the exact change that caused it. You stop finding out from users.
 
-It also changes how the team treats those files. A `CLAUDE.md` with a test is no longer a document someone updates when they remember. It is a contract with a consequence. People keep it current because the build makes them.
+It also changes how the team treats those files. An `llms.txt` or docs page with a test is no longer a document someone updates when they remember. It is a contract with a consequence. People keep it current because the build makes them.
 
 And because examples are free and the check run is bounded by `--max-cells` or `--sample`, you can afford to run it on every pull request, not as an occasional manual sweep. The point of a gate is that nothing gets past it.
 
 ## Try it
 
-Add the two jobs above, set a `threshold`, and open a PR that intentionally breaks one answer. Watch it go red.
+Add the workflow above, set a `threshold`, and open a PR that intentionally breaks one answer. Watch it go red.
 
 - [Run pickled in GitHub Actions](https://docs.pickled.dev/github-actions)
 - [Getting started](https://docs.pickled.dev/getting-started)

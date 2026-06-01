@@ -11,13 +11,13 @@ Ask an agent the same question about your product three ways and you can get thr
 
 Same agent, same question, same product. The variable is how the agent reached the information. If you only test one path, you are blind to the other two, and your users' agents run across all of them.
 
-## Three paths, three different questions
+## Three paths, three different signals
 
 Pickled models the path as `access`, and the run includes one cell per path. Each one tests something different:
 
-- **`none`** injects your source straight into the prompt. This is the content test: given the material, is the answer right? It isolates one thing, the quality of what you wrote, by removing retrieval from the equation.
-- **`web`** injects nothing. It names your site as the target and makes the agent use a web tool to get there. This is the discovery test: can an agent find your content in the wild, the way a stranger's agent would?
-- **`mcp`** wires up an MCP server and requires the agent to call it. This is the surface test: does the tool you expose actually return the right answer?
+- **`tools: none`** injects your source straight into the prompt. This is the content test: given the material, is the answer right? It isolates one thing, the quality of what you wrote, by removing retrieval from the equation.
+- **`tools: web`** injects nothing. If the access path names a URL source, Pickled gives the agent that canonical URL as the target and requires a web tool call. This is the discovery test: can the agent reach the content through the web path?
+- **`tools: mcp`** wires up an MCP server and requires the agent to call it. This is the surface test: does the tool you expose actually return the right answer?
 
 A pass on `none` and a fail on `web` is a specific, useful diagnosis: your content is good, but agents cannot discover it. A pass on `web` and a fail on `mcp` says your published docs work but the MCP path is not returning the same answer. One blended score would have hidden both.
 
@@ -38,7 +38,7 @@ agents:
 
 access:
   injected: { source: docs_url, tools: none }
-  web: { source: none, tools: web }
+  web: { source: docs_url, tools: web }
   docs_mcp:
     source: docs_url
     tools: mcp
@@ -59,13 +59,13 @@ questions:
 threshold: 80
 ```
 
-One question, three cells, scored independently. The same `mustMention` check runs on all three, so the only thing that varies between them is the retrieval path. That is the comparison you want.
+One question, three cells, scored independently. The same `mustMention` check runs on all three, so the only thing that varies between them is the context path. That is the comparison you want.
 
 ## The label has to be honest
 
-There is a failure a softer test would miss: an agent can answer from memory without ever using the tool the cell is named for, and happen to be right. Pickled vetoes that. For a `web` or `mcp` cell, if the agent never invokes the configured tool path, the cell is forced to a hard fail regardless of whether the words match. A cell labeled `web` has to have actually used the web. Otherwise "passes on web" would be a lie, and the whole point is to know which path works.
+There is a failure a softer test would miss: an agent can answer from memory without ever using the tool the cell is named for, and happen to be right. Pickled vetoes that. For a `web` or `mcp` cell, if the agent never invokes the configured tool path, the cell is set to `NO` regardless of whether the words match. A cell labeled `web` has to have actually used the web. Otherwise "passes on web" would be a lie, and the whole point is to know which path works.
 
-One consequence worth stating: in `web` and `mcp` cells, your local files are not read from disk. They are name-only hints. If the same answer does not come back through the tool path, the cell fails, which is exactly the signal you are looking for.
+One consequence worth stating: in `web` and `mcp` cells, your sources are not injected into the prompt. URL sources become canonical hints; local-file sources become readable names. If the same answer does not come back through the tool path, the cell fails, which is exactly the signal you are looking for.
 
 ## Legibility is per-surface
 
