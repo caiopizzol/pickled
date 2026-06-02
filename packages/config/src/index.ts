@@ -5,6 +5,7 @@ export {
   DEFAULT_ALLOWED_TOOLS,
   DEFAULT_DISALLOWED_TOOLS,
   DEFAULT_TARGET,
+  EDIT_ALLOWED_TOOLS,
 } from "./defaults.js";
 // Loader
 export { loadConfig } from "./loader.js";

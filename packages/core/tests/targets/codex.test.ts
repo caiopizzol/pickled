@@ -115,6 +115,21 @@ describe("CodexCliTarget - flag spelling", () => {
     expect(args[args.length - 1]).toBe("-");
   });
 
+  test("build mode switches the sandbox to workspace-write", async () => {
+    const { spawn, calls } = makeSpawn({
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+    });
+    const target = new CodexCliTarget("codex", baseConfig, {
+      spawn,
+      readFile: makeReadFile("Done."),
+    });
+    await target.run("q", { ...baseRunOptions, editMode: true });
+    const args = calls[0]!.args;
+    expect(args[args.indexOf("--sandbox") + 1]).toBe("workspace-write");
+  });
+
   test("writes the citation prompt to stdin, not argv", async () => {
     const { spawn, calls } = makeSpawn({
       exitCode: 0,

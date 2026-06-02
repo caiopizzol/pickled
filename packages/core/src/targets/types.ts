@@ -75,6 +75,15 @@ export interface RunOptions {
    * provenance matcher works across providers.
    */
   mcpTools?: { servers: Record<string, McpServerConfig> };
+  /**
+   * Build mode: run the agent as an editor of the workspace. The CLI adapters
+   * switch to their edit profile (claude-code: workspace toolset +
+   * permissionMode "bypassPermissions"; codex: --sandbox workspace-write).
+   * Internal only - the build runner sets it for `kind: build` cells; it is
+   * never exposed in the public schema. API adapters ignore it (no repo-edit
+   * loop), and the runner gates build tasks to edit-capable agents first.
+   */
+  editMode?: boolean;
   onProgress?: (msg: string) => void;
 }
 

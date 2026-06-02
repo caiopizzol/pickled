@@ -7,6 +7,7 @@ import { CodexCliTarget } from "./cli/codex.js";
 import type { ResolvedContext, TargetRunner } from "./types.js";
 
 export { DEFAULT_TARGET } from "@pickled-dev/config";
+export { assertEditCapable, isEditCapable } from "./capabilities.js";
 export type {
   ResolvedContext,
   RunOptions,

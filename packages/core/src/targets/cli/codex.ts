@@ -64,7 +64,7 @@ export class CodexCliTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, cwd, docs, requiredSources } = options;
+    const { tool, cwd, docs, requiredSources, editMode } = options;
     const model = this.config.model;
     if (!model) {
       throw new Error(
@@ -83,7 +83,9 @@ export class CodexCliTarget implements TargetRunner {
       "exec",
       "--json",
       "--sandbox",
-      "read-only",
+      // Build mode gets codex's own OS-level write confinement to the
+      // workspace; answer mode stays read-only.
+      editMode ? "workspace-write" : "read-only",
       "--ignore-user-config",
       "--ignore-rules",
       "--ephemeral",
