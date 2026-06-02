@@ -496,7 +496,7 @@ async function runScenario(
   };
 }
 
-function buildReport(
+export function buildReport(
   tool: ToolInfo,
   docs: ResolvedDocSource[],
   results: ScenarioResult[],
@@ -507,6 +507,9 @@ function buildReport(
   type Eval = {
     answerable: "YES" | "PARTIAL" | "NO";
     confidence: number;
+    /** Build cells score by their pass rate directly (confidence IS the rate),
+     *  not the answer-mode YES=conf / PARTIAL=conf*0.5 curve. */
+    isBuild?: boolean;
   };
   const evals: Eval[] = [];
   for (const r of results) {
@@ -518,7 +521,16 @@ function buildReport(
     }
     if (r.cells) {
       for (const c of r.cells) {
-        evals.push({ answerable: c.answerable, confidence: c.confidence });
+        // A build cell with no `build` block is an Error (setup failure,
+        // vacuous fixture, all trials errored): an environment problem, not the
+        // agent failing, so it is excluded from scoring entirely. A scored
+        // build cell - including a 0/n NO - keeps its `build` block and counts.
+        if (c.taskKind === "build" && c.build === undefined) continue;
+        evals.push({
+          answerable: c.answerable,
+          confidence: c.confidence,
+          isBuild: c.build !== undefined,
+        });
       }
       continue;
     }
@@ -536,6 +548,9 @@ function buildReport(
     total > 0
       ? Math.round(
           evals.reduce((sum, e) => {
+            // Build cells: confidence is the pass rate; count it directly so a
+            // PARTIAL 2/3 scores 67, not 67 * 0.5.
+            if (e.isBuild) return sum + e.confidence;
             if (e.answerable === "YES") return sum + e.confidence;
             if (e.answerable === "PARTIAL") return sum + e.confidence * 0.5;
             return sum;

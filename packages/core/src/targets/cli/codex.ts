@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Target, TargetCategory } from "@pickled-dev/config";
+import { buildTaskPrompt } from "../build-prompt.js";
 import { buildCitationPrompt } from "../citation-prompt.js";
 import type {
   ResponseEntry,
@@ -64,7 +65,8 @@ export class CodexCliTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, cwd, docs, requiredSources, editMode } = options;
+    const { tool, cwd, docs, requiredSources, editMode, buildContext } =
+      options;
     const model = this.config.model;
     if (!model) {
       throw new Error(
@@ -72,7 +74,9 @@ export class CodexCliTarget implements TargetRunner {
       );
     }
 
-    const systemPrompt = buildCitationPrompt(tool, docs, requiredSources);
+    const systemPrompt = buildContext
+      ? buildTaskPrompt(tool, buildContext.docs, buildContext.sourceHint)
+      : buildCitationPrompt(tool, docs, requiredSources);
     const fullPrompt = `${systemPrompt}\n\n---\n\n${prompt}`;
 
     const lastMessageFile = join(tmpdir(), `pickled-codex-${randomUUID()}.txt`);
