@@ -42,14 +42,14 @@ access:
   web_open: { source: none, tools: web } # open web discovery
   web_docs: { source: docs, tools: web } # docs URL handed over, reached with web
 
-questions:
+tasks:
   # Positioning across the full context gradient, on three agents. The
   # `memory` cells answer from model memory; `given_docs` reads the docs;
   # `web_open` and `web_docs` reach the live site through web tools.
   # "agent" is the load-bearing noun, and a real summary names what the
   # tool checks (legibility / understanding / context).
   - id: positioning
-    ask: In one or two sentences, what does pickled do?
+    prompt: In one or two sentences, what does pickled do?
     agents: [quick, anthropic_api, openai_api]
     access: [memory, given_docs, web_open, web_docs]
     checks:
@@ -63,7 +63,7 @@ questions:
   # form, a pickled.yml, and the run command. A stale `npm install` form
   # means the agent drifted off the registered docs.
   - id: install
-    ask: How do I install pickled and run my first check?
+    prompt: How do I install pickled and run my first check?
     agents: [quick]
     access: [given_getting_started, given_docs]
     checks:
@@ -74,7 +74,7 @@ questions:
   # but not shipped; an agent that claims it is the exact false-support
   # answer pickled exists to catch.
   - id: tool_modes
-    ask: Which tool modes can a pickled agent use today, and which agent or provider does each need?
+    prompt: Which tool modes can a pickled agent use today, and which agent or provider does each need?
     agents: [quick]
     access: [given_docs, given_llms]
     checks:
