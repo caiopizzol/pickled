@@ -8,6 +8,7 @@ on:
     paths:
       - "apps/cli/**"
       - "packages/core/**"
+      - "packages/config/**"
 
 jobs:
   release:

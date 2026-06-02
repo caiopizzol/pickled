@@ -28,11 +28,8 @@ export interface PublicAccess {
   /** A registered source id, or "none" for the no-context baseline. */
   source: string;
   tools: "none" | "web" | "mcp";
-  /** Required when tools is "mcp"; forbidden otherwise. */
-  servers?: Record<
-    string,
-    { type?: string; url: string; headers?: Record<string, string> }
-  >;
+  /** Required when tools is "mcp"; forbidden otherwise. HTTP transport only. */
+  servers?: Record<string, { url: string; headers?: Record<string, string> }>;
 }
 
 export interface PublicChecks {

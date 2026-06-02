@@ -16,6 +16,15 @@ const PROVIDERS: Record<string, TargetCategory> = {
   "codex-cli": "cli",
 };
 
+const ALLOWED_TOP_LEVEL = new Set([
+  "product",
+  "sources",
+  "agents",
+  "access",
+  "questions",
+  "threshold",
+]);
+
 /**
  * Validate the public config in its own vocabulary, so users never see
  * internal terms (scenario/target/toolset) in errors. The internal
@@ -24,6 +33,13 @@ const PROVIDERS: Record<string, TargetCategory> = {
 export function validatePublicConfig(pub: PublicConfig): void {
   if (!pub || typeof pub !== "object") {
     throw new Error("pickled.yml: config must be an object");
+  }
+  for (const key of Object.keys(pub)) {
+    if (!ALLOWED_TOP_LEVEL.has(key)) {
+      throw new Error(
+        `pickled.yml: unknown top-level key "${key}". Allowed: product, sources, agents, access, questions, threshold.`,
+      );
+    }
   }
   if (!pub.product?.name) {
     throw new Error("pickled.yml: 'product.name' is required");
@@ -35,6 +51,13 @@ export function validatePublicConfig(pub: PublicConfig): void {
   const sourceIds = new Set(Object.keys(pub.sources ?? {}));
   if (sourceIds.has("none")) {
     throw new Error('pickled.yml: source id "none" is reserved');
+  }
+  for (const [id, value] of Object.entries(pub.sources ?? {})) {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error(
+        `pickled.yml: source "${id}" must be a non-empty URL or file path string. Object sources (codebase globs, byte limits) are not part of the public schema yet.`,
+      );
+    }
   }
 
   const agentNames = new Set(Object.keys(pub.agents ?? {}));
@@ -79,6 +102,21 @@ export function validatePublicConfig(pub: PublicConfig): void {
       throw new Error(
         `pickled.yml: access "${name}" declares 'servers' but tools is "${access.tools}" (servers only valid with tools: mcp)`,
       );
+    }
+    for (const [label, server] of Object.entries(access.servers ?? {})) {
+      const url = (server as { url?: unknown }).url;
+      if (typeof url !== "string" || !/^https?:\/\//.test(url)) {
+        throw new Error(
+          `pickled.yml: access "${name}" MCP server "${label}" needs an http(s) 'url'`,
+        );
+      }
+      for (const key of Object.keys(server as Record<string, unknown>)) {
+        if (key !== "url" && key !== "headers") {
+          throw new Error(
+            `pickled.yml: access "${name}" MCP server "${label}" has unsupported field "${key}". Public MCP servers accept only 'url' and 'headers' (HTTP transport).`,
+          );
+        }
+      }
     }
   }
 
@@ -179,10 +217,8 @@ export function compilePublicConfig(pub: PublicConfig): CheckConfig {
     } else {
       const mcpServers: Record<string, McpServerConfig> = {};
       for (const [label, server] of Object.entries(access.servers ?? {})) {
-        const cfg: McpServerConfig = {
-          type: (server.type as McpServerConfig["type"]) ?? "http",
-          url: server.url,
-        };
+        // Public MCP is HTTP-only; the transport is fixed, not user-set.
+        const cfg: McpServerConfig = { type: "http", url: server.url };
         if (server.headers) cfg.headers = server.headers;
         mcpServers[label] = cfg;
       }
