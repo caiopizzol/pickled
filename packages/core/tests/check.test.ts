@@ -684,6 +684,11 @@ describe("runCheck matrix mode", () => {
       const cell = report.scenarios[0]!.cells![0]!;
       expect(cell.answerable).toBe("NO");
       expect(cell.confidence).toBe(0);
+      // The veto names the semantic web_search label (server-side web targets
+      // push no SDK auto-permit entry, so the diagnostic must come from
+      // provenance.expectedLabels, not the empty allow-list).
+      expect(cell.reason).toContain("web_search");
+      expect(cell.reason).not.toContain("none of []");
     });
   });
 
@@ -2153,6 +2158,48 @@ describe("runCheck plan + sample + max-cells", () => {
       expect(report.plan?.selectedCells).toBe(1);
       expect(report.scenarios[0]!.cells).toHaveLength(1);
       expect(report.scenarios[0]!.cells![0]?.cell.access).toBeDefined();
+    });
+  });
+
+  test("a target error keeps the cell's access label and taskKind", async () => {
+    await withTempProject("# README", async (path) => {
+      const config: CheckConfig = {
+        tool: { name: "t", description: "d" },
+        toolsets: { none: {} },
+        targets: { a: { category: "cli", provider: "claude-code" } },
+        docs: { sources: { readme: "./README.md" } },
+        scenarios: [
+          {
+            name: "Probe",
+            prompt: "?",
+            matrix: {
+              interfaces: ["a"],
+              accessPairs: [
+                { access: "injected", source: "readme", toolset: "none" },
+              ],
+            },
+            expected: { includes: ["x"] },
+          },
+        ],
+      };
+      const report = await runCheck(
+        { name: "t", description: "d", path },
+        config,
+        {
+          targetFactory: () => ({
+            category: "cli",
+            provider: "claude-code",
+            name: "boom",
+            async run(): Promise<never> {
+              throw new Error("target exploded");
+            },
+          }),
+        },
+      );
+      const cell = report.scenarios[0]!.cells![0]!;
+      expect(cell.error).toContain("target exploded");
+      expect(cell.cell.access).toBe("injected");
+      expect(cell.taskKind).toBe("answer");
     });
   });
 
