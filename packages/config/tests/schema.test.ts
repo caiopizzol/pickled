@@ -94,9 +94,10 @@ describe("pickled.schema.json", () => {
   });
 
   // Each bad config plus which validator(s) must reject it. The loader is the
-  // authoritative gate; the schema is a shape layer that is stricter on some
-  // structural errors (unknown top-level key) and looser on cross-references
-  // (which the loader owns, so they are not listed here).
+  // authoritative gate; the schema is a shape layer that agrees on structural
+  // errors (unknown top-level keys, bad shapes) and is looser only on
+  // cross-references (unknown source/agent/access ids), which the loader owns,
+  // so those are not listed here.
   const INVALID: Array<{
     label: string;
     yaml: string;
@@ -171,6 +172,22 @@ questions:
       loaderRejects: true,
     },
     {
+      label: "MCP server url is not http(s)",
+      yaml: `
+product: { name: t, description: d }
+agents: { q: { provider: claude-code, model: m } }
+access:
+  mcp_x:
+    source: none
+    tools: mcp
+    servers: { s: { url: ftp://x/mcp } }
+questions:
+  - { id: q, ask: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+`,
+      schemaRejects: true,
+      loaderRejects: true,
+    },
+    {
       label: "bad examples shape (pass is not an array)",
       yaml: `
 product: { name: t, description: d }
@@ -188,7 +205,7 @@ questions:
       loaderRejects: true,
     },
     {
-      label: "unknown top-level key (schema catches what the loader ignores)",
+      label: "unknown top-level key (rejected by both)",
       yaml: `
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
@@ -198,7 +215,7 @@ questions:
 typo_section: oops
 `,
       schemaRejects: true,
-      loaderRejects: false,
+      loaderRejects: true,
     },
   ];
 

@@ -16,6 +16,15 @@ const PROVIDERS: Record<string, TargetCategory> = {
   "codex-cli": "cli",
 };
 
+const ALLOWED_TOP_LEVEL = new Set([
+  "product",
+  "sources",
+  "agents",
+  "access",
+  "questions",
+  "threshold",
+]);
+
 /**
  * Validate the public config in its own vocabulary, so users never see
  * internal terms (scenario/target/toolset) in errors. The internal
@@ -24,6 +33,13 @@ const PROVIDERS: Record<string, TargetCategory> = {
 export function validatePublicConfig(pub: PublicConfig): void {
   if (!pub || typeof pub !== "object") {
     throw new Error("pickled.yml: config must be an object");
+  }
+  for (const key of Object.keys(pub)) {
+    if (!ALLOWED_TOP_LEVEL.has(key)) {
+      throw new Error(
+        `pickled.yml: unknown top-level key "${key}". Allowed: product, sources, agents, access, questions, threshold.`,
+      );
+    }
   }
   if (!pub.product?.name) {
     throw new Error("pickled.yml: 'product.name' is required");
@@ -89,7 +105,7 @@ export function validatePublicConfig(pub: PublicConfig): void {
     }
     for (const [label, server] of Object.entries(access.servers ?? {})) {
       const url = (server as { url?: unknown }).url;
-      if (typeof url !== "string" || url.length === 0) {
+      if (typeof url !== "string" || !/^https?:\/\//.test(url)) {
         throw new Error(
           `pickled.yml: access "${name}" MCP server "${label}" needs an http(s) 'url'`,
         );

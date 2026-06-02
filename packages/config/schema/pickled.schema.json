@@ -58,7 +58,7 @@
       "required": ["url"],
       "additionalProperties": false,
       "properties": {
-        "url": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^https?://" },
         "headers": {
           "type": "object",
           "additionalProperties": { "type": "string" }
