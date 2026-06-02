@@ -18,3 +18,20 @@ export const DEFAULT_DISALLOWED_TOOLS = [
   "Write",
   "NotebookEdit",
 ];
+
+/**
+ * Workspace edit profile for build mode. Adds the structured edit tools to the
+ * read/inspect set so an edit-capable agent can modify a throwaway workspace.
+ * Internal only; selected by the runner for `kind: build`, never authored in
+ * the public schema. Paired with permissionMode "bypassPermissions" inside the
+ * temp workspace (the containment boundary).
+ */
+export const EDIT_ALLOWED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "Bash",
+  "Edit",
+  "MultiEdit",
+  "Write",
+];

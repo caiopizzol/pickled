@@ -4,6 +4,7 @@ import type { Target, TargetCategory } from "@pickled-dev/config";
 import {
   DEFAULT_ALLOWED_TOOLS,
   DEFAULT_DISALLOWED_TOOLS,
+  EDIT_ALLOWED_TOOLS,
 } from "@pickled-dev/config";
 import { buildCitationPrompt } from "../citation-prompt.js";
 import { buildDiscoveryPrompt } from "../discovery-prompt.js";
@@ -13,6 +14,74 @@ import type {
   TargetResult,
   TargetRunner,
 } from "../types.js";
+
+/**
+ * Build the Claude Agent SDK options for a run. Extracted from `run` so the
+ * tool/permission profile is testable without invoking the SDK. In build mode
+ * (`options.editMode`) the agent gets the workspace edit profile plus
+ * `bypassPermissions`, so it can edit files and run commands unattended inside
+ * the throwaway workspace (the containment boundary); answer mode keeps the
+ * read-biased defaults and `acceptEdits`.
+ */
+export function buildAgentOptions(
+  config: Target,
+  options: RunOptions,
+): ClaudeAgentOptions {
+  const {
+    tool,
+    cwd,
+    context,
+    docs,
+    requiredSources,
+    discovery,
+    restrictBuiltinTools,
+    editMode,
+  } = options;
+
+  // Discovery-mode cells get a different system prompt: no injected sources,
+  // agent uses its tools to research, optional canonical-source hint.
+  const systemPrompt = discovery
+    ? buildDiscoveryPrompt(tool, discovery.sourceHint)
+    : buildCitationPrompt(tool, docs, requiredSources);
+
+  const agentOptions: ClaudeAgentOptions = {
+    cwd,
+    model: config.model ?? "sonnet",
+    systemPrompt,
+    allowedTools: editMode
+      ? EDIT_ALLOWED_TOOLS
+      : (context?.allowedTools ?? config.allowedTools ?? DEFAULT_ALLOWED_TOOLS),
+    disallowedTools: editMode
+      ? []
+      : (context?.disallowedTools ??
+        config.disallowedTools ??
+        DEFAULT_DISALLOWED_TOOLS),
+    permissionMode: editMode
+      ? "bypassPermissions"
+      : (config.permissionMode ?? "acceptEdits"),
+    maxTurns: config.maxTurns ?? 10,
+    maxThinkingTokens: config.maxThinkingTokens,
+    maxBudgetUsd: config.maxBudgetUsd,
+    mcpServers: (context?.mcpServers ??
+      config.mcpServers) as ClaudeAgentOptions["mcpServers"],
+    settingSources: [],
+  };
+
+  // SDK `tools` is what actually restricts built-in availability; allowedTools
+  // is only the auto-permission list. Build mode MUST keep the workspace tools
+  // available, so compose them with whatever access scope the runner passes
+  // (web/mcp cells) - the access scope must never strip Edit/Write/Bash. Answer
+  // mode keeps the runner's exact scope.
+  if (editMode) {
+    agentOptions.tools = [
+      ...new Set([...EDIT_ALLOWED_TOOLS, ...(restrictBuiltinTools ?? [])]),
+    ];
+  } else if (restrictBuiltinTools !== undefined) {
+    agentOptions.tools = restrictBuiltinTools;
+  }
+
+  return agentOptions;
+}
 
 export class ClaudeCodeTarget implements TargetRunner {
   readonly category: TargetCategory = "cli";
@@ -27,58 +96,9 @@ export class ClaudeCodeTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const {
-      tool,
-      cwd,
-      context,
-      docs,
-      requiredSources,
-      discovery,
-      restrictBuiltinTools,
-    } = options;
+    const agentOptions = buildAgentOptions(this.config, options);
     const toolsUsed: string[] = [];
     const sources: string[] = [];
-
-    // Discovery-mode cells (matrix runner sets options.discovery) get a
-    // different system prompt: no injected sources, agent uses its tools
-    // to research, optional canonical-source hint. Otherwise build the
-    // standard citation prompt that injects docs and demands a Sources block.
-    const systemPrompt = discovery
-      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
-      : buildCitationPrompt(tool, docs, requiredSources);
-
-    const agentOptions: ClaudeAgentOptions = {
-      cwd,
-      model: this.config.model ?? "sonnet",
-      systemPrompt,
-      allowedTools:
-        context?.allowedTools ??
-        this.config.allowedTools ??
-        DEFAULT_ALLOWED_TOOLS,
-      disallowedTools:
-        context?.disallowedTools ??
-        this.config.disallowedTools ??
-        DEFAULT_DISALLOWED_TOOLS,
-      permissionMode: this.config.permissionMode ?? "acceptEdits",
-      maxTurns: this.config.maxTurns ?? 10,
-      maxThinkingTokens: this.config.maxThinkingTokens,
-      maxBudgetUsd: this.config.maxBudgetUsd,
-      mcpServers: (context?.mcpServers ??
-        this.config.mcpServers) as ClaudeAgentOptions["mcpServers"],
-      settingSources: [],
-    };
-
-    // SDK `tools` controls which built-in tools are available; without
-    // restricting it, allowedTools is just an auto-permission list and the
-    // agent can still call any built-in (Read/Bash/Glob), bypassing the
-    // configured tool path. Matrix runner sets restrictBuiltinTools for
-    // non-none cells. Empty array = no built-ins (MCP cells, where the
-    // tools come from mcpServers). Non-empty = scope to those built-ins
-    // (web cells: WebSearch/WebFetch).
-    if (restrictBuiltinTools !== undefined) {
-      agentOptions.tools = restrictBuiltinTools;
-    }
-
     const allResponses: ResponseEntry[] = [];
     let lastAssistantText = "";
     let finalResult = "";
