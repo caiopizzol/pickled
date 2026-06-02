@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: `mustMention`, `mustMentionOneOf`, `mustNotMention`, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that tests whether real agents can answer and build with your product (Claude Code, Codex CLI, Anthropic API, OpenAI API), across declared context paths (a source injected, or reached through `web` / `mcp` tools), using deterministic evidence: text checks (`mustMention`, `mustMentionOneOf`, `mustNotMention`), tool-use provenance, and build verification. No LLM grades another LLM.
 
 ## Install
 
@@ -14,8 +14,9 @@ bun add -g @pickled-dev/cli
 
 - `pickled init [path]` - scaffold a pickled.yml config in your repo.
 - `pickled audit [path]` - static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.
-- `pickled check [path]` - run the questions against the configured agents. `--plan` previews the cells without calling any model.
-- `pickled test [path]` - score declared example answers against each question's checks, offline. No model calls.
+- `pickled check [path]` - run the answer tasks against the configured agents. `--plan` previews the cells without calling any model.
+- `pickled build [path]` - run the build tasks: the agent edits a workspace and your `verify` commands must pass. `--plan` previews cells and executions.
+- `pickled test [path]` - score declared example answers against each answer task's checks, offline. No model calls.
 
 ## Minimum config
 
@@ -35,9 +36,9 @@ agents:
 access:
   given_readme: { source: readme, tools: none }
 
-questions:
+tasks:
   - id: install
-    ask: How do I install your product?
+    prompt: How do I install your product?
     agents: [quick]
     access: [given_readme]
     checks:
@@ -61,7 +62,7 @@ A registered source is the public context Pickled is allowed to score against: a
 
 ## Access: context paths
 
-A question runs once per `(agent × access)` pair. An access path is a named `(source, tools)` pair you compare across runs:
+A task runs as one cell per `(agent × access)` pair. An access path is a named `(source, tools)` pair you compare across runs:
 
 - `tools: none` - the source content is injected into the prompt; the agent answers from it.
 - `tools: web` - web research. On Claude Code the cell scopes built-ins to `[WebSearch, WebFetch]`; on the Anthropic API target it passes the server-side `web_search` tool (`web_search_20250305`) to `messages.create`; on the OpenAI API target it passes `web_search` to `responses.create`. The source is NOT injected; the agent must reach the answer with the tool.
@@ -71,11 +72,15 @@ A question runs once per `(agent × access)` pair. An access path is a named `(s
 
 ## Checks
 
-A question carries at least one check. Each entry counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
+An answer task carries at least one check. Each entry counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
 
 - `mustMention` - substrings the answer must contain.
 - `mustMentionOneOf` - groups of `{ label, values }`; each group is satisfied when the answer contains at least one of its values.
 - `mustNotMention` - substrings the answer must not contain.
+
+## Build tasks
+
+A build task (`kind: build`) measures whether an agent can BUILD with your context, not just answer. The agent edits a throwaway `workspace` and the task passes when your `verify` commands do; build tasks have no answer `checks`. Run them with `pickled build`. Each `(agent × access)` cell runs `trials` times in a fresh workspace and reports the pass rate (k of n) as `Built`, `Partially built`, or `Did not build` (never the grounded answer scale). Build tasks run on edit-capable CLI agents (`claude-code`, `codex-cli`) only.
 
 ## Agents today
 
@@ -95,18 +100,12 @@ JSON output stays raw. It carries machine fields (`answerable`, `confidence`, `c
 For paid agents, a run grows expensive as you add agents and access paths. These flags keep it in check:
 
 - `--plan` (dry run): expand the run, apply filters and sampling, print the cell list, exit. Zero model calls.
-- `--max-cells N`: hard fail before any model call if the selected cell count exceeds N.
-- `--sample N`: deterministic per-question sample.
+- `--max-cells N`: hard fail before any model call if the selected execution count exceeds N. Build cells expand by `trials`, so this gates `cells × trials`.
+- `--sample N`: deterministic per-task sample.
 - `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` are reproducible.
-- `--question ID`, `--agent NAME`, `--access NAME`: narrow a run by names from `pickled.yml`.
+- `--task ID`, `--agent NAME`, `--access NAME`: narrow a run by names from `pickled.yml`.
 
-The report header (text and JSON) records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
-
-## What to preserve when describing pickled
-
-- It tests what agents understand. It is not a generic LLM eval framework.
-- Scoring is deterministic by contract. No LLM grades the answer.
-- "Stay fresh" is footer chrome only. The retired draft branding for the scoring metric is gone; do not reintroduce it.
+The report header (text and JSON) records `expandedCells`, `selectedCells`, `selectedExecutions`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
 
 ## Read more
 

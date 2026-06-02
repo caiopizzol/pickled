@@ -1,6 +1,6 @@
 # 🥒 pickled
 
-> Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
+> Pickled tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence.
 
 ## Why
 
@@ -13,9 +13,9 @@ Four terms:
 - **Agent** is who answers: Claude Code, Codex CLI, Anthropic API, OpenAI API.
 - **Source** is the public context Pickled may score against: a local file or a URL. Anything not registered does not count.
 - **Access** is a named context path: a `(source, tools)` pair. `tools` is `none` (the source is injected), `web`, or `mcp`.
-- **Question** is what you ask, plus the checks the answer must satisfy.
+- **Task** is the unit of work. An answer task asks a question and scores the answer with checks; a build task has the agent edit a workspace and passes when your `verify` commands do.
 
-A question runs once per `(agent × access)` pair, and each pair is graded on its own.
+A task runs as one cell per `(agent × access)` pair, and each cell is graded on its own.
 
 ## What it checks
 
@@ -53,9 +53,9 @@ access:
   given_docs: { source: docs, tools: none } # docs content injected
   web_open: { source: none, tools: web } # open web discovery
 
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
     access: [memory, given_docs, web_open]
     checks:
@@ -64,7 +64,7 @@ questions:
 threshold: 60
 ```
 
-That question runs three cells, one per access path, and grades each on its own. `memory` answers from model memory; `given_docs` reads the docs you registered; `web_open` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell checks `mustMention`. Compare the verdicts to see which context path the agent actually needed to get it right.
+That task runs three cells, one per access path, and grades each on its own. `memory` answers from model memory; `given_docs` reads the docs you registered; `web_open` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell checks `mustMention`. Compare the verdicts to see which context path the agent actually needed to get it right.
 
 ## Read more
 

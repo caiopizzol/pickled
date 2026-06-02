@@ -7,7 +7,7 @@ Tool: t
 Sources: [readme]
 Tasks: 1
 
-Question: s
+Task: s
   ✓ Well grounded (100%)
   cited: [readme]
 
@@ -23,7 +23,7 @@ Tool: t
 Sources: [readme]
 Tasks: 1
 
-Question: s
+Task: s
   ✓ Well grounded (100%)
   cited: [readme]
 
@@ -39,7 +39,7 @@ Tool: t
 Sources: [readme]
 Tasks: 1
 
-Question: s
+Task: s
   ⚠ Partially grounded (65%)
   reason: All required sources cited: readme
   cited: [readme]
@@ -56,7 +56,7 @@ Tool: t
 Sources: [readme]
 Tasks: 1
 
-Question: s
+Task: s
   ✗ Ungrounded (0%)
   reason: No required sources cited
   missing: [readme]
@@ -73,7 +73,7 @@ Tool: t
 Sources: [readme]
 Tasks: 2
 
-Question: Installation
+Task: Installation
   [quick] ✓ Well grounded (100%)
     cited: [readme]
   [thorough] ✓ Well grounded (100%)

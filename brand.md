@@ -11,7 +11,7 @@ language: en
 
 ### Overview
 
-Pickled is an open-source CLI that asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks. Checks are `mustMention`, `mustMentionOneOf`, `mustNotMention`, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence. The evidence is text checks (`mustMention`, `mustMentionOneOf`, `mustNotMention`), tool-use provenance, and build verification. No LLM grades another LLM.
 
 Pickled started as a freshness checker for developer tool docs. It got rewritten when the real problem became clear, and the real problem has three surfaces, not one.
 
@@ -21,7 +21,7 @@ Pickled started as a freshness checker for developer tool docs. It got rewritten
 
 The same product can be legible in one agent surface and illegible in another, because each one gets a different slice. Pickled measures that per surface.
 
-**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, access paths, questions, and checks. The framework runs each question once per `(agent x access)` pair and scores the answer with deterministic checks. Receipts per cell.
+**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, access paths, and tasks. The framework runs each task once per `(agent x access)` pair and scores it with deterministic evidence. Receipts per cell.
 
 **The problem.** Every API-backed product now has multiple readers. Some are people. Some are agents. The agents get different context bundles depending on which surface they live in, and each one fails in characteristic ways:
 
@@ -33,7 +33,7 @@ The same product can be legible in one agent surface and illegible in another, b
 
 Generic eval frameworks ask "did the model produce the expected output?" Documentation platforms ask "is the page published?" Pickled asks the specific question those tools usually don't: can this agent, on this surface, use this product's actually-declared context to answer this product question correctly?
 
-**Transformation.** Before: you hope AI gets your product right and find out from angry GitHub issues. After: you have a deterministic score, per surface, per question, that fails CI when it drops.
+**Transformation.** Before: you hope AI gets your product right and find out from angry GitHub issues. After: you have a deterministic score, per surface, per task, that fails CI when it drops.
 
 **Long-term ambition.** Become the standard CI check for agent legibility across API-backed products.
 
@@ -61,7 +61,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 - **Checks you control.** A grounded answer can still be wrong. You declare what the answer must mention, must not mention, or must satisfy one of, and the check is matched deterministically.
 - **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Antigravity CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
 - **Source-agnostic.** Registers anything an agent can read. Public docs, private docs, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. URLs or local paths.
-- **The report is the receipt.** Each run produces a structured artifact: question, agent, access path, response, registered sources cited, checks satisfied and missed, threshold result. The run fails on the receipt, not on a vibe.
+- **The report is the receipt.** Each run produces a structured artifact: task, agent, access path, response, registered sources cited, checks satisfied and missed, threshold result. The run fails on the receipt, not on a vibe.
 - **CLI-first. CI-native. No dashboard required.**
 - **Open source. MIT.**
 
@@ -107,7 +107,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 The second case is not secondary. It is where prompt surface becomes product-critical, and it is the bridge between pickled and benchmarks like comment-bench and agents-md-bench.
 
-**Base message.** Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
+**Base message.** Pickled tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence.
 
 This is the one-sentence description used as the lead line in `README.md`, `apps/cli/README.md`, and the homepage hero subtitle. Keep it verbatim across surfaces so the npm page, the GitHub repo overview, and any external write-up all read the same. When the product story shifts (new axis, new signal, new scoring rule), update this line first and propagate; do not let READMEs drift from it.
 
@@ -230,7 +230,7 @@ pickled
 
 **Checks you control.** A grounded answer can still be wrong. You declare what the answer must mention, must not mention, or must satisfy one of, and the check is matched deterministically.
 
-**The report is the receipt.** Each run leaves an artifact: question, agent, access path, response, sources cited, checks satisfied and missed, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
+**The report is the receipt.** Each run leaves an artifact: task, agent, access path, response, sources cited, checks satisfied and missed, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
 
 **Internal-team use is first-class.** Pickled is for teams testing how the outside world's agents understand their product, and for teams testing whether their own context steers their own agents correctly inside their own codebase. Comments are prompt surface. Stale prompt surface is product debt, not harmless prose.
 
@@ -284,15 +284,15 @@ Every interface should use the same feedback grammar: CLI, CI logs, web demos, a
 **Default structure.**
 
 1. Command or screen name.
-2. Scope metadata: product, sources, questions, agent, or access path when relevant.
-3. Question result.
+2. Scope metadata: product, sources, tasks, agent, or access path when relevant.
+3. Task result (answer or build).
 4. Evidence lines.
 5. Overall score and threshold result.
 6. One next-action sentence.
 
-**Question result grammar.**
+**Task result grammar.**
 
-- `Question: Error handling`
+- `Task: Error handling`
 - `✓ Well grounded (92%)`
 - `✓ Grounded (84%)`
 - `⚠ Partially grounded (65%)`
@@ -342,9 +342,9 @@ Implementation rule: one shared helper returns the label, icon, and tone. Both p
 pickled check
 Tool: zod
 Sources: [readme], [llms]
-Questions: 1
+Tasks: 1
 
-Question: Error handling
+Task: Error handling
   ⚠ Partially grounded (50%)
   reason: missing includes: "z.treeifyError"
 
@@ -391,7 +391,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **LinkedIn.**
 
-pickled is an open-source CLI that asks your product's real questions at real agents, starting with Claude Code and Codex CLI, down the context paths your team controls: README, llms.txt, docs, MCP servers, hosted source bundles, internal handbooks. Checks are matched deterministically. No LLM judges the answer. MIT.
+pickled is an open-source CLI that tests whether real agents can answer and build with your product, starting with Claude Code and Codex CLI, across the context paths your team controls: README, llms.txt, docs, MCP servers, hosted source bundles, internal handbooks. Evidence is matched deterministically. No LLM judges the answer. MIT.
 
 **Instagram.**
 
@@ -504,7 +504,7 @@ The palette is electric, not earthy. The pickle here is preserved in glass under
 
 - **Display.** Space Grotesk, 600–700. Headlines, section titles, strong product statements, campaign copy. The feel should be technical, compact, and slightly odd.
 - **Body.** DM Sans, 400–500. Paragraphs, UI copy, docs, cards, navigation. Keep line lengths moderate.
-- **Mono.** JetBrains Mono, 400–600 (Fira Code as fallback). CLI commands, source IDs, question ids, agent names, citations, config snippets, score numbers, report output. Mono text should feel like product evidence, not decoration.
+- **Mono.** JetBrains Mono, 400–600 (Fira Code as fallback). CLI commands, source IDs, task ids, agent names, citations, config snippets, score numbers, report output. Mono text should feel like product evidence, not decoration.
 
 The score number is always mono. Always. It is the receipt.
 

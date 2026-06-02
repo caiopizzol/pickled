@@ -251,7 +251,7 @@ export interface CheckReport {
   };
   /**
    * Cell counts and sampling provenance for a run. `expandedCells` is the
-   * count after `--question` / `--agent` / `--access` filters but before
+   * count after `--task` / `--agent` / `--access` filters but before
    * sampling. `selectedCells` is the count after
    * sampling (equal to `expandedCells` when `--sample` was not passed).
    * `seed` is recorded only when sampling was active.

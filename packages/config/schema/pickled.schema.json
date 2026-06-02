@@ -85,7 +85,7 @@
     },
     "agents": {
       "type": "object",
-      "description": "Agents or model interfaces that answer each question.",
+      "description": "Agents or model interfaces that run each task.",
       "minProperties": 1,
       "additionalProperties": { "$ref": "#/$defs/agent" }
     },
@@ -151,7 +151,7 @@
     },
     "checks": {
       "type": "object",
-      "description": "The answer contract for a question. At least one check is required.",
+      "description": "The answer contract for an answer task. At least one check is required.",
       "additionalProperties": false,
       "properties": {
         "mustMention": {
@@ -249,7 +249,7 @@
         "prompt": {
           "type": "string",
           "minLength": 1,
-          "description": "The question to answer, or the work to build.",
+          "description": "Prompt for the answer task, or the work to build.",
           "examples": ["How do I install my-product?"]
         },
         "kind": {

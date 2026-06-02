@@ -49,9 +49,9 @@ access:
         headers:
           CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 
-questions:
+tasks:
   - id: auth-setup
-    ask: How do I authenticate with my-product?
+    prompt: How do I authenticate with my-product?
     agents: [quick]
     access: [given_docs_bundle, web_docs_bundle, mcp_context7]
     checks:

@@ -395,7 +395,7 @@ export function formatCheckReport(
     }
 
     for (const [scenarioName, scenarioResults] of byScenario) {
-      lines.push(`Question: ${scenarioName}`);
+      lines.push(`Task: ${scenarioName}`);
 
       for (const result of scenarioResults) {
         if (result.cells) {
@@ -412,7 +412,7 @@ export function formatCheckReport(
     }
   } else {
     for (const result of results) {
-      lines.push(`Question: ${result.scenario.name}`);
+      lines.push(`Task: ${result.scenario.name}`);
       if (result.cells) {
         lines.push(...formatMatrixBlock(result, "  "));
       } else if (result.surfaces) {

@@ -55,9 +55,9 @@ access:
       mintlify:
         url: https://docs.my-product.dev/mcp
 
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
     access: [memory, given_llms, web_llms, mcp_mintlify]
     checks:

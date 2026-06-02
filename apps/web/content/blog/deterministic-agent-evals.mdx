@@ -40,9 +40,9 @@ agents:
 access:
   given_readme: { source: readme, tools: none }
 
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
     access: [given_readme]
     checks:

@@ -20,15 +20,18 @@ agents:
     model: claude-haiku-4-5
 
 # Named context paths. Each pairs a source with a tool mode. The point is
-# to compare them: ask the same question down each path and see which one
+# to compare them: run the same task down each path and see which one
 # gets the agent to the right answer.
 access:
   memory: { source: none, tools: none } # no context, model memory only
   given_readme: { source: readme, tools: none } # your README injected
 
-questions:
+# Tasks are the unit of work. An answer task (the default) asks a question and
+# scores the answer with checks. A build task (kind: build) has the agent edit
+# a workspace and runs verify commands; see docs.pickled.dev/pickled-yml.
+tasks:
   - id: getting-started
-    ask: How do I install and set up this product?
+    prompt: How do I install and set up this product?
     agents: [claude]
     access: [memory, given_readme]
     checks:
@@ -57,9 +60,7 @@ export async function init(targetPath: string): Promise<void> {
   console.log(chalk.green("Created pickled.yml"));
   console.log();
   console.log(chalk.dim("Next steps:"));
-  console.log(
-    chalk.dim("  1. Edit pickled.yml: list your sources and questions"),
-  );
+  console.log(chalk.dim("  1. Edit pickled.yml: list your sources and tasks"));
   console.log(chalk.dim("  2. Preview the run: pickled check --plan"));
   console.log(chalk.dim("  3. Run it: pickled check"));
   console.log();

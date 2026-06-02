@@ -15,8 +15,8 @@ export function Hero() {
             <span className="hero-lede-hook">
               For products developers and agents read.
             </span>{" "}
-            An open-source CLI that asks real product questions across agents
-            and context paths, then scores each answer with deterministic
+            An open-source CLI that tests whether agents can answer and build
+            with your product across context paths, scored by deterministic
             checks. No LLM grades another LLM.
           </p>
           <div className="hero-actions">
@@ -45,7 +45,7 @@ export function Hero() {
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Dim>Question: How do I install pickled?</T.Dim>
+              <T.Dim>Task: How do I install pickled?</T.Dim>
             </TerminalLine>
             <TerminalLine>
               &nbsp;&nbsp;<T.Success>✓ Well grounded</T.Success>{" "}
@@ -53,7 +53,7 @@ export function Hero() {
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Dim>Question: Basic usage</T.Dim>
+              <T.Dim>Task: Basic usage</T.Dim>
             </TerminalLine>
             <TerminalLine>
               &nbsp;&nbsp;<T.Warning>⚠ Partially grounded</T.Warning>{" "}
@@ -61,7 +61,7 @@ export function Hero() {
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Dim>Question: Config format</T.Dim>
+              <T.Dim>Task: Config format</T.Dim>
             </TerminalLine>
             <TerminalLine>
               &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}

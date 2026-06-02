@@ -38,6 +38,7 @@ program
 
 program
   .command("check")
+  .summary("Run answer tasks against your sources")
   .description("Run answer tasks: ask the agents and score their answers")
   .argument("[path]", "Project path", ".")
   .option("--json", "Output as JSON")
@@ -55,7 +56,8 @@ program
 
 program
   .command("build")
-  .description("Run build tasks: the agent edits a workspace; verify must pass")
+  .summary("Run build tasks in a fresh workspace")
+  .description("Run build tasks: the agent edits a workspace, verify must pass")
   .argument("[path]", "Project path", ".")
   .option("--json", "Output as JSON")
   .option("-o, --output <file>", "Save report to file")

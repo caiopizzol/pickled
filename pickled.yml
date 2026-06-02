@@ -12,7 +12,7 @@ sources:
   llms: ./llms.txt
 
 # The agents that answer. `quick` is the cheap default; the two API agents
-# run the same question through the Anthropic and OpenAI servers so the
+# run the same task through the Anthropic and OpenAI servers so the
 # positioning answer can be compared across three providers. The API agents
 # need ANTHROPIC_API_KEY_PICKLED / OPENAI_API_KEY_PICKLED at run time.
 agents:
@@ -32,7 +32,7 @@ agents:
     maxTokens: 4096
 
 # Named context paths. Each pairs a source with a tool mode. This is the
-# whole point of pickled: ask the same question down different paths and
+# whole point of pickled: run the same task down different paths and
 # see which one gets the agent to the right answer.
 access:
   memory: { source: none, tools: none } # model memory, no context

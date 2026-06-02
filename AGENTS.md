@@ -4,7 +4,7 @@ Router for agents working on `pickled`. Keep this file short. Real specs live in
 
 ## What pickled is
 
-An open-source CLI that tests whether AI agents actually understand a product. It runs questions against real agent targets down declared context paths and checks each answer against a deterministic contract: must-mention, one-of mention, must-not-mention, and tool-use provenance. No LLM grades another LLM.
+An open-source CLI that tests whether AI agents can answer and build with a product. It runs tasks against real agent targets down declared context paths: answer tasks check the response against a deterministic contract (must-mention, one-of mention, must-not-mention, tool-use provenance), and build tasks have the agent edit a workspace and pass the declared verify commands. No LLM grades another LLM.
 
 ## Where the rules live
 
@@ -18,11 +18,11 @@ An open-source CLI that tests whether AI agents actually understand a product. I
 These are the rules new edits most often break. Each lives in a single source of truth; do not paraphrase them here.
 
 1. **Cell verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
-2. **Cell verdict determines the label family.** Each `(agent × access)` cell scores on its own; a question has no single verdict. Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, or Error. See `packages/core/src/report-status.ts`.
+2. **Cell verdict determines the label family.** Each `(agent × access)` cell scores on its own; a task has no single verdict. Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, or Error. See `packages/core/src/report-status.ts`.
 3. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. See `reporter.ts` near `formatOverall`.
 4. **JSON output stays raw.** It carries machine fields (`answerable`, `confidence`, `citations`), not derived human labels. Human labels are derived in each renderer.
 5. **Registered source contract.** Only sources declared in `pickled.yml`'s `sources` count for scoring. The contract is the strength, not the limitation.
-6. **A non-none access path skips citation scoring.** When a question reaches a source through `web`/`mcp` tools (not injection), the verdict rests on the `checks` plus a tool-use provenance veto, not on `## Sources` citations. See `check.ts` near `provenanceFailed`.
+6. **A non-none access path skips citation scoring.** When an answer task reaches a source through `web`/`mcp` tools (not injection), the verdict rests on the `checks` plus a tool-use provenance veto, not on `## Sources` citations. See `check.ts` near `provenanceFailed`.
 
 ## Runtime and toolchain
 

@@ -19,9 +19,9 @@ agents:
 access:
   injected: { source: llms, tools: none }
 
-questions:
+tasks:
   - id: error-handling
-    ask: How do I get error messages from failed validation?
+    prompt: How do I get error messages from failed validation?
     agents: [quick]
     access: [injected]
     checks:
@@ -43,14 +43,14 @@ export function Example() {
           </h2>
           <p className="example-lede">
             Drop a <code className="inline">pickled.yml</code> next to your
-            sources. Declare the sources agents should use, the questions they
-            should answer, and the checks each answer must pass. Whether agents
-            reach your product through a public API, SDK docs,{" "}
+            sources. Declare the sources agents should use, the tasks they
+            should complete, and how each one is checked. Whether agents reach
+            your product through a public API, SDK docs,{" "}
             <code className="inline">llms.txt</code>,{" "}
             <code className="inline">CLAUDE.md</code>,{" "}
             <code className="inline">AGENTS.md</code>, JSDoc, or internal
-            runbooks, pickled tests whether they can answer from the sources you
-            declared. The example below is a public library.
+            runbooks, pickled tests whether they can answer and build from the
+            sources you declared. The example below is a public library.
           </p>
         </div>
 
@@ -75,7 +75,7 @@ export function Example() {
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
-              <T.Dim>Question: error-handling</T.Dim>
+              <T.Dim>Task: error-handling</T.Dim>
             </TerminalLine>
             <TerminalLine>
               &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}
