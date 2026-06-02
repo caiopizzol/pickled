@@ -35,7 +35,7 @@ These are the rules new edits most often break. Each lives in a single source of
 
 ## Release discipline
 
-A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**` or `packages/core/**` triggers a release via semantic-release, which publishes the CLI to npm. Two consequences:
+A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**`, `packages/core/**`, or `packages/config/**` triggers a release via semantic-release, which publishes the CLI to npm. Two consequences:
 
 - Bundle partial features into a single `feat:` commit so runtime ships with the schema. A `feat:` commit that lands schema-only forces a misleading release; future cleanup commits are then `chore:` against a public artifact that already claimed the feature.
 - The Release job runs `bun run verify` (tests, lint, builds, dogfood audit) before semantic-release. CI runs in parallel for surface signal; verify-in-release is the canonical publishability check. See `.github/workflows/release.yml`.
