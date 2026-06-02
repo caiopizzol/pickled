@@ -3,12 +3,12 @@ import { loadConfig, runExampleTests } from "@pickled-dev/core";
 import chalk from "chalk";
 
 export interface TestOptions {
-  question?: string;
+  task?: string;
 }
 
 /**
  * `pickled test` - score declared example answers (`examples.pass` /
- * `examples.fail`) against each question's deterministic contract, offline.
+ * `examples.fail`) against each answer task's deterministic contract, offline.
  * Zero model calls. Catches brittle or over-specific checks before a paid
  * run. Exits non-zero if any example does not behave as declared.
  */
@@ -26,10 +26,10 @@ export async function test(
     process.exit(1);
   }
 
-  if (options.question) {
-    const match = config.scenarios.filter((s) => s.name === options.question);
+  if (options.task) {
+    const match = config.scenarios.filter((s) => s.name === options.task);
     if (match.length === 0) {
-      console.error(chalk.red(`No question named "${options.question}".`));
+      console.error(chalk.red(`No task named "${options.task}".`));
       process.exit(1);
     }
     config = { ...config, scenarios: match };
@@ -40,7 +40,7 @@ export async function test(
   if (report.total === 0) {
     console.log(
       chalk.dim(
-        "No examples declared. Add examples.pass / examples.fail to a question to test its checks offline.",
+        "No examples declared. Add examples.pass / examples.fail to an answer task to test its checks offline.",
       ),
     );
     return;

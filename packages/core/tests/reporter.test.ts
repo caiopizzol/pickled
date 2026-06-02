@@ -162,8 +162,8 @@ describe("formatCheckReport", () => {
       },
     };
     const text = formatCheckReport(report, { threshold: 80 });
-    expect(text).toContain("Questions: 1");
-    expect(text).not.toContain("Questions: 0");
+    expect(text).toContain("Tasks: 1");
+    expect(text).not.toContain("Tasks: 0");
     expect(text).toContain("Cells: 2");
     expect(text).toContain("[quick · injected]");
     expect(text).toContain("[quick · web]");

@@ -132,7 +132,7 @@ export async function runCheck(
   const expandedCells = planMatrixCells(expanded, cellFilter);
   if (expandedCells.length === 0) {
     throw new Error(
-      "No cells matched the selected filters. Check --question, --agent, and --access.",
+      "No cells matched the selected filters. Check --task, --agent, and --access.",
     );
   }
   let selectedCells = expandedCells;
@@ -164,7 +164,7 @@ export async function runCheck(
         ? `${selectedExecutions} cells`
         : `${selectedExecutions} executions (${selectedCells.length} cells, build trials expanded)`;
     throw new Error(
-      `Matrix expands to ${cellNote}, exceeding --max-cells ${options.maxCells}. Add --question/--agent/--access filters, pass --sample N, or lower build trials.`,
+      `Matrix expands to ${cellNote}, exceeding --max-cells ${options.maxCells}. Add --task/--agent/--access filters, pass --sample N, or lower build trials.`,
     );
   }
 
