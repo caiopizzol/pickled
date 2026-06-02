@@ -1,4 +1,4 @@
-import type { PublicConfig } from "./public-types.js";
+import type { PublicAgent, PublicConfig, PublicTask } from "./public-types.js";
 import type {
   CheckConfig,
   ExpectedChecks,
@@ -21,7 +21,7 @@ const ALLOWED_TOP_LEVEL = new Set([
   "sources",
   "agents",
   "access",
-  "questions",
+  "tasks",
   "threshold",
 ]);
 
@@ -34,18 +34,24 @@ export function validatePublicConfig(pub: PublicConfig): void {
   if (!pub || typeof pub !== "object") {
     throw new Error("pickled.yml: config must be an object");
   }
+  // Hard rename (no alias): point old configs at the new vocabulary.
+  if ("questions" in pub) {
+    throw new Error(
+      'pickled.yml: "questions" was renamed to "tasks" (and each question\'s "ask" to "prompt"). Rename the top-level key and update each entry.',
+    );
+  }
   for (const key of Object.keys(pub)) {
     if (!ALLOWED_TOP_LEVEL.has(key)) {
       throw new Error(
-        `pickled.yml: unknown top-level key "${key}". Allowed: product, sources, agents, access, questions, threshold.`,
+        `pickled.yml: unknown top-level key "${key}". Allowed: product, sources, agents, access, tasks, threshold.`,
       );
     }
   }
   if (!pub.product?.name) {
     throw new Error("pickled.yml: 'product.name' is required");
   }
-  if (!Array.isArray(pub.questions) || pub.questions.length === 0) {
-    throw new Error("pickled.yml: 'questions' must be a non-empty array");
+  if (!Array.isArray(pub.tasks) || pub.tasks.length === 0) {
+    throw new Error("pickled.yml: 'tasks' must be a non-empty array");
   }
 
   const sourceIds = new Set(Object.keys(pub.sources ?? {}));
@@ -120,50 +126,133 @@ export function validatePublicConfig(pub: PublicConfig): void {
     }
   }
 
-  for (const q of pub.questions) {
-    if (!q.id || !q.ask) {
-      throw new Error("pickled.yml: every question needs 'id' and 'ask'");
-    }
-    if (!q.agents?.length) {
+  for (const t of pub.tasks) {
+    // Per-task migration nudge: ask -> prompt.
+    if (t.id && (t as { ask?: unknown }).ask !== undefined) {
       throw new Error(
-        `pickled.yml: question "${q.id}" needs at least one agent`,
+        `pickled.yml: task "${t.id}" uses "ask"; it was renamed to "prompt".`,
       );
     }
-    for (const a of q.agents) {
-      if (!agentNames.has(a)) {
-        throw new Error(
-          `pickled.yml: question "${q.id}" references unknown agent "${a}"`,
-        );
-      }
+    if (!t.id || !t.prompt) {
+      throw new Error("pickled.yml: every task needs 'id' and 'prompt'");
     }
-    if (!q.access?.length) {
+    const kind = t.kind ?? "answer";
+    if (kind !== "answer" && kind !== "build") {
       throw new Error(
-        `pickled.yml: question "${q.id}" needs at least one access`,
+        `pickled.yml: task "${t.id}" has unknown kind "${kind}". Use "answer" or "build".`,
       );
     }
-    for (const a of q.access) {
-      if (!accessNames.has(a)) {
-        throw new Error(
-          `pickled.yml: question "${q.id}" references unknown access "${a}"`,
-        );
-      }
-    }
-    const c = q.checks ?? {};
+    // Build is never inferred from shape: build-only fields require kind: build.
     if (
-      !c.mustMention?.length &&
-      !c.mustNotMention?.length &&
-      !c.mustMentionOneOf?.length
+      kind !== "build" &&
+      (t.workspace !== undefined ||
+        t.verify !== undefined ||
+        t.trials !== undefined)
     ) {
       throw new Error(
-        `pickled.yml: question "${q.id}" needs at least one of checks.mustMention / mustMentionOneOf / mustNotMention`,
+        `pickled.yml: task "${t.id}" has build-only fields (workspace/verify/trials) but kind is not "build". Set kind: build, or remove them.`,
       );
     }
-    for (const g of c.mustMentionOneOf ?? []) {
-      if (!g.label || !Array.isArray(g.values) || g.values.length === 0) {
+    if (!t.agents?.length) {
+      throw new Error(`pickled.yml: task "${t.id}" needs at least one agent`);
+    }
+    for (const a of t.agents) {
+      if (!agentNames.has(a)) {
         throw new Error(
-          `pickled.yml: question "${q.id}" mustMentionOneOf groups need a label and non-empty values`,
+          `pickled.yml: task "${t.id}" references unknown agent "${a}"`,
         );
       }
+    }
+    if (!t.access?.length) {
+      throw new Error(`pickled.yml: task "${t.id}" needs at least one access`);
+    }
+    for (const a of t.access) {
+      if (!accessNames.has(a)) {
+        throw new Error(
+          `pickled.yml: task "${t.id}" references unknown access "${a}"`,
+        );
+      }
+    }
+    if (kind === "build") validateBuildTask(t, pub.agents);
+    else validateAnswerTask(t);
+  }
+}
+
+/** Answer tasks prove success with deterministic text checks. */
+function validateAnswerTask(t: PublicTask): void {
+  const c = t.checks ?? {};
+  if (
+    !c.mustMention?.length &&
+    !c.mustNotMention?.length &&
+    !c.mustMentionOneOf?.length
+  ) {
+    throw new Error(
+      `pickled.yml: task "${t.id}" needs at least one of checks.mustMention / mustMentionOneOf / mustNotMention`,
+    );
+  }
+  for (const g of c.mustMentionOneOf ?? []) {
+    if (!g.label || !Array.isArray(g.values) || g.values.length === 0) {
+      throw new Error(
+        `pickled.yml: task "${t.id}" mustMentionOneOf groups need a label and non-empty values`,
+      );
+    }
+  }
+}
+
+/**
+ * Build tasks prove success with `verify`, not text checks. They forbid
+ * `checks`/`examples` (which score answer text), require a `workspace` + at
+ * least one `verify` command, and run only on edit-capable CLI agents (build
+ * edits files and runs code; API agents have no repo-edit loop).
+ */
+function validateBuildTask(
+  t: PublicTask,
+  agents: Record<string, PublicAgent>,
+): void {
+  if (t.checks !== undefined) {
+    throw new Error(
+      `pickled.yml: build task "${t.id}" cannot declare checks; a build task's contract is verify.`,
+    );
+  }
+  if (t.examples !== undefined) {
+    throw new Error(
+      `pickled.yml: build task "${t.id}" cannot declare examples; examples score answer checks, which build tasks do not use.`,
+    );
+  }
+  if (typeof t.workspace?.path !== "string" || t.workspace.path.length === 0) {
+    throw new Error(
+      `pickled.yml: build task "${t.id}" needs a non-empty workspace.path (the fixture the agent edits).`,
+    );
+  }
+  if (
+    t.workspace.setup !== undefined &&
+    (!Array.isArray(t.workspace.setup) ||
+      t.workspace.setup.some((c) => typeof c !== "string" || c.length === 0))
+  ) {
+    throw new Error(
+      `pickled.yml: build task "${t.id}" workspace.setup must be a list of non-empty shell command strings.`,
+    );
+  }
+  if (
+    !Array.isArray(t.verify) ||
+    t.verify.length === 0 ||
+    t.verify.some((c) => typeof c !== "string" || c.length === 0)
+  ) {
+    throw new Error(
+      `pickled.yml: build task "${t.id}" needs at least one non-empty verify command.`,
+    );
+  }
+  if (t.trials !== undefined && (!Number.isInteger(t.trials) || t.trials < 1)) {
+    throw new Error(
+      `pickled.yml: build task "${t.id}" trials must be a positive integer.`,
+    );
+  }
+  for (const name of t.agents) {
+    const provider = agents[name]?.provider;
+    if (provider && PROVIDERS[provider] !== "cli") {
+      throw new Error(
+        `pickled.yml: build task "${t.id}" agent "${name}" (${provider}) cannot run build tasks; build requires an edit-capable CLI agent (claude-code, codex-cli).`,
+      );
     }
   }
 }
@@ -176,9 +265,10 @@ export function validatePublicConfig(pub: PublicConfig): void {
  * - access -> synthesized toolsets + one (source, toolset) pair each;
  *   source "none" stays the string "none" (no-context sentinel, never null);
  *   tools: none maps to the shared internal toolset "none".
- * - questions -> scenarios with matrix.accessPairs; checks -> expected
- *   (mustMention->includes, mustNotMention->excludes,
- *   mustMentionOneOf->expected.mustMentionOneOf).
+ * - tasks -> scenarios with matrix.accessPairs. Answer tasks: checks ->
+ *   expected (mustMention->includes, mustNotMention->excludes,
+ *   mustMentionOneOf->expected.mustMentionOneOf). Build tasks: kind/workspace/
+ *   verify/trials carried as inert metadata (no answer contract).
  */
 export function compilePublicConfig(pub: PublicConfig): CheckConfig {
   const targets: Record<string, Target> = {};
@@ -231,23 +321,39 @@ export function compilePublicConfig(pub: PublicConfig): CheckConfig {
     }
   }
 
-  const scenarios: Scenario[] = pub.questions.map((q) => {
+  const scenarios: Scenario[] = pub.tasks.map((t) => {
+    const matrix = {
+      interfaces: t.agents,
+      accessPairs: t.access.map((a) => pairByAccess[a]),
+    };
+    // Build scenario: carry the build metadata; no answer contract. Inert
+    // until runCheck routes kind: build to the build runner (later phase).
+    if ((t.kind ?? "answer") === "build") {
+      const scenario: Scenario = {
+        name: t.id,
+        prompt: t.prompt,
+        kind: "build",
+        matrix,
+        workspace: t.workspace,
+        verify: t.verify,
+      };
+      if (t.trials !== undefined) scenario.trials = t.trials;
+      return scenario;
+    }
+    const checks = t.checks ?? {};
     const expected: ExpectedChecks = {};
-    if (q.checks.mustMention?.length) expected.includes = q.checks.mustMention;
-    if (q.checks.mustNotMention?.length)
-      expected.excludes = q.checks.mustNotMention;
-    if (q.checks.mustMentionOneOf?.length)
-      expected.mustMentionOneOf = q.checks.mustMentionOneOf;
+    if (checks.mustMention?.length) expected.includes = checks.mustMention;
+    if (checks.mustNotMention?.length)
+      expected.excludes = checks.mustNotMention;
+    if (checks.mustMentionOneOf?.length)
+      expected.mustMentionOneOf = checks.mustMentionOneOf;
     const scenario: Scenario = {
-      name: q.id,
-      prompt: q.ask,
-      matrix: {
-        interfaces: q.agents,
-        accessPairs: q.access.map((a) => pairByAccess[a]),
-      },
+      name: t.id,
+      prompt: t.prompt,
+      matrix,
       expected,
     };
-    if (q.examples) scenario.examples = q.examples;
+    if (t.examples) scenario.examples = t.examples;
     return scenario;
   });
 

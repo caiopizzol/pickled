@@ -4,14 +4,14 @@
   "title": "pickled.yml",
   "description": "Configuration for testing whether agents understand a product. Editor/tooling contract; the pickled loader remains the authoritative validator (it owns cross-references, reserved names, and provider-specific rules).",
   "type": "object",
-  "required": ["product", "agents", "access", "questions"],
+  "required": ["product", "agents", "access", "tasks"],
   "additionalProperties": false,
   "properties": {
     "product": { "$ref": "#/$defs/product" },
     "sources": { "$ref": "#/$defs/sources" },
     "agents": { "$ref": "#/$defs/agents" },
     "access": { "$ref": "#/$defs/access" },
-    "questions": { "$ref": "#/$defs/questions" },
+    "tasks": { "$ref": "#/$defs/tasks" },
     "threshold": {
       "type": "number",
       "minimum": 0,
@@ -214,22 +214,48 @@
         }
       }
     },
-    "question": {
+    "workspace": {
       "type": "object",
-      "required": ["id", "ask", "agents", "access", "checks"],
+      "required": ["path"],
       "additionalProperties": false,
+      "description": "Build tasks only: the throwaway fixture the agent edits.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Fixture directory the agent edits, relative to pickled.yml.",
+          "examples": ["./fixtures/react-app"]
+        },
+        "setup": {
+          "type": "array",
+          "description": "Commands run to prepare the fixture before the agent.",
+          "items": { "type": "string", "minLength": 1 },
+          "examples": [["bun install --frozen-lockfile"]]
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "prompt", "agents", "access"],
+      "additionalProperties": false,
+      "description": "An intent a developer cares about. Answer tasks prove success with text checks; build tasks edit a workspace and run verify. Field separation (checks vs workspace/verify) is enforced by the loader.",
       "properties": {
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Stable question id used in reports and CLI filters (--question).",
+          "description": "Stable task id used in reports and CLI filters (--task).",
           "examples": ["install"]
         },
-        "ask": {
+        "prompt": {
           "type": "string",
           "minLength": 1,
-          "description": "The question sent to the agent.",
+          "description": "The question to answer, or the work to build.",
           "examples": ["How do I install my-product?"]
+        },
+        "kind": {
+          "enum": ["answer", "build"],
+          "description": "How success is proven. \"answer\" (default): deterministic text checks. \"build\": edit the workspace and pass verify commands.",
+          "examples": ["answer", "build"]
         },
         "agents": {
           "type": "array",
@@ -244,14 +270,28 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "checks": { "$ref": "#/$defs/checks" },
-        "examples": { "$ref": "#/$defs/examples" }
+        "examples": { "$ref": "#/$defs/examples" },
+        "workspace": { "$ref": "#/$defs/workspace" },
+        "verify": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Build tasks only: commands that must pass after the agent stops.",
+          "items": { "type": "string", "minLength": 1 },
+          "examples": [["bun test", "bun run typecheck"]]
+        },
+        "trials": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Build tasks only: independent trials per cell (default 1).",
+          "examples": [3]
+        }
       }
     },
-    "questions": {
+    "tasks": {
       "type": "array",
-      "description": "Questions to ask agents, plus the checks their answers must satisfy.",
+      "description": "Tasks for agents: answer tasks (text checks) and build tasks (edit a workspace, run verify).",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/question" }
+      "items": { "$ref": "#/$defs/task" }
     }
   }
 }

@@ -17,15 +17,29 @@ function base(): PublicConfig {
       injected: { source: "docs", tools: "none" },
       web: { source: "none", tools: "web" },
     },
-    questions: [
+    tasks: [
       {
         id: "positioning",
-        ask: "what does it do?",
+        prompt: "what does it do?",
         agents: ["quick"],
         access: ["prior", "injected"],
         checks: { mustMention: ["agent"] },
       },
     ],
+  };
+}
+
+// A minimal valid build task on an edit-capable agent.
+function buildTask(): PublicConfig["tasks"][number] {
+  return {
+    id: "toolbar",
+    prompt: "Add a toolbar.",
+    kind: "build",
+    agents: ["quick"],
+    access: ["injected"],
+    workspace: { path: "./fixtures/app", setup: ["bun install"] },
+    verify: ["bun test"],
+    trials: 3,
   };
 }
 
@@ -41,10 +55,10 @@ describe("validatePublicConfig", () => {
     expect(() => validatePublicConfig(pub)).toThrow(/product\.name/);
   });
 
-  test("rejects empty questions", () => {
+  test("rejects empty tasks", () => {
     const pub = base();
-    pub.questions = [];
-    expect(() => validatePublicConfig(pub)).toThrow(/questions/);
+    pub.tasks = [];
+    expect(() => validatePublicConfig(pub)).toThrow(/'tasks' must be/);
   });
 
   test('rejects a source id named "none"', () => {
@@ -111,47 +125,48 @@ describe("validatePublicConfig", () => {
     );
   });
 
-  test("rejects a question missing id or ask", () => {
+  test("rejects a task missing id or prompt", () => {
     const pub = base();
     // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed
-    pub.questions[0] = {
-      ask: "x",
+    pub.tasks[0] = {
+      prompt: "x",
       agents: ["quick"],
       access: ["prior"],
       checks: { mustMention: ["a"] },
     } as any;
-    expect(() => validatePublicConfig(pub)).toThrow(/needs 'id' and 'ask'/);
+    delete (pub.tasks[0] as { prompt?: string }).prompt;
+    expect(() => validatePublicConfig(pub)).toThrow(/needs 'id' and 'prompt'/);
   });
 
-  test("rejects a question with no agents", () => {
+  test("rejects a task with no agents", () => {
     const pub = base();
-    pub.questions[0]!.agents = [];
+    pub.tasks[0]!.agents = [];
     expect(() => validatePublicConfig(pub)).toThrow(/needs at least one agent/);
   });
 
-  test("rejects a question referencing an unknown agent", () => {
+  test("rejects a task referencing an unknown agent", () => {
     const pub = base();
-    pub.questions[0]!.agents = ["ghost"];
+    pub.tasks[0]!.agents = ["ghost"];
     expect(() => validatePublicConfig(pub)).toThrow(/unknown agent "ghost"/);
   });
 
-  test("rejects a question with no access", () => {
+  test("rejects a task with no access", () => {
     const pub = base();
-    pub.questions[0]!.access = [];
+    pub.tasks[0]!.access = [];
     expect(() => validatePublicConfig(pub)).toThrow(
       /needs at least one access/,
     );
   });
 
-  test("rejects a question referencing unknown access", () => {
+  test("rejects a task referencing unknown access", () => {
     const pub = base();
-    pub.questions[0]!.access = ["ghost"];
+    pub.tasks[0]!.access = ["ghost"];
     expect(() => validatePublicConfig(pub)).toThrow(/unknown access "ghost"/);
   });
 
-  test("rejects a question with no checks", () => {
+  test("rejects an answer task with no checks", () => {
     const pub = base();
-    pub.questions[0]!.checks = {};
+    pub.tasks[0]!.checks = {};
     expect(() => validatePublicConfig(pub)).toThrow(
       /needs at least one of checks/,
     );
@@ -159,7 +174,7 @@ describe("validatePublicConfig", () => {
 
   test("rejects a mustMentionOneOf group without a label or values", () => {
     const pub = base();
-    pub.questions[0]!.checks = {
+    pub.tasks[0]!.checks = {
       mustMentionOneOf: [{ label: "", values: ["x"] }],
     };
     expect(() => validatePublicConfig(pub)).toThrow(
@@ -167,14 +182,167 @@ describe("validatePublicConfig", () => {
     );
   });
 
-  test("accepts a question whose only check is mustMentionOneOf", () => {
+  test("accepts a task whose only check is mustMentionOneOf", () => {
     const pub = base();
-    pub.questions[0]!.checks = {
+    pub.tasks[0]!.checks = {
       mustMentionOneOf: [
         { label: "names a provider", values: ["openai", "anthropic"] },
       ],
     };
     expect(() => validatePublicConfig(pub)).not.toThrow();
+  });
+});
+
+describe("validatePublicConfig - migration errors", () => {
+  test("rejects the old top-level 'questions' key with a rename hint", () => {
+    const pub = base();
+    // biome-ignore lint/suspicious/noExplicitAny: old-schema config
+    (pub as any).questions = (pub as any).tasks;
+    // biome-ignore lint/suspicious/noExplicitAny: old-schema config
+    delete (pub as any).tasks;
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /"questions" was renamed to "tasks"/,
+    );
+  });
+
+  test("rejects a task using the old 'ask' field with a rename hint", () => {
+    const pub = base();
+    // biome-ignore lint/suspicious/noExplicitAny: old-schema task
+    (pub.tasks[0] as any).ask = "what does it do?";
+    // biome-ignore lint/suspicious/noExplicitAny: old-schema task
+    delete (pub.tasks[0] as any).prompt;
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /uses "ask"; it was renamed to "prompt"/,
+    );
+  });
+});
+
+describe("validatePublicConfig - answer/build separation", () => {
+  test("accepts a valid build task", () => {
+    const pub = base();
+    pub.tasks = [buildTask()];
+    expect(() => validatePublicConfig(pub)).not.toThrow();
+  });
+
+  test("kind defaults to answer when omitted", () => {
+    const pub = base();
+    expect(pub.tasks[0]!.kind).toBeUndefined();
+    expect(() => validatePublicConfig(pub)).not.toThrow();
+  });
+
+  test("rejects an unknown kind", () => {
+    const pub = base();
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed
+    pub.tasks[0]!.kind = "verify" as any;
+    expect(() => validatePublicConfig(pub)).toThrow(/unknown kind "verify"/);
+  });
+
+  test("rejects build-only fields without kind: build (no shape inference)", () => {
+    const pub = base();
+    pub.tasks[0]!.verify = ["bun test"];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /build-only fields .* but kind is not "build"/,
+    );
+  });
+
+  test("rejects checks on a build task", () => {
+    const pub = base();
+    const t = buildTask();
+    t.checks = { mustMention: ["x"] };
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(/cannot declare checks/);
+  });
+
+  test("rejects examples on a build task", () => {
+    const pub = base();
+    const t = buildTask();
+    t.examples = { pass: ["x"] };
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(/cannot declare examples/);
+  });
+
+  test("rejects a build task with no workspace.path", () => {
+    const pub = base();
+    const t = buildTask();
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed
+    t.workspace = {} as any;
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /needs a non-empty workspace\.path/,
+    );
+  });
+
+  test("rejects a build task with no verify command", () => {
+    const pub = base();
+    const t = buildTask();
+    t.verify = [];
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /needs at least one non-empty verify command/,
+    );
+  });
+
+  test("rejects non-integer trials", () => {
+    const pub = base();
+    const t = buildTask();
+    t.trials = 0;
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /trials must be a positive integer/,
+    );
+  });
+
+  test("rejects a build task on a non-edit-capable (API) agent", () => {
+    const pub = base();
+    const t = buildTask();
+    t.agents = ["api"]; // openai -> api category, not edit-capable
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /cannot run build tasks; build requires an edit-capable CLI agent/,
+    );
+  });
+
+  test("rejects a non-string workspace.path", () => {
+    const pub = base();
+    const t = buildTask();
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed
+    t.workspace = { path: 123 as any };
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /needs a non-empty workspace\.path/,
+    );
+  });
+
+  test("rejects a non-string workspace.setup entry", () => {
+    const pub = base();
+    const t = buildTask();
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed
+    t.workspace = { path: "./x", setup: [123 as any] };
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /workspace\.setup must be a list of non-empty shell command strings/,
+    );
+  });
+
+  test("rejects a non-string verify entry", () => {
+    const pub = base();
+    const t = buildTask();
+    // biome-ignore lint/suspicious/noExplicitAny: deliberately malformed
+    t.verify = [123 as any];
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /needs at least one non-empty verify command/,
+    );
+  });
+
+  test("rejects an empty-string verify entry", () => {
+    const pub = base();
+    const t = buildTask();
+    t.verify = [""];
+    pub.tasks = [t];
+    expect(() => validatePublicConfig(pub)).toThrow(
+      /needs at least one non-empty verify command/,
+    );
   });
 });
 
@@ -226,7 +394,7 @@ describe("compilePublicConfig", () => {
     const pub = base();
     pub.sources = undefined;
     pub.access = { prior: { source: "none", tools: "none" } };
-    pub.questions[0]!.access = ["prior"];
+    pub.tasks[0]!.access = ["prior"];
     const c = compilePublicConfig(pub);
     expect(c.docs).toBeUndefined();
   });
@@ -247,14 +415,13 @@ describe("compilePublicConfig", () => {
       source: "none",
       toolset: "none",
     });
-    // Guard: no pair carries a null source for an injected/prior cell.
     expect(pairs?.some((p) => p.source === null)).toBe(false);
   });
 
   test("tools: web synthesizes a web toolset named after the access", () => {
     const pub = base();
-    pub.questions[0]!.access = ["web"];
-    pub.questions[0]!.checks = { mustMention: ["agent"] };
+    pub.tasks[0]!.access = ["web"];
+    pub.tasks[0]!.checks = { mustMention: ["agent"] };
     const c = compilePublicConfig(pub);
     expect(c.toolsets?.web).toEqual({ webSearch: true, webFetch: true });
     expect(c.scenarios[0]!.matrix?.accessPairs).toContainEqual({
@@ -276,7 +443,7 @@ describe("compilePublicConfig", () => {
         },
       },
     };
-    pub.questions[0]!.access = ["docs_mcp"];
+    pub.tasks[0]!.access = ["docs_mcp"];
     const c = compilePublicConfig(pub);
     expect(c.toolsets?.docs_mcp?.mcpServers?.mintlify?.url).toBe(
       "https://mcp.example.com/mcp",
@@ -292,11 +459,12 @@ describe("compilePublicConfig", () => {
     });
   });
 
-  test("maps a question to a scenario with interfaces + accessPairs", () => {
+  test("maps an answer task to a scenario with interfaces + accessPairs", () => {
     const c = compilePublicConfig(base());
     const s = c.scenarios[0]!;
     expect(s.name).toBe("positioning");
     expect(s.prompt).toBe("what does it do?");
+    expect(s.kind).toBeUndefined();
     expect(s.matrix?.interfaces).toEqual(["quick"]);
     expect(s.matrix?.accessPairs).toEqual([
       { access: "prior", source: "none", toolset: "none" },
@@ -306,7 +474,7 @@ describe("compilePublicConfig", () => {
 
   test("maps checks to expected (mustMention/mustMentionOneOf/mustNotMention)", () => {
     const pub = base();
-    pub.questions[0]!.checks = {
+    pub.tasks[0]!.checks = {
       mustMention: ["agent"],
       mustNotMention: ["AI-powered"],
       mustMentionOneOf: [
@@ -325,10 +493,42 @@ describe("compilePublicConfig", () => {
 
   test("passes examples and threshold through", () => {
     const pub = base();
-    pub.questions[0]!.examples = { pass: ["good"], fail: ["bad"] };
+    pub.tasks[0]!.examples = { pass: ["good"], fail: ["bad"] };
     pub.threshold = 60;
     const c = compilePublicConfig(pub);
     expect(c.scenarios[0]!.examples).toEqual({ pass: ["good"], fail: ["bad"] });
     expect(c.threshold).toBe(60);
+  });
+
+  test("compiles a build task to inert internal build metadata", () => {
+    const pub = base();
+    pub.tasks = [buildTask()];
+    const c = compilePublicConfig(pub);
+    const s = c.scenarios[0]!;
+    expect(s.name).toBe("toolbar");
+    expect(s.prompt).toBe("Add a toolbar.");
+    expect(s.kind).toBe("build");
+    expect(s.workspace).toEqual({
+      path: "./fixtures/app",
+      setup: ["bun install"],
+    });
+    expect(s.verify).toEqual(["bun test"]);
+    expect(s.trials).toBe(3);
+    // Build scenarios carry no answer contract.
+    expect(s.expected).toBeUndefined();
+    // Access composition is identical to answer tasks.
+    expect(s.matrix?.interfaces).toEqual(["quick"]);
+    expect(s.matrix?.accessPairs).toEqual([
+      { access: "injected", source: "docs", toolset: "none" },
+    ]);
+  });
+
+  test("a build task without trials defaults to omitted (runner applies 1)", () => {
+    const pub = base();
+    const t = buildTask();
+    t.trials = undefined;
+    pub.tasks = [t];
+    const c = compilePublicConfig(pub);
+    expect(c.scenarios[0]!.trials).toBeUndefined();
   });
 });

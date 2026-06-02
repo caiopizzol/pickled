@@ -3,7 +3,7 @@ title: pickled.yml reference
 description: Every field the loader accepts, with the rules each one enforces.
 ---
 
-A `pickled.yml` has five required top-level keys: `product`, `sources`, `agents`, `access`, and `questions`, plus an optional `threshold`. Checks and example answers live inside each question.
+A `pickled.yml` has four required top-level keys: `product`, `agents`, `access`, and `tasks`, plus optional `sources` and `threshold`. Each task is an `answer` task (deterministic text `checks`) or a `build` task (edit a workspace, run `verify`).
 
 For editor autocomplete and inline validation, point your YAML tooling at the published [JSON Schema](https://pickled.dev/schema/pickled.schema.json). `pickled init` adds the directive for you:
 
@@ -57,7 +57,7 @@ Providers: `claude-code` and `codex-cli` (CLI agents), `anthropic` and `openai` 
 
 ## `access`
 
-A named context path: a `(source, tools)` pair, and the unit you compare across runs. The same source reached two ways is two different tests. A question runs once per `(agent × access)` pair, and each shows in the report as `agent · access`, so name paths to read well. The id `none` is reserved.
+A named context path: a `(source, tools)` pair, and the unit you compare across runs. The same source reached two ways is two different tests. A task forms one cell per `(agent × access)` pair, and each shows in the report as `agent · access`, so name paths to read well. The id `none` is reserved.
 
 ```yaml
 access:
@@ -83,7 +83,7 @@ With `tools: none` the source is injected and the agent answers from it. With `t
 
 ### Reading the comparison
 
-Put several access paths on one question and the verdicts localize where the answer lives:
+Put several access paths on one task and the verdicts localize where the answer lives:
 
 - `memory` fails, `given_docs` passes: your source carries the answer.
 - `given_docs` fails: the answer is missing or unclear in that source. Fix the source.
@@ -98,12 +98,16 @@ The access name is the only place the report shows which path ran, so keep names
 - **access** names the path: `memory` (no context), `given_<source>` (source injected), `web_open` (web, no hint), `web_<source>` (web with that source as the target), `mcp_<provider>` (that MCP surface).
 - **servers** are the provider or endpoint: `mintlify`, `context7`.
 
-## `questions`
+## `tasks`
+
+A task is the unit of work: a `prompt` plus how success is proven. `kind` selects the proof and defaults to `answer`; set `kind: build` explicitly for build tasks (build is never inferred from shape).
+
+### Answer tasks
 
 ```yaml
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick, api]
     access: [memory, given_docs, web_open]
     checks:
@@ -114,7 +118,7 @@ questions:
       mustNotMention: ["npm install my-product-cli"]
 ```
 
-Each question runs once per `(agent × access)` pair. A question needs an `id`, an `ask`, at least one `agent`, at least one `access`, and at least one check.
+Each task forms one cell per `(agent × access)` pair. A task needs an `id`, a `prompt`, at least one `agent`, and at least one `access`. An answer task also needs at least one check.
 
 ### `checks`
 
@@ -126,14 +130,14 @@ Each entry counts as one check. All matches are case-sensitive substrings. The c
 
 ### `examples`
 
-Optional per-question sample answers, scored offline by `pickled test` with no model calls.
+Optional per-task sample answers (answer tasks only), scored offline by `pickled test` with no model calls.
 
 ```yaml
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
-    access: [injected]
+    access: [given_docs]
     checks:
       mustMention: ["bunx my-product"]
     examples:
@@ -144,6 +148,33 @@ questions:
 ```
 
 A `pass` example must satisfy every check; a `fail` example must miss at least one. A `pass` a check rejects means the check is too strict; a `fail` that satisfies everything means the check is too weak. Run with `pickled test .`.
+
+### Build tasks
+
+A `build` task proves success by editing a throwaway workspace and running verification, not by checking answer text. Build tasks run on edit-capable CLI agents only (`claude-code`, `codex-cli`).
+
+```yaml
+tasks:
+  - id: toolbar
+    kind: build
+    prompt: Add a custom toolbar using my-product.
+    agents: [builder]
+    access: [given_docs]
+    trials: 3
+    workspace:
+      path: ./fixtures/react-app
+      setup:
+        - bun install --frozen-lockfile
+    verify:
+      - bun test
+```
+
+- `kind: build` is required; build is never inferred from the presence of build fields.
+- `workspace.path` is the fixture directory the agent edits, relative to `pickled.yml`. Optional `workspace.setup` runs before the agent (e.g. install).
+- `verify` lists the commands that must pass after the agent stops. This is the build task's contract.
+- `trials` is the number of independent runs per `(agent × access)` cell (default 1); the result is reported as `k/n`.
+
+Build tasks forbid `checks` and `examples` (those score answer text); answer tasks forbid `workspace` / `verify` / `trials`.
 
 ## `threshold`
 
@@ -162,6 +193,9 @@ String values matching `${UPPER_SNAKE_CASE}` are replaced with the corresponding
 - A source or access path named `none` (reserved for the no-context path).
 - An agent with an unknown provider, or one missing `provider` / `model`.
 - `tools: mcp` without a `servers` map, or `servers` on a non-`mcp` access path.
-- A question with no checks (`mustMention` / `mustMentionOneOf` / `mustNotMention` all empty).
-- A question referencing an agent or access path that is not declared.
+- An answer task with no checks (`mustMention` / `mustMentionOneOf` / `mustNotMention` all empty).
+- A task referencing an agent or access path that is not declared.
+- A build task missing `workspace.path` or `verify`, declaring `checks` / `examples`, or assigned to a non-edit-capable (API) agent.
+- Build-only fields (`workspace` / `verify` / `trials`) on a task without `kind: build`.
+- The old `questions` top-level key, or a task's old `ask` field (renamed to `tasks` / `prompt`).
 - API agents that set CLI-only fields, or a `codex-cli` agent without a pinned model.
