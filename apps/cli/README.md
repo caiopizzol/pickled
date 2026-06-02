@@ -2,7 +2,7 @@
 
 > Pickled tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence.
 
-The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check whether agents can answer from the product context you publish. No LLM grades another LLM.
+The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check whether agents can answer and build from the product context you publish. No LLM grades another LLM.
 
 Full docs: [docs.pickled.dev](https://docs.pickled.dev/).
 
@@ -19,6 +19,7 @@ bunx @pickled-dev/cli <command>
 - **`pickled init [path]`** writes a starter `pickled.yml`.
 - **`pickled test [path]`** scores `examples.pass` and `examples.fail` offline. No model calls.
 - **`pickled check [path]`** asks the configured agents and scores their answers.
+- **`pickled build [path]`** has edit-capable agents work in a fresh workspace and scores `verify` commands.
 - **`pickled audit [path]`** scans agent-facing files for broken refs and oversized sections. No model calls.
 
 ## Minimum config
@@ -62,6 +63,7 @@ For paid agents, a run can expand to many `(agent × access)` cells. These flags
 pickled check . --plan                           # dry run: no model calls
 pickled check . --max-cells 10                   # fail before spending
 pickled check . --sample 2 --seed nightly-2026  # deterministic sample per task
+pickled build . --plan                           # preview build cells and executions
 ```
 
 The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample. Build tasks also report `selectedExecutions` (cells x trials), which is what `--max-cells` gates.

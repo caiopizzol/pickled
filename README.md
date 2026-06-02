@@ -4,7 +4,7 @@
 
 ## Why
 
-Docs can be correct and agents can still answer wrong. Pickled gives you receipts: per-cell verdicts showing which agent, which source, and which tool path produced which answer. No LLM grades another LLM.
+Docs can be correct and agents can still answer wrong. Examples can be correct and agents can still build the wrong thing. Pickled gives you receipts: per-cell verdicts showing which agent, which source, and which access path produced which answer or build result. No LLM grades another LLM.
 
 ## How it works
 
@@ -23,7 +23,8 @@ A task runs as one cell per `(agent × access)` pair, and each cell is graded on
 - **mustMentionOneOf.** Groups where the answer must contain at least one value from each group.
 - **mustNotMention.** Substrings the answer must not contain.
 - **Tool paths are real.** A `web` or `mcp` access path that answers without invoking any of its tools is vetoed to `NO`. Model memory does not count as evidence for a tool path.
-- **No LLM grades another LLM.** Every signal is a substring check or a recorded tool invocation.
+- **Builds prove themselves.** Build tasks pass or fail on your `verify` commands.
+- **No LLM grades another LLM.** Every signal is a substring check, a recorded tool invocation, or a command result.
 
 ## Quick start
 
@@ -65,6 +66,26 @@ threshold: 60
 ```
 
 That task runs three cells, one per access path, and grades each on its own. `memory` answers from model memory; `given_docs` reads the docs you registered; `web_open` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell checks `mustMention`. Compare the verdicts to see which context path the agent actually needed to get it right.
+
+## Build task
+
+Answer tasks check what the agent says. Build tasks check what the agent can do:
+
+```yaml
+tasks:
+  - id: add-toolbar
+    kind: build
+    prompt: Add a toolbar using my-product.
+    agents: [quick]
+    access: [given_docs]
+    trials: 3
+    workspace:
+      path: ./fixtures/app
+      setup: [bun install]
+    verify: [bun test]
+```
+
+Run build tasks with `pickled build .`. Each `(agent × access)` cell runs in a fresh workspace for each trial and reports `Built k/n`, `Partially built k/n`, or `Did not build k/n`.
 
 ## Read more
 

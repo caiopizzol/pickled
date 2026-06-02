@@ -1,9 +1,9 @@
 ---
 title: GitHub Actions
-description: Run pickled in CI with offline checks, a dry plan, and a capped agent run.
+description: Run pickled in CI with offline checks, dry plans, capped answer runs, and scheduled build runs.
 ---
 
-Use CI to keep the public context contract from drifting.
+Use CI to keep the public context contract from drifting. Run answer tasks on pull requests; run build tasks on trusted branches or schedules when you want the agent to edit a workspace.
 
 ## Minimal workflow
 
@@ -33,10 +33,32 @@ jobs:
 What each step does:
 
 - `pickled test` scores example answers offline. It catches brittle checks before spending on a model run.
-- `pickled check --plan` prints the cells that would run. No model calls.
-- `pickled check --max-cells 20` refuses to run if the config expands beyond the cap.
+- `pickled check --plan` prints the answer cells that would run. No model calls.
+- `pickled check --max-cells 20` refuses to run if the selected answer executions exceed the cap.
 
 Set a `threshold` in `pickled.yml` when you want CI to fail on a low score.
+
+## Build tasks in CI
+
+Build tasks are heavier: each selected cell runs `trials` times, and each trial lets an edit-capable agent work in a fresh workspace. Keep them explicit and capped:
+
+```yaml
+  build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bunx @pickled-dev/cli build . --plan
+      - run: bunx @pickled-dev/cli build . --max-cells 6
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+`pickled build --plan` reports both selected cells and selected executions. `--max-cells` gates executions (`cells × trials`), so one build cell with `trials: 3` counts as three.
+
+For public repos, do not run build tasks on untrusted fork pull requests with secrets. Use `pickled test` and `pickled check --plan` everywhere; run real answer and build tasks on trusted branches, internal PRs, or a schedule.
 
 ## Sample larger suites
 
@@ -49,7 +71,7 @@ For a broad suite, sample first:
     OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-The seed makes the sample reproducible. The receipt records `expandedCells`, `selectedCells`, and `seed`.
+The seed makes the sample reproducible. The receipt records `expandedCells`, `selectedCells`, `selectedExecutions`, and `seed`.
 
 ## Secrets
 

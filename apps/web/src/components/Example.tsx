@@ -28,6 +28,15 @@ tasks:
       mustMention: ["z.treeifyError"]
       mustNotMention: ["ZodError.format()"]
 
+  - id: add-validation
+    kind: build
+    prompt: Add Zod validation to the signup form.
+    agents: [quick]
+    access: [injected]
+    trials: 3
+    workspace: { path: ./fixtures/app }
+    verify: [bun test]
+
 threshold: 80`;
 
 export function Example() {
@@ -57,47 +66,62 @@ export function Example() {
         <div className="example-grid">
           <pre className="example-code">{configSnippet}</pre>
 
-          <Terminal label="pickled check · zod">
-            <TerminalLine>
-              <T.Prompt>$</T.Prompt> pickled check
-            </TerminalLine>
-            <TerminalLine>&nbsp;</TerminalLine>
-            <TerminalLine>
-              <T.Dim>Source check</T.Dim>
-            </TerminalLine>
-            <TerminalLine>
-              &nbsp;&nbsp;<T.Success>✓</T.Success>{" "}
-              <T.Dim>readme · ./README.md</T.Dim>
-            </TerminalLine>
-            <TerminalLine>
-              &nbsp;&nbsp;<T.Success>✓</T.Success>{" "}
-              <T.Dim>llms · https://zod.dev/llms.txt</T.Dim>
-            </TerminalLine>
-            <TerminalLine>&nbsp;</TerminalLine>
-            <TerminalLine>
-              <T.Dim>Task: error-handling</T.Dim>
-            </TerminalLine>
-            <TerminalLine>
-              &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}
-              <T.Muted>(0%)</T.Muted>
-            </TerminalLine>
-            <TerminalLine>
-              <T.Dim>{'    reason: missing includes: "z.treeifyError"'}</T.Dim>
-            </TerminalLine>
-            <TerminalLine>
-              <T.Dim>{'    hit excludes: "ZodError.format()"'}</T.Dim>
-            </TerminalLine>
-            <TerminalLine>&nbsp;</TerminalLine>
-            <TerminalLine>
-              <T.Dim>Overall:</T.Dim> <T.Error>0</T.Error>{" "}
-              <T.Muted>/ 100 · threshold 80 · run fails</T.Muted>
-            </TerminalLine>
-          </Terminal>
+          <div className="example-terminal-stack">
+            <Terminal label="pickled check · zod">
+              <TerminalLine>
+                <T.Prompt>$</T.Prompt> pickled check
+              </TerminalLine>
+              <TerminalLine>&nbsp;</TerminalLine>
+              <TerminalLine>
+                <T.Dim>Task: error-handling</T.Dim>
+              </TerminalLine>
+              <TerminalLine>
+                &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}
+                <T.Muted>(0%)</T.Muted>
+              </TerminalLine>
+              <TerminalLine>
+                <T.Dim>
+                  {'    reason: missing includes: "z.treeifyError"'}
+                </T.Dim>
+              </TerminalLine>
+              <TerminalLine>
+                <T.Dim>{'    hit excludes: "ZodError.format()"'}</T.Dim>
+              </TerminalLine>
+              <TerminalLine>
+                <T.Dim>Overall:</T.Dim> <T.Error>0</T.Error>{" "}
+                <T.Muted>/ 100 · threshold 80 · run fails</T.Muted>
+              </TerminalLine>
+            </Terminal>
+
+            <Terminal label="pickled build · app">
+              <TerminalLine>
+                <T.Prompt>$</T.Prompt> pickled build
+              </TerminalLine>
+              <TerminalLine>&nbsp;</TerminalLine>
+              <TerminalLine>
+                <T.Dim>Task: add-validation</T.Dim>
+              </TerminalLine>
+              <TerminalLine>
+                &nbsp;&nbsp;<T.Warning>⚠ Partially built</T.Warning>{" "}
+                <T.Muted>2/3</T.Muted>
+              </TerminalLine>
+              <TerminalLine>
+                <T.Dim>{"    changed: src/signup.tsx"}</T.Dim>
+              </TerminalLine>
+              <TerminalLine>
+                <T.Dim>{"    command: bun test -> exit 1"}</T.Dim>
+              </TerminalLine>
+              <TerminalLine>
+                <T.Dim>Overall:</T.Dim> <T.Warning>67</T.Warning>{" "}
+                <T.Muted>/ 100 · threshold 80 · run fails</T.Muted>
+              </TerminalLine>
+            </Terminal>
+          </div>
         </div>
 
         <p className="example-receipt-note">
-          A plausible answer can still be wrong. The checks caught a deprecated
-          Zod 4 API the agent still recommends, and the replacement it left out.
+          A plausible answer can still be wrong, and a plausible edit can still
+          fail verification. Pickled keeps both receipts deterministic.
         </p>
 
         <div className="example-foot">
