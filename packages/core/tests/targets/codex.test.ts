@@ -115,6 +115,21 @@ describe("CodexCliTarget - flag spelling", () => {
     expect(args[args.length - 1]).toBe("-");
   });
 
+  test("forwards the abort signal to the spawn call", async () => {
+    const ac = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const spawn: SpawnFn = async (_cmd, _args, options) => {
+      receivedSignal = options.signal;
+      return { exitCode: 0, stdout: "", stderr: "" };
+    };
+    const target = new CodexCliTarget("codex", baseConfig, {
+      spawn,
+      readFile: makeReadFile("Done."),
+    });
+    await target.run("q", { ...baseRunOptions, signal: ac.signal });
+    expect(receivedSignal).toBe(ac.signal);
+  });
+
   test("build mode switches the sandbox to workspace-write", async () => {
     const { spawn, calls } = makeSpawn({
       exitCode: 0,

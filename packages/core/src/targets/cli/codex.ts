@@ -31,7 +31,7 @@ export interface SpawnResult {
 export type SpawnFn = (
   cmd: string,
   args: string[],
-  options: { cwd: string; stdin: string },
+  options: { cwd: string; stdin: string; signal?: AbortSignal },
 ) => Promise<SpawnResult>;
 
 export interface CodexCliTargetOptions {
@@ -107,6 +107,7 @@ export class CodexCliTarget implements TargetRunner {
       const result = await this.spawnFn(this.binary, args, {
         cwd,
         stdin: fullPrompt,
+        signal: options.signal,
       });
 
       const { allResponses, toolsUsed } = parseJsonlStream(result.stdout);
@@ -225,6 +226,12 @@ const defaultSpawn: SpawnFn = async (cmd, args, options) => {
     stdout: "pipe",
     stderr: "pipe",
   });
+  // Kill the codex process if the run is cancelled (wall-clock timeout) so it
+  // does not orphan. Already-aborted signals kill immediately.
+  if (options.signal) {
+    if (options.signal.aborted) proc.kill();
+    else options.signal.addEventListener("abort", () => proc.kill());
+  }
   proc.stdin.write(options.stdin);
   await proc.stdin.end();
 
