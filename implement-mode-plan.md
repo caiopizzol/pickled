@@ -1,136 +1,197 @@
-# Implement mode: from answer-legibility to build-legibility
+# Build mode: a context acceptance test for agent-facing products
 
 State file for a multi-PR, multi-session effort. Update as slices land.
 
-## Objective
+## What Pickled is (the framing this all serves)
 
-Evolve Pickled from "can the agent explain the right thing from this context?"
-to "can the agent BUILD the right thing from this context?". The scored
-artifact moves from text (today) to a workspace change verified by
-deterministic evidence (exit codes, diffs, stdout). The contract is
-unchanged: no LLM grades another LLM. The build, the test runner, and the
-exit code are the judges.
+Pickled tests *your published context*, using agents as the measuring
+instrument. A failing cell is not "the agent is bad"; it is "our docs /
+examples / llms.txt / MCP did not let a capable agent succeed." The product
+answers, for the intents a company cares about:
 
-Value claim the product can finally make: "with this context, this agent
-builds this task k/n times, vs j/n without it." That is a causal,
-rate-shaped legibility signal, far stronger than "the answer mentioned the
-right API."
+> Can an agent answer and build with your product from the context you
+> publish, and which context path made the difference?
 
-## Locked decisions (with why)
+Two depths of the same question:
 
-1. **Rename public `questions` -> `tasks`; discriminator `kind: answer | implement`.**
-   "Add a React toolbar" is a task, not a question. Pre-1.0, bundle the
-   rename WITH implement mode so the breaking change delivers the feature
-   (never a bare rename). Deferring would cost two migrations, not one.
-2. **Answer mode behavior is unchanged.** `checks.answer` is today's text
-   contract (mustMention / mustMentionOneOf / mustNotMention).
-3. **Implement mode = workspace + deterministic verifiers.**
-   `checks.diff` (mustChange / mustContain / mustNotContain / mustNotChange)
-   and `checks.commands` (name + run, exit 0 = pass). No semantic grading.
-4. **"Right API used" is a DIFF check, not a response check.** The final
-   summary is too weak; the truth is in the changed files.
-5. **Setup failure is `Error`, excluded from scoring.** `workspace.setup`
-   (e.g. `bun install`) failing is environment failure, not agent failure.
-   Only `checks.commands` failures count against the agent. This protects
-   the determinism brand. The setup/commands split is the seam.
-6. **Empty or irrelevant diff hard-vetoes to NO** (same tier as the existing
-   provenance veto). Green tests on an unchanged repo are not an
-   implementation. Wrong-files-but-green is a diagnostic, NOT a veto: do not
-   over-constrain how the agent solves it; commands are the truth.
-7. **Implement mode is CLI-only in v1.** claude-code (enable Edit/Write/
-   MultiEdit) and codex (`--sandbox workspace-write`). API targets excluded
-   (no repo-edit loop). Gate hard: implement tasks only run on edit-capable
-   agents.
-8. **Results are trial-shaped from day one.** A cell is `attempts[]` with a
-   `passedAttempts / totalAttempts` summary; reports always show `k/n`.
-   `trials` defaults to 1 in v1 (answer mode renders 1/1), but the model is
-   rate-shaped so single results are never read as measurements.
-9. **Explicit execution boundary.** Implement runs must not happen by
-   accident from the same command. Recommend a separate `pickled build`
-   command for implement tasks; `pickled check` stays answer-only. (Open for
-   confirmation; alternative is an explicit `--implement` flag on check.)
-10. **No containers / hosted sandbox in v1.** Self-hosted, operator-authored
-    tasks on their own machine = same trust model as running the agent
-    themselves. Lean on each agent's NATIVE sandbox (codex workspace-write;
-    claude-code tool-allowlist + permission mode). Caveat to document:
-    temp-copy is work-area scoping, NOT security isolation (Bash + network
-    are live). Containers are gated on the hosted/untrusted/unattended case.
-11. **`pickled test` validates implement fixtures offline.** A golden
-    implementation passes all verifiers; an empty/no-op diff fails. Same
-    pass/fail discipline answer mode already has for `examples`.
-12. **Tasks must be small / fast / pinned.** The signal is a rate, rates
-    cost trials, and an implement cell is already 10-100x an answer cell.
-    Economics force narrow tasks (one feature, fast deterministic tests,
-    pinned lockfile). The fixture is the new source-of-truth surface.
+- **Answer tasks** (cheap smoke tests): can the agent explain the right API,
+  install path, concept, limitation?
+- **Build tasks** (the proof): can the agent use that understanding to make a
+  real project pass the commands a developer already trusts?
 
-## PR sequence (internal-first, breaking-last; all risk in the final PR)
+The deliverable is a **diagnosis**, not a single score. Across `access` paths
+it sorts failures into four buckets:
 
-- [x] **PR 1 - refactor, no release (merged #47).** Extract the planner from check.ts into
-  `packages/core/src/planner.ts`: `expandMatrix`, `planMatrixCells`,
-  `matrixCellPairs`, `plannedCellKey`, `buildPlanReport`, and the
-  `PlannedCell` / `ExpandedScenario` types. Both modes will share it.
-  Non-breaking; keep all tests green.
-- [ ] **PR 2 - feat (internal).** Workspace module: copy fixture to a temp
-  dir, run `setup` (failure -> Error), capture diff, cleanup,
-  keep-on-failure, timeout. Verifier modules: `diff` and `commands`.
-  Internal types only; not wired to the public schema yet.
-- [ ] **PR 3 - feat (internal).** Edit-capable target capability:
-  answer-capable vs edit-capable distinction; claude-code edit profile
-  (enable Edit/Write/MultiEdit); codex `--sandbox workspace-write`. Gate so
-  implement only runs on edit-capable agents.
-- [ ] **PR 4 - feat (internal).** Attempts-shaped result model:
-  `CellResult` -> `cell.attempts[]` with `passedAttempts / totalAttempts`;
-  reporter renders `k/n`; answer mode is n=1 with no behavior change.
-- [ ] **PR 5 - feat -> RELEASE (the one breaking PR).** Public schema
-  `questions` -> `tasks` + `kind` + implement fields (workspace, checks.diff,
-  checks.commands, trials); wire answer + implement runners onto the shared
-  planner; add `pickled build` + gate; migrate the dogfood `pickled.yml`;
-  extend `pickled test` for fixture validation. This release ships implement
-  mode.
+1. **Context gap** - injected docs fail.
+2. **Discovery gap** - injected docs pass, web/MCP fails.
+3. **Agent-surface gap** - one agent succeeds, another fails at the same access.
+4. **Environment/test gap** - setup fails or the verifier is flaky.
 
-## Schema shape (target, lands in PR 5)
+It is not "prove agents can do everything." It is an **agent-legibility test
+suite** for the intents that matter, grown from support issues, real agent
+failures, common integrations, and public API surface.
+
+## The unit is a `task` (public `kind: answer | build`)
+
+`questions` becomes `tasks` when the feature ships. `kind` selects the runner.
+("Implement mode" stays the internal engineering term; `build` is the public
+word, matching `pickled build`.)
+
+Answer task:
 
 ```yaml
 tasks:
-  - id: react_toolbar
-    kind: implement
-    prompt: Add a custom React toolbar using my-product/react.
-    agents: [claude_builder]      # edit-capable only
-    access: [memory, given_llms, web_llms]
-    trials: 3
-    workspace:
-      path: ./fixtures/react-toolbar
-      setup: [bun install --frozen-lockfile]
-    checks:
-      diff:
-        mustChange: ["src/**/*.tsx"]
-        mustContain: ["my-product/react"]
-        mustNotContain: ["legacyReactAdapter"]
-      commands:
-        - { name: tests, run: bun test }
-        - { name: typecheck, run: bun run typecheck }
-
   - id: install
     kind: answer
     prompt: How do I install my-product?
     agents: [quick]
     access: [memory, given_llms]
     checks:
-      answer:
-        mustMention: ["bunx my-product"]
+      mustMention: ["bunx my-product"]
 ```
+
+Build task (v1 public surface - intentionally minimal):
+
+```yaml
+tasks:
+  - id: custom_toolbar
+    kind: build
+    prompt: Add a custom React toolbar using my-product.
+    agents: [claude_builder]      # edit-capable only
+    access: [memory, given_llms, web_llms]
+    trials: 3                     # optional, default 1
+    workspace:
+      path: ./fixtures/react-app
+      setup:
+        - bun install --frozen-lockfile
+    verify:
+      - bun test
+      - bun run typecheck
+```
+
+The build contract is `verify` (the commands a developer trusts), NOT a diff
+DSL. Users never write `mustChange` / `mustContain` / `mustAdd`. They write a
+small project, its setup, and the commands that prove the work.
+
+## Locked decisions (with why)
+
+1. **`verify` is the build contract.** Real commands, the same bar a developer
+   trusts. No user-authored diff-scoring language - that forces authors to
+   predict the implementation and turns Pickled into a static-analysis DSL.
+2. **Diffs are receipts, not knobs.** Pickled always captures changed files,
+   full diff, stdout/stderr, and command exits for the report. None of it is a
+   user-facing scoring field.
+3. **Empty diff = NO.** A cell where the agent changed nothing is vetoed; no
+   work happened. (Receipt-based, structural.)
+4. **Setup failure = Error, excluded from scoring.** `workspace.setup` failing
+   is environment failure, not agent failure. Only `verify` failures count
+   against the agent.
+5. **Results are trial-shaped from day one** (`attempts[]`, `passedAttempts /
+   totalAttempts`); reports show `k/n`. `trials` optional, default 1. Build
+   outcomes are stochastic, so the trustworthy unit is a **repeatable rate per
+   access path**, not a single pass/fail. This is the core output, not polish.
+6. **Build is CLI-only in v1.** claude-code + codex (edit-capable). API
+   providers excluded (no repo-edit loop). Agents must be explicitly granted
+   edit capability (`allowEdits`, PR 3); `kind: build` on a non-edit-capable
+   agent fails the gate. `agents` stays a list for build too (comparing which
+   agent succeeds with your context is part of the diagnosis).
+7. **`pickled build` vs `pickled check`.** Build executes code and edits
+   workspaces, so it never happens by accident through the answer command.
+   `check` runs answer tasks and skips build with a one-line notice; `build`
+   runs build tasks.
+
+### Build runner verdict contract (confirmed - runner invariants, NOT public schema)
+
+These are runner invariants, like the web/MCP provenance veto - never public
+knobs. Authors write only `workspace` + `verify`. A build attempt scores:
+
+- `setup` fails -> **Error** (environment; excluded from scoring).
+- `verify` already passes on the untouched fixture (preflight, after setup,
+  before the agent) -> **Error / invalid fixture** (the fixture is bad, not the
+  agent; excluded from scoring). Never scored as agent NO.
+- agent's diff is empty -> **NO** (no work).
+- agent modified or deleted a baseline test file (`tests/**`, `**/*.test.*`,
+  `**/*.spec.*`) -> **NO** (weakened the harness). Test files ONLY in v1: do
+  not protect config / `package.json` / tsconfig / vite (legitimate fixes touch
+  them; protecting them manufactures false failures). Report the changed path;
+  a configurable `protect` is deferred.
+- `verify` fails after the agent -> **NO**.
+- `verify` passes with a real diff and an intact harness -> **pass** attempt.
+
+Powered by the PR 2 primitives: `captureDiff` (empty-diff + the test-file
+veto via `checkDiff`), `runCommands` (the preflight and the real `verify`).
+
+## Deferred (NOT in v1 public schema)
+
+`protect` knob, declared golden fixtures, `mustChange`/`mustContain`/etc.,
+top-level `workspaces` registry, stdout/stderr `contains`, artifact checks,
+browser checks, per-command timeout (unless needed internally), retries beyond
+`trials`. Keep the internal engine ready; expose only when a real user need
+forces the shape. Discipline: simple schema, strong receipts, room to grow.
+
+## PR sequence (internal-first, breaking-last)
+
+- [x] **PR 1 - refactor, no release (merged #47).** Extract the planner into
+  `planner.ts`; both modes share it.
+- [x] **PR 2 - chore, no release (merged #48).** Internal primitives:
+  `implement/workspace.ts` (copy, setup/`SetupError`, baseline, diff capture,
+  cleanup, `runProcess` with bounded-drain timeout) and `implement/verifiers.ts`
+  (`runCommands`, `checkDiff`). 19 tests.
+- [ ] **PR 3 - chore (internal).** Edit-capable target capability + gate.
+  `isEditCapable` (CLI claude-code/codex; API rejected). Internal `editMode`
+  RunOption (NOT public). claude-code editMode: workspace toolset (Read, Glob,
+  Grep, Edit, MultiEdit, Write, Bash) + `permissionMode: bypassPermissions`,
+  scoped to build + the temp workspace + after gating; extract a pure
+  `buildAgentOptions` so the profile is testable without the SDK. codex
+  editMode: `--sandbox workspace-write`. setup/verify are run by Pickled, never
+  the agent. Public schema (PR 6) exposes `allowEdits` (build-capable), not
+  permission semantics.
+- [ ] **PR 4 - chore (internal).** Attempts-shaped result model (`attempts[]`,
+  `passedAttempts/totalAttempts`); reporter renders `k/n`; answer mode is n=1.
+- [ ] **PR 5 - chore (internal).** Build runner orchestrating the primitives:
+  create -> setup (Error) -> baseline -> vacuous-fixture guard -> run
+  edit-capable target -> capture diff -> empty-diff veto -> harness-protection
+  veto -> run `verify` -> record attempt -> cleanup. Tested with fake/editing
+  targets. `checkDiff` repositioned to power empty-diff + harness protection,
+  not public scoring.
+- [ ] **PR 6 - feat -> RELEASE (the breaking PR).** Public schema
+  `questions -> tasks` + `kind` + `workspace`/`verify`/`trials`; wire answer +
+  build runners onto the shared planner; `pickled build` + gate; migrate the
+  dogfood config.
+- [ ] **PR 7 - feat.** Reporting: `k/n` by access path + the four-bucket
+  diagnosis + receipts (diff, changed files, command logs, kept-workspace path).
+- [ ] **Later.** `pickled test` fixture validation (golden passes / empty fails
+  / verify stable); docs, schema, examples; then dogfood decides whether
+  `protect`, golden fixtures, or richer verifiers earn public schema.
+
+## The clean product model
+
+- **sources** - what truth exists.
+- **access** - how the agent reaches it (the diagnosis axis).
+- **agents** - who attempts the task.
+- **tasks** - what a real developer would ask (answer or build).
+- **checks** (answer) / **verify** (build) - what proves success.
 
 ## Verified seams (as of 2026-06-02)
 
-- codex is read-only today: `packages/core/src/targets/cli/codex.ts:85` (`--sandbox read-only`).
-- claude-code disallows edits: `packages/config/src/defaults.ts:15` (`Edit/MultiEdit/Write/NotebookEdit`); `Bash` is allowed.
-- planner pieces live in `packages/core/src/check.ts` (~42-235); `sampling.ts` is already its own module; `--plan/--max-cells/--sample/--seed` exist in `apps/cli/src/index.ts:49-52`.
-- scoring is text-only today: `scoreExpected` over the response (`scorers/expected.ts`).
+- codex read-only today: `targets/cli/codex.ts:85` (`--sandbox read-only`).
+- claude-code disallows edits: `config/src/defaults.ts:15`.
+- planner extracted: `core/src/planner.ts`. Primitives: `core/src/implement/`.
+- `runCommands` IS the `verify` engine; `captureDiff` is evidence + the
+  empty-diff signal; `checkDiff` is internal (empty-diff / harness protection),
+  not public authoring.
 
-## Open risks to keep visible
+## Open risks
 
-- Stochasticity: implement verdicts are noisy; rate-shaped + trials + narrow tasks.
-- Environment vs agent failure: setup=Error is the guard.
-- Fixture validity: pinned deps, deterministic tests, golden/empty offline check.
-- Cost: trials x access x cell-cost; aggressive default sampling for implement.
-- Security: temp-copy is not isolation; containers gated on hosted/untrusted.
+- Stochastic build outcomes -> rate-shaped `k/n`, trials, small/fast/pinned
+  fixtures.
+- Trust: weak tests pass bad work, agents game tests -> the two safeguards
+  above; deterministic fixture tests.
+- Cost: `tasks x agents x access x trials` is super-linear -> `--max-cells`
+  counts trials; `--plan` shows the expanded total before any build runs.
+- Security: temp copy is work-area scoping, not isolation; containers gated on
+  hosted/untrusted/unattended use.
+- Build-mode access attribution is weaker than answer mode: the agent has Bash
+  (can reach the network), so a `web`/`mcp` build cell cannot prove context was
+  reached only through that path. Acceptable for v1; do not overclaim build
+  provenance the way answer-mode attribution can.
