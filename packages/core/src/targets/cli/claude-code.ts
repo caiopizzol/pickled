@@ -38,6 +38,7 @@ export function buildAgentOptions(
     restrictBuiltinTools,
     editMode,
     buildContext,
+    signal,
   } = options;
 
   // Build cells use the build prompt (no citation contract); discovery cells
@@ -70,6 +71,17 @@ export function buildAgentOptions(
       config.mcpServers) as ClaudeAgentOptions["mcpServers"],
     settingSources: [],
   };
+
+  // Wire the run's cancellation signal to the SDK's abortController so a
+  // wall-clock timeout actually stops the query, not just the wait. Bridge
+  // signal -> controller (the SDK takes a controller); handle an already-
+  // aborted signal up front.
+  if (signal) {
+    const controller = new AbortController();
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", () => controller.abort());
+    agentOptions.abortController = controller;
+  }
 
   // SDK `tools` is what actually restricts built-in availability; allowedTools
   // is only the auto-permission list. Build mode MUST keep the workspace tools

@@ -69,4 +69,26 @@ describe("buildAgentOptions", () => {
     expect(o.tools).toContain("Write");
     expect(o.tools).toContain("Bash");
   });
+
+  test("bridges the run signal to the SDK abortController", () => {
+    const ac = new AbortController();
+    const o = buildAgentOptions(config, { ...baseOptions, signal: ac.signal });
+    expect(o.abortController).toBeInstanceOf(AbortController);
+    expect(o.abortController?.signal.aborted).toBe(false);
+    ac.abort();
+    // Aborting the run's signal must flip the bridged controller too.
+    expect(o.abortController?.signal.aborted).toBe(true);
+  });
+
+  test("an already-aborted signal yields an aborted controller", () => {
+    const ac = new AbortController();
+    ac.abort();
+    const o = buildAgentOptions(config, { ...baseOptions, signal: ac.signal });
+    expect(o.abortController?.signal.aborted).toBe(true);
+  });
+
+  test("no signal means no abortController", () => {
+    const o = buildAgentOptions(config, baseOptions);
+    expect(o.abortController).toBeUndefined();
+  });
 });

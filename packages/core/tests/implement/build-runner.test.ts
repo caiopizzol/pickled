@@ -286,6 +286,35 @@ describe("runBuildCell", () => {
     expect(cell.build).toBeUndefined();
   });
 
+  test("an agent that exceeds the timeout is a failed trial and is cancelled", async () => {
+    const fixture = makeFixture({ "src/placeholder.txt": "x\n" });
+    let aborted = false;
+    const cell = await runBuildCell(
+      baseInput(fixture, {
+        agentTimeoutMs: 100,
+        // Hang until the run's signal aborts; record that cancellation reached
+        // the adapter (real teardown, not just an abandoned wait).
+        targetFactory: () => ({
+          category: "cli",
+          provider: "claude-code",
+          name: "hang",
+          run(_p, options): Promise<TargetResult> {
+            return new Promise((_resolve, reject) => {
+              options.signal?.addEventListener("abort", () => {
+                aborted = true;
+                reject(new Error("aborted"));
+              });
+            });
+          },
+        }),
+      }),
+    );
+    expect(aborted).toBe(true);
+    expect(cell.answerable).toBe("NO");
+    expect(cell.build?.attempts[0]?.status).toBe("failed");
+    expect(cell.build?.attempts[0]?.reason).toContain("budget");
+  });
+
   test("an error trial is excluded from k/n; passing trials still score", async () => {
     const fixture = makeFixture({ "src/placeholder.txt": "x\n" });
     let call = 0;

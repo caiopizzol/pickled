@@ -92,6 +92,13 @@ export interface RunOptions {
    * Paired with `editMode`. Internal only.
    */
   buildContext?: { docs: ResolvedDocSource[]; sourceHint: string | null };
+  /**
+   * Cancellation for the run. The build runner aborts this when the wall-clock
+   * budget elapses; the CLI adapters wire it to a real teardown (claude-code:
+   * the SDK's abortController; codex: killing the spawned process) so a hung
+   * agent does not orphan a process. Internal only.
+   */
+  signal?: AbortSignal;
   onProgress?: (msg: string) => void;
 }
 

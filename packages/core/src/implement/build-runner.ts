@@ -42,6 +42,9 @@ export interface BuildCellInput {
   /** Test seam: build a target from the per-cell config (defaults to createTarget). */
   targetFactory?: (name: string, config: unknown) => TargetRunner;
   keepOnFailure?: boolean;
+  /** Wall-clock budget for one agent run. Defaults to AGENT_TIMEOUT_MS; tests
+   *  pass a small value to exercise the timeout/cancellation path. */
+  agentTimeoutMs?: number;
   onProgress?: (msg: string) => void;
 }
 
@@ -191,13 +194,14 @@ async function runTrial(
       : createTarget(interfaceName, rt.targetConfig);
 
     // Wall-clock bound on the agent run so a hung agent cannot stall CI. The
-    // SDK's maxTurns bounds turns, not time; this is the time backstop. A
-    // timeout is a non-success trial (the agent did not finish in budget),
-    // not an environment error - it counts against the rate. NOTE: this stops
-    // the runner from waiting; it does NOT kill the underlying CLI/SDK process
-    // (the adapters do not yet accept an abort signal). The workspace is thrown
-    // away regardless, so an orphan cannot corrupt a later trial. A real
-    // process-kill backstop is deferred to its own slice.
+    // SDK's maxTurns bounds turns, not time; this is the time backstop. On
+    // timeout the runner aborts the controller, which the adapters wire to a
+    // real teardown (claude-code abortController, codex proc.kill), so the
+    // agent process is cancelled, not just abandoned. A timeout is a
+    // non-success trial (the agent did not finish in budget), counted against
+    // the rate.
+    const controller = new AbortController();
+    const budgetMs = input.agentTimeoutMs ?? AGENT_TIMEOUT_MS;
     let timedOut: boolean;
     try {
       timedOut = await raceTimeout(
@@ -214,9 +218,11 @@ async function runTrial(
           restrictBuiltinTools: rt.runOptions.restrictBuiltinTools,
           webTools: rt.runOptions.webTools,
           mcpTools: rt.runOptions.mcpTools,
+          signal: controller.signal,
           onProgress: input.onProgress,
         }),
-        AGENT_TIMEOUT_MS,
+        budgetMs,
+        () => controller.abort(),
       );
     } catch (e) {
       // The agent run threw (e.g. codex exited non-zero). We cannot tell an
@@ -230,7 +236,7 @@ async function runTrial(
     if (timedOut) {
       return {
         status: "failed",
-        reason: `agent run exceeded the ${Math.round(AGENT_TIMEOUT_MS / 1000)}s budget`,
+        reason: `agent run exceeded the ${Math.round(budgetMs / 1000)}s budget`,
       };
     }
 
@@ -294,22 +300,35 @@ async function runTrial(
 
 /**
  * Resolve to false when `promise` settles first, true if `ms` elapses first.
- * The underlying agent run is not cancelled (the SDK owns its own teardown);
- * the workspace is thrown away regardless, so an orphaned run cannot corrupt a
- * later trial.
+ * On timeout, `onTimeout` runs (the runner aborts the controller, which the
+ * adapters wire to a real process teardown). The orphaned promise is left to
+ * settle on its own; we do not await it.
  */
 async function raceTimeout(
   promise: Promise<unknown>,
   ms: number,
+  onTimeout: () => void,
 ): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<boolean>((resolve) => {
-    timer = setTimeout(() => resolve(true), ms);
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), ms);
   });
-  const done = promise.then(() => false);
-  const result = await Promise.race([done, timeout]);
+  // `settled` never rejects: it captures success vs failure as a value, so a
+  // late rejection from a post-timeout abandoned run cannot become an unhandled
+  // rejection. A rejection that arrives BEFORE the timeout is rethrown below so
+  // the caller records an error attempt.
+  const settled = promise.then(
+    () => ({ ok: true }) as const,
+    (e) => ({ ok: false, error: e }) as const,
+  );
+  const result = await Promise.race([settled, timeout]);
   if (timer) clearTimeout(timer);
-  return result;
+  if (result === "timeout") {
+    onTimeout();
+    return true;
+  }
+  if (!result.ok) throw result.error;
+  return false;
 }
 
 function errorCell(cellMeta: CellResult["cell"], message: string): CellResult {
