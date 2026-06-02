@@ -57,13 +57,14 @@ Providers: `claude-code` and `codex-cli` (CLI agents), `anthropic` and `openai` 
 
 ## `access`
 
-A named context path: a `(source, tools)` pair. This is what you compare across runs. The id `none` is reserved.
+A named context path: a `(source, tools)` pair, and the unit you compare across runs. The same source reached two ways is two different tests. A question runs once per `(agent × access)` pair, and each shows in the report as `agent · access`, so name paths to read well. The id `none` is reserved.
 
 ```yaml
 access:
   memory: { source: none, tools: none } # no context, model memory only
-  given_docs: { source: docs, tools: none } # docs content injected
-  web_open: { source: none, tools: web } # open web discovery
+  given_docs: { source: docs, tools: none } # docs injected into the prompt
+  web_open: { source: none, tools: web } # web search, no hint
+  web_docs: { source: docs, tools: web } # web search, docs URL as the target
   mcp_mintlify:
     source: none
     tools: mcp
@@ -75,10 +76,27 @@ access:
 ```
 
 - `source` is a registered source id, or `none` for no context.
-- `tools` is `none` (the source is injected into the prompt), `web` (the agent uses web search), or `mcp` (the agent uses the declared MCP servers).
-- `servers` is required when `tools: mcp` and rejected otherwise. HTTP transports only.
+- `tools` is `none` (the source is injected into the prompt), `web` (the agent reaches it with web search), or `mcp` (the agent reaches it through the declared MCP servers).
+- `servers` is required when `tools: mcp` and rejected otherwise. HTTP transports only. Name a server by its provider (`mintlify`, `context7`), not `docs`: the receipt records provenance as `mcp__<server>__...`, so you can tell which surface answered.
 
-With `tools: none` the source content is injected and the agent answers from it. With `tools: web` or `mcp` nothing is injected: the agent must reach the answer with its tools, and a cell that answers without invoking one is vetoed to `NO`.
+With `tools: none` the source is injected and the agent answers from it. With `tools: web` or `mcp` nothing is injected: the agent must reach the answer with its tools, and a cell that answers without invoking one is vetoed to `NO`, because model memory cannot testify to the path the cell is meant to test. With `source: none` the agent searches with no hint; with a URL source, that URL is handed over as the canonical target.
+
+### Reading the comparison
+
+Put several access paths on one question and the verdicts localize where the answer lives:
+
+- `memory` fails, `given_docs` passes: your source carries the answer.
+- `given_docs` fails: the answer is missing or unclear in that source. Fix the source.
+- `given_docs` passes, `web_docs` fails: the source is good, but it is not discoverable on the open web.
+- a `web` or `mcp` cell answers without calling a tool: vetoed to `NO`.
+
+### Naming
+
+The access name is the only place the report shows which path ran, so keep names boring and descriptive:
+
+- **sources** are content nouns: `readme`, `llms`, `docs_bundle`.
+- **access** names the path: `memory` (no context), `given_<source>` (source injected), `web_open` (web, no hint), `web_<source>` (web with that source as the target), `mcp_<provider>` (that MCP surface).
+- **servers** are the provider or endpoint: `mintlify`, `context7`.
 
 ## `questions`
 

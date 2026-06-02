@@ -1,9 +1,3 @@
 {
-  "pages": [
-    "index",
-    "getting-started",
-    "pickled-yml",
-    "access",
-    "github-actions"
-  ]
+  "pages": ["index", "getting-started", "pickled-yml", "github-actions"]
 }

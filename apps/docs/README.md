@@ -4,7 +4,7 @@ Pickled's public documentation site. Static Next.js + Fumadocs UI, deployed to C
 
 The site exposes:
 
-- `/` and `/<slug>` for humans (e.g. `/getting-started`, `/access`, `/pickled-yml`).
+- `/` and `/<slug>` for humans (e.g. `/getting-started`, `/pickled-yml`).
 - `/llms.txt` and `/llms-full.txt` for agents that ingest docs ahead of time.
 - `/llms.mdx/<slug>/content.md` for per-page Markdown fetching.
 - `/og/<slug>/image.png` for Open Graph cards.
