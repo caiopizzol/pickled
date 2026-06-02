@@ -41,6 +41,40 @@ export interface SurfaceResult {
  * Other shapes (Firecrawl, native API search) throw until their adapters
  * land per release.
  */
+/**
+ * One build-task attempt: the outcome plus deterministic receipts. Build
+ * outcomes are stochastic, so a build cell aggregates several attempts into a
+ * k/n rate. Self-contained report shape; the build runner (PR 5) maps the
+ * workspace/verifier primitives into it.
+ */
+export interface BuildAttempt {
+  status: "passed" | "failed" | "error";
+  /**
+   * Build-language reason on a non-pass: empty diff, the baseline test harness
+   * was modified, a failing verify command, or a setup/environment error.
+   */
+  reason?: string;
+  changedFiles?: Array<{ status: string; path: string }>;
+  diff?: string;
+  /**
+   * Per-verify-command receipt, mirroring the command verifier's CommandResult
+   * so a failed command is debuggable ("read the receipt and know what
+   * failed"). `stdout`/`stderr` and the attempt `diff` are stripped from
+   * non-verbose JSON (see formatCheckJSON) to keep CI artifacts small.
+   */
+  commands?: Array<{
+    name: string;
+    run: string;
+    exitCode: number;
+    passed: boolean;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+  }>;
+  /** Path to the retained workspace when keep-on-failure kept it. */
+  workspaceKeptPath?: string;
+}
+
 export interface CellResult {
   cell: {
     interface: string;
@@ -85,6 +119,20 @@ export interface CellResult {
   /** Set when the cell run threw; answerable will be NO, confidence 0. */
   error?: string;
   allResponses?: ResponseEntry[];
+  /**
+   * Build-task evidence (kind: build cells only). Answer cells leave this
+   * undefined and keep the answerable/confidence verdict, which still drives
+   * summary math and thresholds for both modes. `build` carries the k/n pass
+   * rate plus per-attempt receipts; the reporter renders it as build language
+   * (Built 2/3, Partially built 1/3, Did not build 0/3). Attempts are evidence
+   * for stochastic build tasks, NOT a universal result container - answer cells
+   * are never reshaped into attempts.
+   */
+  build?: {
+    attempts: BuildAttempt[];
+    passedAttempts: number;
+    totalAttempts: number;
+  };
 }
 
 export interface ScenarioResult {

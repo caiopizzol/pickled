@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import {
+  getBuildStatus,
   getScenarioStatus,
   type ScenarioStatus,
   type StatusTone,
@@ -148,11 +149,19 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
     `${indent}${chalk.dim(hasAccess ? "Matrix cells (agent · access)" : "Matrix cells (interface · source · toolset)")}`,
   );
   for (const cell of result.cells) {
-    const status = getScenarioStatus(cell);
+    // Build cells score k/n over trials and get build language; answer cells
+    // (and errored build cells, which carry `error` and no `build`) use the
+    // grounded scale.
+    const status = cell.build
+      ? getBuildStatus(cell.build)
+      : getScenarioStatus(cell);
     const color = toneToColor(status.tone);
     const labelText = formatCellLabel(cell.cell);
     const label = chalk.dim(labelText);
-    const statusLine = `${color(status.icon)} ${color(renderStatusLine(status))}`;
+    const statusText = cell.build
+      ? `${status.label} ${cell.build.passedAttempts}/${cell.build.totalAttempts}`
+      : renderStatusLine(status);
+    const statusLine = `${color(status.icon)} ${color(statusText)}`;
     lines.push(`${indent}${label} ${statusLine}`);
     lines.push(
       ...formatDetailFields(
@@ -473,9 +482,32 @@ export function formatCheckJSON(
           content: "",
         })),
         cells: cells?.map((c) => {
-          const { allResponses: cellAll, ...cellRest } = c;
+          const { allResponses: cellAll, build, ...cellRest } = c;
           void cellAll;
-          return cellRest;
+          if (!build) return cellRest;
+          // Keep the build receipt summary (status, reason, changed files,
+          // command names + exits) but strip heavy/leaky evidence - full diffs
+          // and command stdout/stderr - from non-verbose JSON, matching how
+          // source content and transcripts are stripped above.
+          return {
+            ...cellRest,
+            build: {
+              ...build,
+              attempts: build.attempts.map((a) => {
+                const { diff, commands, ...attRest } = a;
+                void diff;
+                return {
+                  ...attRest,
+                  commands: commands?.map((cmd) => {
+                    const { stdout, stderr, ...cmdRest } = cmd;
+                    void stdout;
+                    void stderr;
+                    return cmdRest;
+                  }),
+                };
+              }),
+            },
+          };
         }),
         surfaces: surfaces?.map((s2) => {
           const { allResponses: surfAll, ...surfRest } = s2;

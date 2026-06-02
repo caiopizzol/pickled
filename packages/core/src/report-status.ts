@@ -54,3 +54,26 @@ export function getScenarioStatus(input: Scoreable): ScenarioStatus {
 
   return { icon: "✗", label: "Ungrounded", confidence, tone: "error" };
 }
+
+/**
+ * Build-cell label. Build cells score as a k/n pass rate over trials, not the
+ * answer-mode grounded scale, so they get their own language and never render
+ * as "Well grounded". `confidence` carries the pass rate as a percent for
+ * non-CLI surfaces; the CLI reporter shows the literal k/n. An errored build
+ * cell (setup or vacuous-fixture) carries `error` and no `build` block, so it
+ * falls through to getScenarioStatus and renders "Error".
+ */
+export function getBuildStatus(build: {
+  passedAttempts: number;
+  totalAttempts: number;
+}): ScenarioStatus {
+  const { passedAttempts: passed, totalAttempts: total } = build;
+  const confidence = total > 0 ? Math.round((passed / total) * 100) : 0;
+  if (total > 0 && passed === total) {
+    return { icon: "✓", label: "Built", confidence, tone: "success" };
+  }
+  if (passed > 0) {
+    return { icon: "⚠", label: "Partially built", confidence, tone: "warning" };
+  }
+  return { icon: "✗", label: "Did not build", confidence, tone: "error" };
+}

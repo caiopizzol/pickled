@@ -290,3 +290,112 @@ describe("formatCheckReport golden fixtures", () => {
     expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
   });
 });
+
+describe("formatCheckReport build cells", () => {
+  function makeBuildReport(): CheckReport {
+    return {
+      tool: { name: "t", description: "d", path: "/tmp/t" },
+      docs: [],
+      scenarios: [
+        {
+          scenario: {
+            name: "build_toolbar",
+            prompt: "Add a toolbar",
+            requiredSources: [],
+          },
+          answerable: null,
+          confidence: null,
+          response: null,
+          reason: null,
+          citations: null,
+          cells: [
+            {
+              cell: {
+                interface: "claude_builder",
+                access: "given_docs",
+                source: "docs",
+                toolset: "none",
+              },
+              answerable: "YES",
+              confidence: 100,
+              response: "",
+              reason: "",
+              citations: null,
+              build: {
+                attempts: [
+                  {
+                    status: "passed",
+                    changedFiles: [{ status: "M", path: "src/app.tsx" }],
+                    diff: "diff --git a/src/app.tsx b/src/app.tsx\n+toolbar",
+                    commands: [
+                      {
+                        name: "tests",
+                        run: "bun test",
+                        exitCode: 0,
+                        passed: true,
+                        stdout: "PASS lots of output",
+                        stderr: "",
+                        timedOut: false,
+                      },
+                    ],
+                  },
+                  { status: "passed" },
+                  { status: "failed", reason: "tests failed" },
+                ],
+                passedAttempts: 2,
+                totalAttempts: 3,
+              },
+            },
+            {
+              cell: {
+                interface: "claude_builder",
+                access: "memory",
+                source: null,
+                toolset: "none",
+              },
+              answerable: "NO",
+              confidence: 0,
+              response: "",
+              reason: "",
+              citations: null,
+              build: {
+                attempts: [{ status: "failed" }, { status: "failed" }],
+                passedAttempts: 0,
+                totalAttempts: 2,
+              },
+            },
+          ],
+        },
+      ],
+      summary: { total: 1, answered: 0, unanswered: 1, score: 0 },
+    };
+  }
+
+  test("renders k/n build language, never the grounded scale", () => {
+    const out = stripAnsi(formatCheckReport(makeBuildReport()));
+    expect(out).toContain("Partially built 2/3");
+    expect(out).toContain("Did not build 0/2");
+    expect(out).not.toContain("Well grounded");
+    expect(out).not.toContain("Ungrounded");
+  });
+
+  test("slim JSON keeps the build summary but strips diffs and command output", () => {
+    const json = formatCheckJSON(makeBuildReport());
+    expect(json).not.toContain("lots of output");
+    expect(json).not.toContain("diff --git");
+    const att = JSON.parse(json).scenarios[0].cells[0].build.attempts[0];
+    expect(att.diff).toBeUndefined();
+    expect(att.changedFiles).toEqual([{ status: "M", path: "src/app.tsx" }]);
+    expect(att.commands[0].name).toBe("tests");
+    expect(att.commands[0].run).toBe("bun test");
+    expect(att.commands[0].exitCode).toBe(0);
+    expect(att.commands[0].stdout).toBeUndefined();
+    expect(att.commands[0].stderr).toBeUndefined();
+  });
+
+  test("verbose JSON keeps diffs and command output", () => {
+    const json = formatCheckJSON(makeBuildReport(), { verbose: true });
+    expect(json).toContain("lots of output");
+    expect(json).toContain("diff --git");
+  });
+});
