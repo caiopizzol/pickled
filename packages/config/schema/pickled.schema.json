@@ -16,23 +16,40 @@
       "type": "number",
       "minimum": 0,
       "maximum": 100,
-      "description": "Optional run score required for the run to pass. Omit to report the score with no pass/fail verdict."
+      "description": "Optional run score required for the run to pass. Omit to report the score with no pass/fail verdict.",
+      "examples": [80]
     }
   },
   "$defs": {
     "product": {
       "type": "object",
+      "description": "Name and describe the product being tested.",
       "required": ["name", "description"],
       "additionalProperties": false,
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "description": { "type": "string", "minLength": 1 }
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Product name shown in prompts and reports.",
+          "examples": ["my-product"]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short product description used to orient the agent.",
+          "examples": ["A CLI for managing cloud deployments"]
+        }
       }
     },
     "sources": {
       "type": "object",
-      "description": "Named public context artifacts. Each value is a URL or a local file path.",
-      "additionalProperties": { "type": "string", "minLength": 1 }
+      "description": "Named context artifacts Pickled can inject or point agents toward.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "description": "A URL or local file path.",
+        "examples": ["https://docs.example.com/llms.txt", "./README.md"]
+      }
     },
     "agent": {
       "type": "object",
@@ -40,16 +57,35 @@
       "additionalProperties": false,
       "properties": {
         "provider": {
-          "enum": ["claude-code", "codex-cli", "anthropic", "openai"]
+          "enum": ["claude-code", "codex-cli", "anthropic", "openai"],
+          "description": "Agent provider or interface to run.",
+          "examples": ["claude-code"]
         },
-        "model": { "type": "string", "minLength": 1 },
-        "temperature": { "type": "number" },
-        "maxTokens": { "type": "integer", "minimum": 1 },
-        "maxTurns": { "type": "integer", "minimum": 1 }
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Model identifier to run. Pin a specific version; aliases can drift across SDK upgrades.",
+          "examples": ["claude-haiku-4-5", "gpt-5.2"]
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Sampling temperature for API agents."
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum response tokens for API agents."
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum turns for CLI agents that support a turn cap."
+        }
       }
     },
     "agents": {
       "type": "object",
+      "description": "Agents or model interfaces that answer each question.",
       "minProperties": 1,
       "additionalProperties": { "$ref": "#/$defs/agent" }
     },
@@ -58,10 +94,19 @@
       "required": ["url"],
       "additionalProperties": false,
       "properties": {
-        "url": { "type": "string", "pattern": "^https?://" },
+        "url": {
+          "type": "string",
+          "pattern": "^https?://",
+          "description": "HTTP MCP server URL.",
+          "examples": ["https://docs.example.com/mcp"]
+        },
         "headers": {
           "type": "object",
-          "additionalProperties": { "type": "string" }
+          "description": "Optional HTTP headers for the MCP server. ${VAR} values are expanded from the environment by the loader.",
+          "additionalProperties": {
+            "type": "string",
+            "examples": ["Bearer ${DOCS_TOKEN}"]
+          }
         }
       }
     },
@@ -73,11 +118,16 @@
         "source": {
           "type": "string",
           "minLength": 1,
-          "description": "A registered source id, or \"none\" for no context."
+          "description": "A registered source id, or \"none\" for no context.",
+          "examples": ["none", "llms"]
         },
-        "tools": { "enum": ["none", "web", "mcp"] },
+        "tools": {
+          "enum": ["none", "web", "mcp"],
+          "description": "How the agent reaches context: none injects the source, web uses web search, mcp uses the declared MCP servers."
+        },
         "servers": {
           "type": "object",
+          "description": "MCP servers for this access path. Required when tools is mcp, forbidden otherwise.",
           "minProperties": 1,
           "additionalProperties": { "$ref": "#/$defs/mcpServer" }
         }
@@ -95,30 +145,40 @@
     },
     "access": {
       "type": "object",
+      "description": "Named paths that say how an agent reaches context: a (source, tools) pair.",
       "minProperties": 1,
       "additionalProperties": { "$ref": "#/$defs/accessPath" }
     },
     "checks": {
       "type": "object",
+      "description": "The answer contract for a question. At least one check is required.",
       "additionalProperties": false,
       "properties": {
         "mustMention": {
           "type": "array",
           "minItems": 1,
+          "description": "Case-sensitive substrings that must all appear in the answer.",
           "items": { "type": "string", "minLength": 1 }
         },
         "mustMentionOneOf": {
           "type": "array",
           "minItems": 1,
+          "description": "Groups where the answer must include at least one value from each group.",
           "items": {
             "type": "object",
             "required": ["label", "values"],
             "additionalProperties": false,
             "properties": {
-              "label": { "type": "string", "minLength": 1 },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Human-readable name for this one-of group, shown in receipts.",
+                "examples": ["package manager"]
+              },
               "values": {
                 "type": "array",
                 "minItems": 1,
+                "description": "Candidate substrings; at least one must appear.",
                 "items": { "type": "string", "minLength": 1 }
               }
             }
@@ -127,6 +187,7 @@
         "mustNotMention": {
           "type": "array",
           "minItems": 1,
+          "description": "Case-sensitive substrings that must not appear in the answer.",
           "items": { "type": "string", "minLength": 1 }
         }
       },
@@ -138,14 +199,17 @@
     },
     "examples": {
       "type": "object",
+      "description": "Offline sample answers checked by pickled test (no model calls).",
       "additionalProperties": false,
       "properties": {
         "pass": {
           "type": "array",
+          "description": "Answers that should satisfy every check.",
           "items": { "type": "string", "minLength": 1 }
         },
         "fail": {
           "type": "array",
+          "description": "Answers that should fail at least one check.",
           "items": { "type": "string", "minLength": 1 }
         }
       }
@@ -155,17 +219,29 @@
       "required": ["id", "ask", "agents", "access", "checks"],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "ask": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable question id used in reports and CLI filters (--question).",
+          "examples": ["install"]
+        },
+        "ask": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The question sent to the agent.",
+          "examples": ["How do I install my-product?"]
+        },
         "agents": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "description": "Agent names declared in the top-level agents map.",
+          "items": { "type": "string", "minLength": 1 }
         },
         "access": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "description": "Access path names declared in the top-level access map.",
+          "items": { "type": "string", "minLength": 1 }
         },
         "checks": { "$ref": "#/$defs/checks" },
         "examples": { "$ref": "#/$defs/examples" }
@@ -173,6 +249,7 @@
     },
     "questions": {
       "type": "array",
+      "description": "Questions to ask agents, plus the checks their answers must satisfy.",
       "minItems": 1,
       "items": { "$ref": "#/$defs/question" }
     }
