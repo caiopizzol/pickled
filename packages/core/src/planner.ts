@@ -44,6 +44,21 @@ export interface PlannedCell {
   toolset?: string;
   target?: string;
   context?: string;
+  /**
+   * Executions this cell represents. Build cells run `trials` times within the
+   * one cell; answer/single cells run once. Omitted means 1. The cost gate
+   * (`--max-cells`) and the plan's execution count expand by this.
+   */
+  trials?: number;
+}
+
+/**
+ * Trial-expanded execution count for a set of cells: build cells contribute
+ * their `trials`, every other cell contributes 1. This is the real unit of
+ * work an agent run does, which is what `--max-cells` gates.
+ */
+export function cellExecutions(cells: PlannedCell[]): number {
+  return cells.reduce((n, c) => n + (c.trials ?? 1), 0);
 }
 
 export function expandMatrix(config: CheckConfig): ExpandedScenario[] {
@@ -138,6 +153,10 @@ export function planMatrixCells(
             access: accessName,
             source: sourceName,
             toolset: toolsetName,
+            // Build cells run `trials` times within the cell; answer cells once.
+            ...(scenario.kind === "build"
+              ? { trials: scenario.trials ?? 1 }
+              : {}),
           });
         }
       }
@@ -176,10 +195,12 @@ export function buildPlanReport(args: {
   tool: ToolInfo;
   docs: ResolvedDocSource[];
   expandedCells: number;
+  expandedExecutions: number;
   selectedCells: PlannedCell[];
   seed: string | undefined;
 }): CheckReport {
-  const { tool, docs, expandedCells, selectedCells, seed } = args;
+  const { tool, docs, expandedCells, expandedExecutions, selectedCells, seed } =
+    args;
   return {
     tool: { name: tool.name, description: tool.description, path: tool.path },
     docs,
@@ -188,6 +209,8 @@ export function buildPlanReport(args: {
     plan: {
       expandedCells,
       selectedCells: selectedCells.length,
+      expandedExecutions,
+      selectedExecutions: cellExecutions(selectedCells),
       seed,
       cells: selectedCells.map((c) =>
         c.kind === "matrix"
@@ -197,6 +220,7 @@ export function buildPlanReport(args: {
               access: c.access,
               source: c.source,
               toolset: c.toolset,
+              ...(c.trials !== undefined ? { trials: c.trials } : {}),
             }
           : {
               scenario: c.scenario,

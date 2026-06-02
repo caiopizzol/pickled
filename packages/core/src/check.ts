@@ -2,12 +2,13 @@ import type {
   CheckConfig,
   ResolvedDocSource,
   Scenario,
-  ScenarioMatrix,
 } from "@pickled-dev/config";
 import { resolveCellRuntime } from "./cell-runtime.js";
+import { type BuildTask, runBuildCell } from "./implement/build-runner.js";
 import {
   buildPlanReport,
   type CellFilter,
+  cellExecutions,
   expandMatrix,
   MATRIX_SENTINEL,
   matrixCellPairs,
@@ -15,7 +16,11 @@ import {
   plannedCellKey,
 } from "./planner.js";
 import { summarizeReadiness } from "./readiness.js";
-import { getScenarioStatus } from "./report-status.js";
+import {
+  formatCellLabel,
+  getBuildStatus,
+  getScenarioStatus,
+} from "./report-status.js";
 import { sampleCellsPerScenario } from "./sampling.js";
 import {
   type Answerable,
@@ -150,12 +155,16 @@ export async function runCheck(
     usedSeed = seed;
   }
 
-  if (
-    options.maxCells !== undefined &&
-    selectedCells.length > options.maxCells
-  ) {
+  // The cost gate counts trial-expanded EXECUTIONS, not cells: a build cell
+  // with trials: 20 is 20 agent runs. For answer-only runs executions == cells.
+  const selectedExecutions = cellExecutions(selectedCells);
+  if (options.maxCells !== undefined && selectedExecutions > options.maxCells) {
+    const cellNote =
+      selectedExecutions === selectedCells.length
+        ? `${selectedExecutions} cells`
+        : `${selectedExecutions} executions (${selectedCells.length} cells, build trials expanded)`;
     throw new Error(
-      `Matrix expands to ${selectedCells.length} cells, exceeding --max-cells ${options.maxCells}. Add --question/--agent/--access filters, or pass --sample N to sample per question.`,
+      `Matrix expands to ${cellNote}, exceeding --max-cells ${options.maxCells}. Add --question/--agent/--access filters, pass --sample N, or lower build trials.`,
     );
   }
 
@@ -164,6 +173,7 @@ export async function runCheck(
       tool,
       docs,
       expandedCells: expandedCells.length,
+      expandedExecutions: cellExecutions(expandedCells),
       selectedCells,
       seed: usedSeed,
     });
@@ -205,16 +215,16 @@ export async function runCheck(
       if (result.cells) {
         onProgress?.(`  ${labelPadded} (matrix mode)`);
         for (const cell of result.cells) {
-          const status = getScenarioStatus(cell);
-          const labelParts = [
-            cell.cell.interface,
-            cell.cell.source ?? "-",
-            cell.cell.toolset,
-          ];
-          const cellLabel = `    [${labelParts.join(" · ")}]`.padEnd(40);
-          onProgress?.(
-            `${cellLabel} ${status.icon} ${status.label} (${status.confidence}%)`,
-          );
+          // Build cells use the build verdict family and k/n, never the
+          // grounded answer scale - matching the final reporter.
+          const status = cell.build
+            ? getBuildStatus(cell.build)
+            : getScenarioStatus(cell);
+          const cellLabel = `    ${formatCellLabel(cell.cell)}`.padEnd(40);
+          const statusText = cell.build
+            ? `${status.label} ${cell.build.passedAttempts}/${cell.build.totalAttempts}`
+            : `${status.label} (${status.confidence}%)`;
+          onProgress?.(`${cellLabel} ${status.icon} ${statusText}`);
         }
       } else if (result.surfaces) {
         onProgress?.(`  ${labelPadded} (compare-surfaces mode)`);
@@ -278,6 +288,8 @@ export async function runCheck(
   report.plan = {
     expandedCells: expandedCells.length,
     selectedCells: selectedCells.length,
+    expandedExecutions: cellExecutions(expandedCells),
+    selectedExecutions,
     seed: usedSeed,
   };
   // Stamp the readiness summary (#22 / step 4 of #19) only when at
@@ -314,6 +326,17 @@ async function runScenario(
   // sentinel from expandMatrix. Dispatch to the matrix branch and skip the
   // single-target/compareSurfaces paths.
   if (scenario.matrix && targetName === MATRIX_SENTINEL) {
+    if (scenario.kind === "build") {
+      return runBuildScenario(
+        scenario,
+        contextName,
+        tool,
+        config,
+        docs,
+        options,
+        matrixCellSelection,
+      );
+    }
     return runMatrixScenario(
       scenario,
       contextName,
@@ -885,6 +908,107 @@ async function runMatrixScenario(
     citations: null,
     cells,
     verifierSamples,
+    target: metadata,
+    context: { name: contextName },
+  };
+}
+
+/**
+ * Build-mode scenario runner. Expands the same (interface × access) cells as
+ * the matrix runner - sampling and cell filters apply identically - but each
+ * cell is executed by the build runner (edit a fresh workspace per trial, run
+ * verify) rather than answer-scored. Emits one CellResult per cell carrying the
+ * `build` block (strict k/n); top-level evaluation fields stay null.
+ */
+async function runBuildScenario(
+  scenario: Scenario,
+  contextName: string,
+  tool: ToolInfo,
+  config: CheckConfig,
+  docs: ResolvedDocSource[],
+  options: CheckOptions,
+  matrixCellSelection?: Set<string>,
+): Promise<ScenarioResult> {
+  const { config: contextConfig } = resolveContext(
+    contextName,
+    config.contexts,
+  );
+  const matrix = scenario.matrix ?? {};
+  const defaultInterface = scenario.target ?? "default";
+  const interfaces = matrix.interfaces ?? [defaultInterface];
+  const pairs = matrixCellPairs(matrix);
+  const cellFilter = options.cellFilter ?? {};
+
+  // The public build contract is verify; the scenario carries it as string[].
+  // Map each command to a CommandSpec (name defaults to the command text).
+  const task: BuildTask = {
+    name: scenario.name,
+    prompt: scenario.prompt,
+    workspacePath: scenario.workspace?.path ?? "",
+    setup: scenario.workspace?.setup ?? [],
+    verify: (scenario.verify ?? []).map((run) => ({ name: run, run })),
+    trials: scenario.trials ?? 1,
+  };
+
+  const cells: CellResult[] = [];
+  let metadata: ScenarioResult["target"];
+  for (const interfaceName of interfaces) {
+    if (cellFilter.interface && cellFilter.interface !== interfaceName) {
+      continue;
+    }
+    const { config: tc } = resolveTarget(interfaceName, config.targets);
+    metadata = {
+      target: interfaceName,
+      category: tc.category,
+      provider: tc.provider,
+      model: tc.model ?? "unknown",
+    };
+    for (const cellPair of pairs) {
+      const accessName = cellPair.access;
+      if (cellFilter.access && cellFilter.access !== accessName) continue;
+      if (
+        cellFilter.source !== undefined &&
+        cellFilter.source !== (cellPair.source ?? "")
+      ) {
+        continue;
+      }
+      if (cellFilter.toolset && cellFilter.toolset !== cellPair.toolset) {
+        continue;
+      }
+      if (matrixCellSelection !== undefined) {
+        const key = plannedCellKey({
+          scenario: scenario.name,
+          kind: "matrix",
+          interface: interfaceName,
+          access: accessName,
+          source: cellPair.source,
+          toolset: cellPair.toolset,
+        });
+        if (!matrixCellSelection.has(key)) continue;
+      }
+      const cell = await runBuildCell({
+        task,
+        interfaceName,
+        accessPair: cellPair,
+        config,
+        docs,
+        tool,
+        contextConfig,
+        targetFactory: options.targetFactory,
+        onProgress: options.onProgress,
+      });
+      cells.push(cell);
+    }
+  }
+
+  return {
+    scenario,
+    answerable: null,
+    confidence: null,
+    response: null,
+    reason: null,
+    citations: null,
+    cells,
     target: metadata,
     context: { name: contextName },
   };

@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import {
+  formatCellLabel,
   getBuildStatus,
   getScenarioStatus,
   type ScenarioStatus,
@@ -224,16 +225,6 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
     }
   }
   return lines;
-}
-
-function formatCellLabel(cell: {
-  interface?: string;
-  access?: string;
-  source?: string | null;
-  toolset?: string;
-}): string {
-  if (cell.access) return `[${cell.interface} · ${cell.access}]`;
-  return `[${cell.interface} · ${cell.source ?? "-"} · ${cell.toolset}]`;
 }
 
 /**

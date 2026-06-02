@@ -259,6 +259,13 @@ export interface CheckReport {
   plan?: {
     expandedCells: number;
     selectedCells: number;
+    /**
+     * Trial-expanded execution counts. A build cell runs `trials` agent runs,
+     * so executions >= cells; for answer-only runs they are equal. This is the
+     * real unit of work, and what `--max-cells` gates.
+     */
+    expandedExecutions?: number;
+    selectedExecutions?: number;
     seed?: string;
     /** Per-cell list, included only in dry-run reports (`--plan`). */
     cells?: Array<{
@@ -269,6 +276,8 @@ export interface CheckReport {
       toolset?: string;
       target?: string;
       context?: string;
+      /** Executions for this cell (build cells only; absent means 1). */
+      trials?: number;
     }>;
   };
 }
