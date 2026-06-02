@@ -84,7 +84,9 @@ tasks:
       mustNotMention: [magic dashboard, Firecrawl]
 
   # Build dogfood: can an agent use Pickled's own public context to author
-  # and validate a Pickled config for a tiny product fixture?
+  # and validate a Pickled config for a tiny product fixture? The fixture
+  # workspace contains llms.txt because the generated config must reference it,
+  # so `memory` means "not injected", not "unavailable".
   - id: write_pickled_config
     kind: build
     prompt: Create a pickled.yml for the BrineKit fixture product. The config should register the local llms.txt source, compare memory against injected llms context, define an answer task that verifies the documented install command while excluding stale npm install guidance, and define a build task named smoke_build that uses ./workspace, runs two trials, and verifies configured.txt exists.

@@ -306,6 +306,9 @@ async function runTrial(
 }
 
 function isAgentTurnBudgetExhausted(message: string): boolean {
+  // Claude Agent SDK currently reports max-turn exhaustion as a string error,
+  // not a structured stop reason. Keep this classifier in sync if the SDK
+  // exposes a typed reason or changes the wording.
   return /reached maximum number of turns/i.test(message);
 }
 
