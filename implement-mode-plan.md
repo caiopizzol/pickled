@@ -166,6 +166,13 @@ forces the shape. Discipline: simple schema, strong receipts, room to grow.
   `buildTaskPrompt` system prompt routed via `buildContext` (no citation
   contract, never names verify commands). Tested with a fake editing target.
   NOT yet wired into `runCheck` - PR 6 wires it to `kind: build`.
+- [x] **PR 5c - chore (internal).** Real agent-run cancellation: RunOptions
+  carries `signal`; the build runner owns an AbortController and aborts it on
+  the wall-clock timeout. claude-code bridges it to the SDK's `abortController`;
+  codex kills the spawned process. raceTimeout rethrows a pre-timeout rejection
+  (error attempt) but swallows a post-timeout abandoned rejection (no unhandled
+  rejection). Closes the "wait-bound, not cancellation" gap before public
+  `pickled build`.
 - [ ] **PR 6 - feat -> RELEASE (the breaking PR).** Public schema
   `questions -> tasks` + `kind` + `workspace`/`verify`/`trials`; wire answer +
   build runners onto the shared planner; `pickled build` + gate; migrate the
