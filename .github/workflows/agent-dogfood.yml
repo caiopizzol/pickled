@@ -10,6 +10,18 @@ name: Agent dogfood
 # silently drifted out of date and broke. If per-cell jobs are wanted again,
 # generate them from `pickled check --plan --json`, never by copying names.
 #
+# Build health gate vs lift diagnostic. The build task declares two access
+# paths: given_llms (context injected - the supported path) and memory (no
+# injection - a baseline that is meant to be hard). A run that averages both
+# is red by construction even when the product works, which is a bad
+# operational signal. So a default build dispatch (no access, no threshold)
+# gates on the supported path only: it forces --access given_llms and a green
+# run means "agents can still build with our injected context." To measure the
+# memory-vs-given_llms lift instead, set threshold=0 (leave access empty): that
+# runs the full matrix and never reds on score, so the receipt's gradient is
+# the signal. The memory cell stays declared in pickled.yml so --access memory
+# remains available for ad-hoc diagnosis.
+#
 # Secrets (set in repo settings; missing keys produce error receipts):
 # - ANTHROPIC_API_KEY_DOGFOOD (quick / anthropic_api / build agents)
 # - OPENAI_API_KEY_DOGFOOD     (openai_api cells)
@@ -28,7 +40,10 @@ on:
         description: "Run only this agent (optional)"
         required: false
       access:
-        description: "Run only this access path (optional)"
+        description: "Run only this access path (optional; build defaults to given_llms)"
+        required: false
+      threshold:
+        description: "Override pass threshold (0 = never red; use for the build lift diagnostic)"
         required: false
       max_cells:
         description: "Abort if planned executions exceed N (optional)"
@@ -62,15 +77,25 @@ jobs:
           PICKLED_TASK: ${{ inputs.task }}
           PICKLED_AGENT: ${{ inputs.agent }}
           PICKLED_ACCESS: ${{ inputs.access }}
+          PICKLED_THRESHOLD: ${{ inputs.threshold }}
           PICKLED_MAX_CELLS: ${{ inputs.max_cells }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_DOGFOOD }}
         run: |
           set +e
+          # Default build dispatch (no access, no threshold) gates on the
+          # supported path only, so a healthy product produces a green run.
+          # threshold=0 opts out (full matrix, never red) for the lift
+          # diagnostic; an explicit access also opts out of the default.
+          if [[ "$PICKLED_COMMAND" == "build" && -z "$PICKLED_ACCESS" && -z "$PICKLED_THRESHOLD" ]]; then
+            PICKLED_ACCESS="given_llms"
+            echo "build health gate: defaulting --access given_llms (the supported path). For the memory-vs-given_llms lift, re-run with threshold=0 and no access."
+          fi
           args=(. --output pickled-report.json --verbose)
           [[ -n "$PICKLED_TASK" ]] && args+=(--task "$PICKLED_TASK")
           [[ -n "$PICKLED_AGENT" ]] && args+=(--agent "$PICKLED_AGENT")
           [[ -n "$PICKLED_ACCESS" ]] && args+=(--access "$PICKLED_ACCESS")
+          [[ -n "$PICKLED_THRESHOLD" ]] && args+=(--threshold "$PICKLED_THRESHOLD")
           [[ -n "$PICKLED_MAX_CELLS" ]] && args+=(--max-cells "$PICKLED_MAX_CELLS")
           ./apps/cli/dist/index.js "$PICKLED_COMMAND" "${args[@]}"
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
@@ -92,5 +117,6 @@ jobs:
           PICKLED_COMMAND: ${{ inputs.command }}
         run: |
           code="${{ steps.run.outputs.exit_code }}"
-          echo "pickled $PICKLED_COMMAND exited with code $code (non-zero = score below threshold; see the uploaded receipt)"
+          echo "pickled $PICKLED_COMMAND exited with code $code"
+          echo "non-zero means the run did not pass: a cell scored below threshold, OR one or more cells errored (auth/config/runtime). The two look the same from the exit code - read the uploaded receipt's per-cell 'error' fields to tell them apart."
           exit "${code:-1}"
