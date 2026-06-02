@@ -319,10 +319,10 @@ Use `run passes` and `run fails` everywhere. Do not switch between `CI fails`, `
 
 Pickled has two verdicts. They are orthogonal. Renderers must not conflate them.
 
-- **Question verdict** answers whether one question satisfied its check contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as the human labels above: `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, `Error`.
+- **Cell verdict** answers whether one `(agent × access)` cell satisfied its check contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as the human labels above: `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, `Error`.
 - **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
 
-The question verdict determines the label family. Confidence may refine `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90), but it must never upgrade `PARTIAL`, `NO`, or `Error`. A partial answer at 95% confidence is still `Partially grounded`, not `Well grounded`. The categorical signal wins.
+The cell verdict determines the label family. Confidence may refine `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90), but it must never upgrade `PARTIAL`, `NO`, or `Error`. A partial answer at 95% confidence is still `Partially grounded`, not `Well grounded`. The categorical signal wins.
 
 Implementation rule: one shared helper returns the label, icon, and tone. Both progress output and final report consume it. Neither computes the label from raw confidence.
 
@@ -364,7 +364,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **Bullet shape.** One sentence per change. Lead with what changed for the user, not the implementation. Bold the feature name. Use a hyphen, never an em dash, to join the name and the description.
 
-**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `question verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `check` (the `mustMention` / `mustMentionOneOf` / `mustNotMention` contract; not `assertion` or `regression check`).
+**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `cell verdict` and `run verdict` (not `pass rate`), `registered source` (not `source file`), `check` (the `mustMention` / `mustMentionOneOf` / `mustNotMention` contract; not `assertion` or `regression check`).
 
 **Honesty constraints.** No absolutes. A smoke test `catches regressions in the example contract`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
 

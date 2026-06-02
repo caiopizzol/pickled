@@ -31,13 +31,13 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: readme, tools: none }
+  given_readme: { source: readme, tools: none }
 
 questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick]
-    access: [injected]
+    access: [given_readme]
     checks:
       mustMention: ["bunx my-product"]
 
@@ -76,19 +76,19 @@ The point of pickled is the comparison. Add a no-context path and run the same q
 
 ```yaml
 access:
-  prior: { source: none, tools: none } # model memory only
-  injected: { source: readme, tools: none } # your README injected
+  memory: { source: none, tools: none } # model memory only
+  given_readme: { source: readme, tools: none } # your README injected
 
 questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick]
-    access: [prior, injected]
+    access: [memory, given_readme]
     checks:
       mustMention: ["bunx my-product"]
 ```
 
-Now `pickled check .` runs two cells. If `prior` fails and `injected` passes, your README is doing the work. If `prior` already passes, the model knew it without your docs. If `injected` fails, the answer is not in the source you registered: fix the context.
+Now `pickled check .` runs two cells. If `memory` fails and `given_readme` passes, your README is doing the work. If `memory` already passes, the model knew it without your docs. If `given_readme` fails, the answer is not in the source you registered: fix the context.
 
 ## Reach the live site with tools
 
@@ -96,7 +96,7 @@ Add a `web` access path to make the agent discover the answer instead of reading
 
 ```yaml
 access:
-  web: { source: none, tools: web }
+  web_open: { source: none, tools: web }
 ```
 
 A `web` (or `mcp`) cell that answers without invoking a tool is vetoed to `NO`: model memory does not count as evidence for a tool path.

@@ -38,23 +38,23 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: llms, tools: none }
-  web: { source: llms, tools: web }
+  given_llms: { source: llms, tools: none }
+  web_llms: { source: llms, tools: web }
 
 questions:
   - id: pricing
     ask: How is my-product priced?
     agents: [quick]
-    access: [injected, web]
+    access: [given_llms, web_llms]
     checks:
       mustMention: ["free", "open source"]
 
 threshold: 80
 ```
 
-The `injected` cell injects your `llms.txt` into the prompt. That is the content test: if it fails here, your `llms.txt` does not actually answer the question. The `web` cell does not inject the file. It gives the agent the canonical `llms.txt` URL and requires a real web tool call. That is the discovery test: if it fails here while `injected` passes, your content is fine but the agent did not use it through the configured web path.
+The `given_llms` cell injects your `llms.txt` into the prompt. That is the content test: if it fails here, your `llms.txt` does not actually answer the question. The `web_llms` cell does not inject the file. It gives the agent the canonical `llms.txt` URL and requires a real web tool call. That is the discovery test: if it fails here while `given_llms` passes, your content is fine but the agent did not use it through the configured web path.
 
-Both cells use the same `mustMention` checks for the answer you want. The `web` tool calls are real. No model grades another model. The score is the score.
+Both cells use the same `mustMention` checks for the answer you want. The web tool calls are real. No model grades another model. The score is the score.
 
 ## Why this beats reading it yourself
 
@@ -67,5 +67,5 @@ Run this on the questions that matter most for your product, the ones where a wr
 Point pickled at your `llms.txt` and write one question it is supposed to answer. Run it once with the file injected and once with the agent reaching the URL through web tools, and see which promise holds.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
-- [Access tools](https://docs.pickled.dev/toolsets)
+- [Access](https://docs.pickled.dev/access)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

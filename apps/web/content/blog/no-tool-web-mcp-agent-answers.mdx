@@ -30,7 +30,7 @@ product:
   description: short one-liner
 
 sources:
-  docs_url: https://docs.my-product.dev/llms-full.txt
+  docs_bundle: https://docs.my-product.dev/llms-full.txt
 
 agents:
   quick:
@@ -38,10 +38,10 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: docs_url, tools: none }
-  web: { source: docs_url, tools: web }
-  docs_mcp:
-    source: docs_url
+  given_docs_bundle: { source: docs_bundle, tools: none }
+  web_docs_bundle: { source: docs_bundle, tools: web }
+  mcp_context7:
+    source: none
     tools: mcp
     servers:
       context7:
@@ -53,7 +53,7 @@ questions:
   - id: auth-setup
     ask: How do I authenticate with my-product?
     agents: [quick]
-    access: [injected, web, docs_mcp]
+    access: [given_docs_bundle, web_docs_bundle, mcp_context7]
     checks:
       mustMention: ["api key"]
 
@@ -74,8 +74,7 @@ There is no single number for "does an agent understand my product," because it 
 
 ## Try it
 
-Declare injected, `web`, and one `mcp` access path, point a question at all three, and read the row. The gaps are the work.
+Declare an injected (`tools: none`), a `web`, and one `mcp` access path, point a question at all three, and read the row. The gaps are the work.
 
-- [Access tools](https://docs.pickled.dev/toolsets)
-- [Access evaluation](https://docs.pickled.dev/matrix-evaluation)
+- [Access](https://docs.pickled.dev/access)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

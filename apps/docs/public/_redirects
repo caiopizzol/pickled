@@ -9,3 +9,11 @@
 /docs/*               /:splat              301
 /llms.mdx/docs/*      /llms.mdx/:splat     301
 /og/docs/*            /og/:splat           301
+
+# matrix-evaluation + toolsets merged into the single Access page.
+/matrix-evaluation            /access            301
+/toolsets                     /access            301
+/llms.mdx/matrix-evaluation   /llms.mdx/access   301
+/llms.mdx/toolsets            /llms.mdx/access   301
+/og/matrix-evaluation         /og/access         301
+/og/toolsets                  /og/access         301

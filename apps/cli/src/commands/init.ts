@@ -22,14 +22,14 @@ agents:
 # to compare them: ask the same question down each path and see which one
 # gets the agent to the right answer.
 access:
-  prior: { source: none, tools: none } # no context, model memory only
-  injected: { source: readme, tools: none } # your README injected
+  memory: { source: none, tools: none } # no context, model memory only
+  given_readme: { source: readme, tools: none } # your README injected
 
 questions:
   - id: getting-started
     ask: How do I install and set up this product?
     agents: [claude]
-    access: [prior, injected]
+    access: [memory, given_readme]
     checks:
       # Edit these: phrases a correct answer must (or must not) contain.
       mustMention: [install]
