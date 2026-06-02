@@ -65,7 +65,7 @@ right API."
 
 ## PR sequence (internal-first, breaking-last; all risk in the final PR)
 
-- [ ] **PR 1 - refactor, no release.** Extract the planner from check.ts into
+- [x] **PR 1 - refactor, no release (merged #47).** Extract the planner from check.ts into
   `packages/core/src/planner.ts`: `expandMatrix`, `planMatrixCells`,
   `matrixCellPairs`, `plannedCellKey`, `buildPlanReport`, and the
   `PlannedCell` / `ExpandedScenario` types. Both modes will share it.
