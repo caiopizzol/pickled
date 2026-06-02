@@ -53,14 +53,14 @@ A named context path: a `(source, tools)` pair. This is what you compare across 
 
 ```yaml
 access:
-  prior: { source: none, tools: none } # no context, model memory only
-  injected: { source: docs, tools: none } # docs content injected
-  web: { source: none, tools: web } # open web discovery
-  docs_mcp:
-    source: docs
+  memory: { source: none, tools: none } # no context, model memory only
+  given_docs: { source: docs, tools: none } # docs content injected
+  web_open: { source: none, tools: web } # open web discovery
+  mcp_mintlify:
+    source: none
     tools: mcp
     servers:
-      docs:
+      mintlify:
         url: https://docs.example.com/mcp
         headers:
           AUTH_TOKEN: ${AUTH_TOKEN}
@@ -79,7 +79,7 @@ questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick, api]
-    access: [prior, injected, web]
+    access: [memory, given_docs, web_open]
     checks:
       mustMention: ["bunx my-product"]
       mustMentionOneOf:
@@ -96,7 +96,7 @@ Each question runs once per `(agent × access)` pair. A question needs an `id`, 
 - `mustMentionOneOf` - each group is satisfied when at least one of its `values` appears. A group is `{ label, values }`; the label names the group in the receipt.
 - `mustNotMention` - none of the listed substrings may appear.
 
-Each entry counts as one check. The cell score is the share of checks satisfied; the verdict is `YES` (all), `PARTIAL` (some), or `NO` (none).
+Each entry counts as one check. All matches are case-sensitive substrings. The cell score is the share of checks satisfied; the verdict is `YES` (all), `PARTIAL` (some), or `NO` (none).
 
 ### `examples`
 

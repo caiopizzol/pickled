@@ -17,8 +17,8 @@ An open-source CLI that tests whether AI agents actually understand a product. I
 
 These are the rules new edits most often break. Each lives in a single source of truth; do not paraphrase them here.
 
-1. **Question verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
-2. **Question verdict determines the label family.** Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, or Error. See `packages/core/src/report-status.ts`.
+1. **Cell verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
+2. **Cell verdict determines the label family.** Each `(agent × access)` cell scores on its own; a question has no single verdict. Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, or Error. See `packages/core/src/report-status.ts`.
 3. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. See `reporter.ts` near `formatOverall`.
 4. **JSON output stays raw.** It carries machine fields (`answerable`, `confidence`, `citations`), not derived human labels. Human labels are derived in each renderer.
 5. **Registered source contract.** Only sources declared in `pickled.yml`'s `sources` count for scoring. The contract is the strength, not the limitation.

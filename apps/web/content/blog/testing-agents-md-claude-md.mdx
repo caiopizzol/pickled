@@ -34,13 +34,13 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: agents_md, tools: none }
+  given_agents_md: { source: agents_md, tools: none }
 
 questions:
   - id: package-manager
     ask: What package manager does this repo use, and what installs dependencies?
     agents: [local]
-    access: [injected]
+    access: [given_agents_md]
     checks:
       mustMention: ["bun install"]
       mustNotMention: ["npm install", "yarn add"]

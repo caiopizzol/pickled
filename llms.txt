@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, one-of mention, must-not-mention, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: `mustMention`, `mustMentionOneOf`, `mustNotMention`, and tool-use provenance. No LLM grades another LLM.
 
 ## Install
 
@@ -33,13 +33,13 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: readme, tools: none }
+  given_readme: { source: readme, tools: none }
 
 questions:
   - id: install
     ask: How do I install your product?
     agents: [quick]
-    access: [injected]
+    access: [given_readme]
     checks:
       mustMention: ["bunx your-product"]
 
@@ -50,10 +50,10 @@ threshold: 80
 
 Pickled has two orthogonal verdicts. Renderers must not conflate them.
 
-- **Question verdict** answers whether one question satisfied its check contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, or `Error`.
+- **Cell verdict** answers whether one `(agent × access)` cell satisfied its check contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, or `Error`.
 - **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
 
-The question verdict determines the label family. Confidence may refine `YES` into `Well grounded` (>= 90) or `Grounded` (< 90), but it never upgrades `PARTIAL`, `NO`, or `Error`. The categorical signal wins.
+The cell verdict determines the label family. Confidence may refine `YES` into `Well grounded` (>= 90) or `Grounded` (< 90), but it never upgrades `PARTIAL`, `NO`, or `Error`. The categorical signal wins.
 
 ## Source contract
 

@@ -45,21 +45,21 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  prior: { source: none, tools: none }
-  injected_llms: { source: llms, tools: none }
+  memory: { source: none, tools: none }
+  given_llms: { source: llms, tools: none }
   web_llms: { source: llms, tools: web }
-  docs_mcp:
-    source: docs
+  mcp_mintlify:
+    source: none
     tools: mcp
     servers:
-      docs:
+      mintlify:
         url: https://docs.my-product.dev/mcp
 
 questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick]
-    access: [prior, injected_llms, web_llms, docs_mcp]
+    access: [memory, given_llms, web_llms, mcp_mintlify]
     checks:
       mustMention: ["bunx my-product"]
       mustNotMention: ["npm install my-product-cli"]
@@ -67,13 +67,13 @@ questions:
 threshold: 80
 ```
 
-That one question runs four cells. `prior` tells you what the model thinks without context. `injected_llms` tests whether the file itself contains the answer. `web_llms` does not inject the file; it gives the agent the canonical URL and requires a real web tool call. `docs_mcp` requires a real MCP call.
+That one question runs four cells. `memory` tells you what the model thinks without context. `given_llms` tests whether the file itself contains the answer. `web_llms` does not inject the file; it gives the agent the canonical URL and requires a real web tool call. `mcp_mintlify` requires a real MCP call.
 
 Each cell gets its own verdict, so the diagnosis is specific:
 
-- `prior` fails, `injected_llms` passes: your public context carries the answer.
-- `injected_llms` passes, `web_llms` fails: the content works, but web access does not.
-- `web_llms` passes, `docs_mcp` fails: your MCP path is not returning the same answer.
+- `memory` fails, `given_llms` passes: your public context carries the answer.
+- `given_llms` passes, `web_llms` fails: the content works, but web access does not.
+- `web_llms` passes, `mcp_mintlify` fails: your MCP path is not returning the same answer.
 - Everything fails: the product fact is probably missing or unclear everywhere.
 
 ## Keep the contract small
@@ -86,8 +86,8 @@ That is enough to tell whether an agent reached the product fact you care about.
 
 ## Try it
 
-Pick one question from your docs and run it across `prior`, an injected source, and one discovery path. The first useful result is not a perfect score. It is knowing which path is failing.
+Pick one question from your docs and run it across `memory`, an injected source, and one discovery path. The first useful result is not a perfect score. It is knowing which path is failing.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
-- [Access evaluation](https://docs.pickled.dev/matrix-evaluation)
+- [Access](https://docs.pickled.dev/access)

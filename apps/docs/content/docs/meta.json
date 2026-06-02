@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "index",
+    "getting-started",
+    "pickled-yml",
+    "access",
+    "github-actions"
+  ]
+}

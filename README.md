@@ -49,22 +49,22 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  prior: { source: none, tools: none } # no context, model memory only
-  injected: { source: docs, tools: none } # docs content injected
-  web: { source: none, tools: web } # open web discovery
+  memory: { source: none, tools: none } # no context, model memory only
+  given_docs: { source: docs, tools: none } # docs content injected
+  web_open: { source: none, tools: web } # open web discovery
 
 questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick]
-    access: [prior, injected, web]
+    access: [memory, given_docs, web_open]
     checks:
       mustMention: ["bunx my-product"]
 
 threshold: 60
 ```
 
-That question runs three cells, one per access path, and grades each on its own. `prior` answers from model memory; `injected` reads the docs you registered; `web` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell checks `mustMention`. Compare the verdicts to see which context path the agent actually needed to get it right.
+That question runs three cells, one per access path, and grades each on its own. `memory` answers from model memory; `given_docs` reads the docs you registered; `web_open` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell checks `mustMention`. Compare the verdicts to see which context path the agent actually needed to get it right.
 
 ## Read more
 

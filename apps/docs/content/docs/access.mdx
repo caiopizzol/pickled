@@ -1,0 +1,80 @@
+---
+title: Access
+description: How an agent reaches context (injected, web, or MCP), and how to read the comparison.
+---
+
+A question runs once per `(agent × access)` pair. An **access path** is a named `(source, tools)` pair: which registered source to use, and how the agent reaches it. The same source used two ways is two different tests, so access paths are the unit you compare. Each one shows in the report as `agent · access`, so name them to read well.
+
+## The three tool modes
+
+### `tools: none` - inject the source
+
+```yaml
+access:
+  given_llms: { source: llms, tools: none }
+```
+
+Pickled reads the registered source and puts it in the prompt. The question becomes: is this source enough to answer? Use `source: none` for a model-memory baseline with no context at all:
+
+```yaml
+access:
+  memory: { source: none, tools: none }
+```
+
+### `tools: web` - reach it with web search
+
+```yaml
+access:
+  web_open: { source: none, tools: web } # no hint, open discovery
+  web_llms: { source: llms, tools: web } # llms URL handed over as the canonical target
+```
+
+The source is not injected. With `source: none` the agent searches with no hint; with a URL source, that URL is given as the canonical target to reach. Either way the agent must actually invoke a web tool, or the cell is vetoed to `NO`. Works today on Claude Code (`WebSearch` / `WebFetch`), the Anthropic API (`web_search`), and the OpenAI API (`web_search`).
+
+### `tools: mcp` - reach it through an MCP server
+
+```yaml
+access:
+  mcp_mintlify:
+    source: none
+    tools: mcp
+    servers:
+      mintlify:
+        url: https://docs.example.com/mcp
+        headers:
+          AUTH_TOKEN: ${AUTH_TOKEN}
+```
+
+Nothing is injected; the agent must reach the answer through the declared MCP server. Name the server by its provider (`mintlify`, `context7`), not `docs`: the receipt records provenance as `mcp__mintlify__...`, which tells you which surface answered. Works today on Claude Code (Agent SDK MCP config) and the OpenAI API (hosted MCP tools, HTTP transports only; `stdio` servers are Claude-Code-only).
+
+## Read the comparison
+
+Put several access paths on one question, and the verdicts tell you where the answer lives:
+
+```yaml
+access:
+  memory: { source: none, tools: none }
+  given_llms: { source: llms, tools: none }
+  web_llms: { source: llms, tools: web }
+
+questions:
+  - id: install
+    ask: How do I install my-product?
+    agents: [quick]
+    access: [memory, given_llms, web_llms]
+    checks:
+      mustMention: ["bunx my-product"]
+```
+
+- `memory` fails, `given_llms` passes: your source carries the answer.
+- `given_llms` fails: the answer is missing or unclear in that source. Fix the source.
+- `given_llms` passes, `web_llms` fails: the source is good, but it is not discoverable on the open web.
+- a `web` or `mcp` cell answers without calling a tool: vetoed to `NO`, because model memory cannot testify to the path the cell is meant to test.
+
+## Naming
+
+The access name is the only place the report shows which path ran, so keep names boring and descriptive:
+
+- **sources** are content nouns: `readme`, `llms`, `docs_bundle`.
+- **access** names the path: `memory` (no context), `given_<source>` (source injected), `web_open` (web, no hint), `web_<source>` (web with that source as the target), `mcp_<provider>` (that MCP surface).
+- **servers** are the provider or endpoint: `mintlify`, `context7`. The label becomes the `mcp__<server>__...` provenance, so a real provider name reads better than `docs`.

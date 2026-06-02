@@ -39,24 +39,24 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: readme, tools: none }
+  given_readme: { source: readme, tools: none }
 
 questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick]
-    access: [injected]
+    access: [given_readme]
     checks:
       mustMention: ["bunx my-product"]
 
 threshold: 80
 ```
 
-That runs one question with your README injected. Add more `access` paths to compare model prior, injected context, web discovery, and MCP discovery.
+That runs one question with your README injected. Add more `access` paths to compare model memory, injected sources, web discovery, and MCP discovery.
 
 ## Cost controls
 
-For paid agents, a run can expand to many `(agent x access)` cells. These flags keep that in check:
+For paid agents, a run can expand to many `(agent × access)` cells. These flags keep that in check:
 
 ```bash
 pickled check . --plan                           # dry run: no model calls
@@ -71,7 +71,7 @@ Narrow a run by the names in `pickled.yml`:
 ```bash
 pickled check . --question install
 pickled check . --agent quick
-pickled check . --access injected
+pickled check . --access given_readme
 ```
 
 ## Current support

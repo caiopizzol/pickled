@@ -3,7 +3,16 @@ title: pickled
 description: Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
 ---
 
-Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: must-mention, one-of mention, must-not-mention, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: `mustMention`, `mustMentionOneOf`, `mustNotMention`, and tool-use provenance. No LLM grades another LLM.
+
+## The four terms
+
+- **Source** is public context Pickled may score against: a local file or a URL.
+- **Agent** is who answers: Claude Code, Codex CLI, Anthropic API, or OpenAI API.
+- **Access** is a named context path, a `(source, tools)` pair. `tools` is `none` (inject the source), `web`, or `mcp`.
+- **Question** is what you ask, plus the checks the answer must satisfy.
+
+A question runs once per `(agent × access)` pair, and each pair is graded on its own.
 
 ## What pickled tests
 

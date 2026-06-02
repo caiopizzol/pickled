@@ -38,13 +38,13 @@ agents:
     model: claude-haiku-4-5
 
 access:
-  injected: { source: readme, tools: none }
+  given_readme: { source: readme, tools: none }
 
 questions:
   - id: install
     ask: How do I install my-product?
     agents: [quick]
-    access: [injected]
+    access: [given_readme]
     checks:
       mustMention: ["bunx my-product"]
       mustNotMention: ["npm install my-product-cli"]
@@ -68,6 +68,6 @@ A deterministic score is reproducible, so it can gate CI. It avoids an extra jud
 
 Write one question with `mustMention` and `mustNotMention`. Score the same response twice and nothing moves; the only thing that can change a rerun is the agent's answer, not the scoring.
 
-- [Access evaluation](https://docs.pickled.dev/matrix-evaluation)
+- [Access](https://docs.pickled.dev/access)
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
