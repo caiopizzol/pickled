@@ -86,8 +86,10 @@ small project, its setup, and the commands that prove the work.
 4. **Setup failure = Error, excluded from scoring.** `workspace.setup` failing
    is environment failure, not agent failure. Only `verify` failures count
    against the agent.
-5. **Results are trial-shaped from day one** (`attempts[]`, `passedAttempts /
-   totalAttempts`); reports show `k/n`. `trials` optional, default 1. Build
+5. **Build cells carry an additive `build` block** (`attempts[]`,
+   `passedAttempts / totalAttempts`); the reporter shows `k/n`. Answer cells are
+   untouched - NOT reshaped to 1/1 - and keep `answerable`/`confidence`, which
+   still drives summary math and thresholds. `trials` optional, default 1. Build
    outcomes are stochastic, so the trustworthy unit is a **repeatable rate per
    access path**, not a single pass/fail. This is the core output, not polish.
 6. **Build is CLI-only in v1.** claude-code + codex (edit-capable). API
@@ -137,7 +139,7 @@ forces the shape. Discipline: simple schema, strong receipts, room to grow.
   `implement/workspace.ts` (copy, setup/`SetupError`, baseline, diff capture,
   cleanup, `runProcess` with bounded-drain timeout) and `implement/verifiers.ts`
   (`runCommands`, `checkDiff`). 19 tests.
-- [ ] **PR 3 - chore (internal).** Edit-capable target capability + gate.
+- [x] **PR 3 - chore, merged #49.** Edit-capable target capability + gate.
   `isEditCapable` (CLI claude-code/codex; API rejected). Internal `editMode`
   RunOption (NOT public). claude-code editMode: workspace toolset (Read, Glob,
   Grep, Edit, MultiEdit, Write, Bash) + `permissionMode: bypassPermissions`,

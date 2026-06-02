@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getScenarioStatus } from "../src/report-status.js";
+import { getBuildStatus, getScenarioStatus } from "../src/report-status.js";
 import type { ScenarioResult } from "../src/types.js";
 
 function makeResult(overrides: Partial<ScenarioResult> = {}): ScenarioResult {
@@ -59,6 +59,31 @@ describe("getScenarioStatus", () => {
       }),
     );
     expect(status.label).toBe("Error");
+    expect(status.tone).toBe("error");
+  });
+});
+
+describe("getBuildStatus", () => {
+  test("all attempts pass renders Built with the rate as confidence", () => {
+    const status = getBuildStatus({ passedAttempts: 2, totalAttempts: 2 });
+    expect(status.label).toBe("Built");
+    expect(status.icon).toBe("✓");
+    expect(status.tone).toBe("success");
+    expect(status.confidence).toBe(100);
+  });
+
+  test("some attempts pass renders Partially built", () => {
+    const status = getBuildStatus({ passedAttempts: 1, totalAttempts: 3 });
+    expect(status.label).toBe("Partially built");
+    expect(status.icon).toBe("⚠");
+    expect(status.tone).toBe("warning");
+    expect(status.confidence).toBe(33);
+  });
+
+  test("no attempts pass renders Did not build", () => {
+    const status = getBuildStatus({ passedAttempts: 0, totalAttempts: 3 });
+    expect(status.label).toBe("Did not build");
+    expect(status.icon).toBe("✗");
     expect(status.tone).toBe("error");
   });
 });
