@@ -61,9 +61,9 @@ access:
       s:
         url: https://my-product.dev/mcp
         headers: { Authorization: "Bearer x" }
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick, api]
     access: [memory, given_llms, web_llms, mcp_x]
     checks:
@@ -112,8 +112,8 @@ sources:
   code: { path: "src/**/*.ts", type: codebase }
 agents: { q: { provider: claude-code, model: m } }
 access: { m: { source: none, tools: none } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [m], checks: { mustMention: [x] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [m], checks: { mustMention: [x] } }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -124,8 +124,8 @@ questions:
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
 access: { mcp_x: { source: none, tools: mcp } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -137,8 +137,8 @@ product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
 access:
   web_x: { source: none, tools: web, servers: { s: { url: https://x/mcp } } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [web_x], checks: { mustMention: [x] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [web_x], checks: { mustMention: [x] } }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -149,8 +149,8 @@ questions:
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
 access: { m: { source: none, tools: none } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [m], checks: { mustMention: [] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [m], checks: { mustMention: [] } }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -165,8 +165,8 @@ access:
     source: none
     tools: mcp
     servers: { s: { type: stdio, command: foo, url: https://x/mcp } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -181,8 +181,8 @@ access:
     source: none
     tools: mcp
     servers: { s: { url: ftp://x/mcp } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -193,9 +193,9 @@ questions:
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
 access: { m: { source: none, tools: none } }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [q]
     access: [m]
     checks: { mustMention: [x] }
@@ -210,8 +210,8 @@ questions:
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
 access: { m: { source: none, tools: none } }
-questions:
-  - { id: q, ask: a, agents: [q], access: [m], checks: { mustMention: [x] } }
+tasks:
+  - { id: q, prompt: a, agents: [q], access: [m], checks: { mustMention: [x] } }
 typo_section: oops
 `,
       schemaRejects: true,

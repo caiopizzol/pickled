@@ -410,6 +410,10 @@ function validateExamples(
 
 function validateActionableContract(scenario: {
   name: string;
+  kind?: "answer" | "build";
+  verify?: unknown;
+  workspace?: { path?: unknown; setup?: unknown };
+  trials?: unknown;
   requiredSources?: string[];
   expected?: {
     includes?: string[];
@@ -432,6 +436,45 @@ function validateActionableContract(scenario: {
     }>;
   };
 }): void {
+  // Build scenarios prove success with verify commands, not text checks, so
+  // the answer-contract rules below do not apply. This backstop mirrors the
+  // public build contract so a compile bug or internal caller cannot produce a
+  // build scenario that validates but later cannot run.
+  if (scenario.kind === "build") {
+    const ws = scenario.workspace;
+    if (!ws || typeof ws.path !== "string" || ws.path.length === 0) {
+      throw new Error(
+        `pickled.yml: build task "${scenario.name}" needs a non-empty workspace.path`,
+      );
+    }
+    if (
+      ws.setup !== undefined &&
+      (!Array.isArray(ws.setup) ||
+        ws.setup.some((c) => typeof c !== "string" || c.length === 0))
+    ) {
+      throw new Error(
+        `pickled.yml: build task "${scenario.name}" workspace.setup must be non-empty shell command strings`,
+      );
+    }
+    if (
+      !Array.isArray(scenario.verify) ||
+      scenario.verify.length === 0 ||
+      scenario.verify.some((c) => typeof c !== "string" || c.length === 0)
+    ) {
+      throw new Error(
+        `pickled.yml: build task "${scenario.name}" needs at least one non-empty verify command`,
+      );
+    }
+    if (
+      scenario.trials !== undefined &&
+      (!Number.isInteger(scenario.trials) || (scenario.trials as number) < 1)
+    ) {
+      throw new Error(
+        `pickled.yml: build task "${scenario.name}" trials must be a positive integer`,
+      );
+    }
+    return;
+  }
   const hasCitation = scenario.requiredSources !== undefined;
   // Any non-empty expected group counts as an actionable contract. The
   // grouped keys (symbols/paths/options/constraints) score with the same

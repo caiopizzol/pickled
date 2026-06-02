@@ -39,9 +39,9 @@ access:
   prior: { source: none, tools: none }
   injected: { source: docs, tools: none }
   web: { source: none, tools: web }
-questions:
+tasks:
   - id: positioning
-    ask: what does pickled do?
+    prompt: what does pickled do?
     agents: [quick, api]
     access: [prior, injected, web]
     checks:
@@ -101,9 +101,9 @@ access:
         url: https://mcp.example.com/mcp
         headers:
           AUTH: \${PICKLED_TEST_TOKEN}
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [api]
     access: [mcp]
     checks: { mustMention: [x] }
@@ -115,16 +115,16 @@ questions:
     process.env.PICKLED_TEST_TOKEN = undefined;
   });
 
-  test("surfaces a public validation error (question with no checks)", async () => {
+  test("surfaces a public validation error (answer task with no checks)", async () => {
     const dir = makeDir(`
 product: { name: t, description: d }
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
 access:
   prior: { source: none, tools: none }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [quick]
     access: [prior]
     checks: {}
@@ -141,9 +141,9 @@ agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
 access:
   prior: { source: none, tools: none }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [ghost]
     access: [prior]
     checks: { mustMention: [x] }
@@ -160,9 +160,9 @@ agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
 access:
   prior: { source: none, tools: none }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [quick]
     access: [prior]
     checks: { mustMention: [x] }
@@ -179,9 +179,9 @@ agents:
   api: { provider: openai, model: gpt-5.2, maxTurns: 5 }
 access:
   prior: { source: none, tools: none }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [api]
     access: [prior]
     checks: { mustMention: [x] }

@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import {
+  formatCellLabel,
   getBuildStatus,
   getScenarioStatus,
   type ScenarioStatus,
@@ -70,6 +71,9 @@ function hasMatrixResults(results: ScenarioResult[]): boolean {
 
 export interface FormatReportOptions {
   threshold?: number;
+  /** Report title / command label. The CLI passes "pickled check" or
+   *  "pickled build" so the dry-run header names the command that ran. */
+  title?: string;
 }
 
 function formatIds(ids: string[]): string {
@@ -226,16 +230,6 @@ function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
   return lines;
 }
 
-function formatCellLabel(cell: {
-  interface?: string;
-  access?: string;
-  source?: string | null;
-  toolset?: string;
-}): string {
-  if (cell.access) return `[${cell.interface} · ${cell.access}]`;
-  return `[${cell.interface} · ${cell.source ?? "-"} · ${cell.toolset}]`;
-}
-
 /**
  * Compare-mode block.
  * One preamble line names the intersection citation contract; each surface
@@ -320,7 +314,7 @@ export function formatCheckReport(
   const results = scenarios;
   const lines: string[] = [];
 
-  lines.push(chalk.bold("pickled check"));
+  lines.push(chalk.bold(options.title ?? "pickled check"));
   lines.push(LINE);
   lines.push(`Tool: ${chalk.cyan(tool.name)}`);
 
@@ -333,19 +327,28 @@ export function formatCheckReport(
   }
 
   // In plan/dry-run mode no scenarios are scored (summary.total is 0), so
-  // report the count of distinct questions that produced planned cells.
+  // report the count of distinct tasks that produced planned cells.
   const scenarioCount =
     report.plan?.cells != null
       ? new Set(report.plan.cells.map((c) => c.scenario)).size
       : summary.total;
-  lines.push(`Questions: ${chalk.dim(String(scenarioCount))}`);
+  lines.push(`Tasks: ${chalk.dim(String(scenarioCount))}`);
   if (report.plan) {
-    const { expandedCells, selectedCells, seed } = report.plan;
+    const { expandedCells, selectedCells, selectedExecutions, seed } =
+      report.plan;
     const sampled = selectedCells < expandedCells;
     const cellsLine = sampled
       ? `Cells: ${chalk.dim(`${selectedCells} of ${expandedCells} (sampled${seed ? `, seed=${seed}` : ""})`)}`
       : `Cells: ${chalk.dim(String(expandedCells))}`;
     lines.push(cellsLine);
+    // Build cells run multiple trials; the real agent-run count (what
+    // --max-cells gates) differs from the cell count, so surface it.
+    if (
+      selectedExecutions !== undefined &&
+      selectedExecutions !== selectedCells
+    ) {
+      lines.push(`Executions: ${chalk.dim(String(selectedExecutions))}`);
+    }
   }
   lines.push("");
 
@@ -392,7 +395,7 @@ export function formatCheckReport(
     }
 
     for (const [scenarioName, scenarioResults] of byScenario) {
-      lines.push(`Question: ${scenarioName}`);
+      lines.push(`Task: ${scenarioName}`);
 
       for (const result of scenarioResults) {
         if (result.cells) {
@@ -409,7 +412,7 @@ export function formatCheckReport(
     }
   } else {
     for (const result of results) {
-      lines.push(`Question: ${result.scenario.name}`);
+      lines.push(`Task: ${result.scenario.name}`);
       if (result.cells) {
         lines.push(...formatMatrixBlock(result, "  "));
       } else if (result.surfaces) {

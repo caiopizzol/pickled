@@ -39,9 +39,9 @@ access:
   prior: { source: none, tools: none }
   injected: { source: docs, tools: none }
   web: { source: none, tools: web }
-questions:
+tasks:
   - id: positioning
-    ask: In one or two sentences, what does pickled do?
+    prompt: In one or two sentences, what does pickled do?
     agents: [quick, api]
     access: [prior, injected, web]
     checks:
@@ -78,7 +78,7 @@ describe("loadConfig (new public schema, via package export)", () => {
     });
   });
 
-  test("question compiles to a scenario with interfaces + sparse accessPairs", async () => {
+  test("answer task compiles to a scenario with interfaces + sparse accessPairs", async () => {
     await withTempConfig(REALISTIC, async (dir) => {
       const config = await loadConfig(dir);
       const s = config.scenarios[0]!;
@@ -126,16 +126,16 @@ describe("loadConfig (new public schema, via package export)", () => {
     });
   });
 
-  test("rejects a question referencing unknown access", async () => {
+  test("rejects a task referencing unknown access", async () => {
     const yaml = `
 product: { name: t, description: d }
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
 access:
   prior: { source: none, tools: none }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [quick]
     access: [ghost]
     checks: { mustMention: [x] }
@@ -145,16 +145,16 @@ questions:
     });
   });
 
-  test("rejects a question with no checks declared", async () => {
+  test("rejects an answer task with no checks declared", async () => {
     const yaml = `
 product: { name: t, description: d }
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
 access:
   prior: { source: none, tools: none }
-questions:
+tasks:
   - id: q
-    ask: a
+    prompt: a
     agents: [quick]
     access: [prior]
     checks: {}

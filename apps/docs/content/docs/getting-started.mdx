@@ -15,7 +15,7 @@ This writes a starter `pickled.yml` in the current directory.
 
 ## The smallest config
 
-A config needs a `product`, at least one `agent`, one named `access` path, and one `question` carrying at least one check.
+A config needs a `product`, at least one `agent`, one named `access` path, and one `task`. An answer task (the default) carries at least one check.
 
 ```yaml
 product:
@@ -33,9 +33,9 @@ agents:
 access:
   given_readme: { source: readme, tools: none }
 
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
     access: [given_readme]
     checks:
@@ -63,7 +63,7 @@ bunx @pickled-dev/cli check .
 Pickled spawns the agent, injects the registered source, asks the question, and checks the answer:
 
 ```
-Question: install
+Task: install
   ✓ Well grounded (100%)
 
 Overall: 100 / 100 · threshold 80 · run passes
@@ -72,16 +72,16 @@ Every answer met its checks.
 
 ## Compare context paths
 
-The point of pickled is the comparison. Add a no-context path and run the same question down both:
+The point of pickled is the comparison. Add a no-context path and run the same task down both:
 
 ```yaml
 access:
   memory: { source: none, tools: none } # model memory only
   given_readme: { source: readme, tools: none } # your README injected
 
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
     access: [memory, given_readme]
     checks:
@@ -103,11 +103,31 @@ A `web` (or `mcp`) cell that answers without invoking a tool is vetoed to `NO`: 
 
 ## Score example answers offline
 
-`pickled test` scores `examples.pass` / `examples.fail` strings against a question's checks with zero model calls, so you can catch brittle checks before a paid run:
+`pickled test` scores `examples.pass` / `examples.fail` strings against a task's checks with zero model calls, so you can catch brittle checks before a paid run:
 
 ```bash
 bunx @pickled-dev/cli test .
 ```
+
+## Build tasks
+
+The checks above score an agent's *answer*. A build task instead has the agent *do the work*: it edits a throwaway workspace, and you score the result with `verify` commands. Set `kind: build`, declare a `workspace` and `verify`, and run it with `pickled build`:
+
+```yaml
+tasks:
+  - id: add-endpoint
+    kind: build
+    prompt: Add a health-check endpoint using my-product.
+    agents: [quick]
+    access: [given_readme]
+    trials: 3
+    workspace:
+      path: ./fixtures/app
+      setup: [bun install]
+    verify: [bun test]
+```
+
+Each `(agent × access)` cell runs `trials` times in a fresh workspace; the result is `k/n`. Build tasks run on edit-capable CLI agents (`claude-code`, `codex-cli`) and forbid `checks`/`examples` (their contract is `verify`). See the [pickled.yml reference](/pickled-yml) for the full build contract.
 
 ## Next steps
 

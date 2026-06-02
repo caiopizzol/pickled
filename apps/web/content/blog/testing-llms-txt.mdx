@@ -41,9 +41,9 @@ access:
   given_llms: { source: llms, tools: none }
   web_llms: { source: llms, tools: web }
 
-questions:
+tasks:
   - id: pricing
-    ask: How is my-product priced?
+    prompt: How is my-product priced?
     agents: [quick]
     access: [given_llms, web_llms]
     checks:

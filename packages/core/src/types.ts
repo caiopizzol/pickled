@@ -251,7 +251,7 @@ export interface CheckReport {
   };
   /**
    * Cell counts and sampling provenance for a run. `expandedCells` is the
-   * count after `--question` / `--agent` / `--access` filters but before
+   * count after `--task` / `--agent` / `--access` filters but before
    * sampling. `selectedCells` is the count after
    * sampling (equal to `expandedCells` when `--sample` was not passed).
    * `seed` is recorded only when sampling was active.
@@ -259,6 +259,13 @@ export interface CheckReport {
   plan?: {
     expandedCells: number;
     selectedCells: number;
+    /**
+     * Trial-expanded execution counts. A build cell runs `trials` agent runs,
+     * so executions >= cells; for answer-only runs they are equal. This is the
+     * real unit of work, and what `--max-cells` gates.
+     */
+    expandedExecutions?: number;
+    selectedExecutions?: number;
     seed?: string;
     /** Per-cell list, included only in dry-run reports (`--plan`). */
     cells?: Array<{
@@ -269,6 +276,8 @@ export interface CheckReport {
       toolset?: string;
       target?: string;
       context?: string;
+      /** Executions for this cell (build cells only; absent means 1). */
+      trials?: number;
     }>;
   };
 }

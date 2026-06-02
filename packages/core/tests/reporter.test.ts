@@ -127,7 +127,7 @@ describe("formatCheckReport", () => {
     expect(text).toContain("pickled check");
     expect(text).toContain("Tool: t");
     expect(text).toContain("Sources: [readme]");
-    expect(text).toContain("Question: s");
+    expect(text).toContain("Task: s");
     expect(text).toContain("✓ Well grounded (100%)");
     expect(text).toContain("cited: [readme]");
     expect(text).toContain("Overall: 100 / 100 · threshold 80 · run passes");
@@ -162,8 +162,8 @@ describe("formatCheckReport", () => {
       },
     };
     const text = formatCheckReport(report, { threshold: 80 });
-    expect(text).toContain("Questions: 1");
-    expect(text).not.toContain("Questions: 0");
+    expect(text).toContain("Tasks: 1");
+    expect(text).not.toContain("Tasks: 0");
     expect(text).toContain("Cells: 2");
     expect(text).toContain("[quick · injected]");
     expect(text).toContain("[quick · web]");

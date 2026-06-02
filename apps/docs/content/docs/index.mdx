@@ -1,18 +1,18 @@
 ---
 title: pickled
-description: Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
+description: Pickled tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence.
 ---
 
-Pickled is an open-source CLI that asks your product's real questions at real agents (Claude Code, Codex CLI, Anthropic API, OpenAI API), down named context paths (a source injected, or reached through `web` / `mcp` tools), then scores each answer with deterministic checks: `mustMention`, `mustMentionOneOf`, `mustNotMention`, and tool-use provenance. No LLM grades another LLM.
+Pickled is an open-source CLI that tests whether real agents can answer and build with your product (Claude Code, Codex CLI, Anthropic API, OpenAI API), across declared context paths (a source injected, or reached through `web` / `mcp` tools), using deterministic evidence: text checks (`mustMention`, `mustMentionOneOf`, `mustNotMention`), tool-use provenance, and build verification. No LLM grades another LLM.
 
 ## The four terms
 
 - **Source** is public context Pickled may score against: a local file or a URL.
 - **Agent** is who answers: Claude Code, Codex CLI, Anthropic API, or OpenAI API.
 - **Access** is a named context path, a `(source, tools)` pair. `tools` is `none` (inject the source), `web`, or `mcp`.
-- **Question** is what you ask, plus the checks the answer must satisfy.
+- **Task** is the unit of work: an answer task asks a question and scores the answer with checks; a build task has the agent edit a workspace and passes when your `verify` commands do.
 
-A question runs once per `(agent × access)` pair, and each pair is graded on its own.
+A task runs as one cell per `(agent × access)` pair, and each cell is graded on its own.
 
 ## What pickled tests
 
@@ -23,10 +23,11 @@ Two audiences, one tool:
 
 ## How scoring works
 
-A question runs once per `(agent × access)` pair. Each pair scores independently:
+A task runs as one cell per `(agent × access)` pair. Each cell scores independently:
 
 - **Checks.** `mustMention` substrings must appear; `mustMentionOneOf` groups need at least one value from each group; `mustNotMention` substrings must not appear. Each check counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
 - **Tool-use provenance.** When an access path uses `web` or `mcp` tools, the agent must invoke at least one of them, or the cell is vetoed to `NO`. Model memory does not count as evidence for a tool path.
+- **Build verification.** A build task instead has the agent edit a workspace; the cell passes when your `verify` commands do, reported as `Built` k-of-n over trials.
 
 ## Getting started
 

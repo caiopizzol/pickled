@@ -5,9 +5,9 @@ exports[`formatCheckReport golden fixtures well grounded, no threshold (omits ru
 ───────────────────────────────────────────────────────
 Tool: t
 Sources: [readme]
-Questions: 1
+Tasks: 1
 
-Question: s
+Task: s
   ✓ Well grounded (100%)
   cited: [readme]
 
@@ -21,9 +21,9 @@ exports[`formatCheckReport golden fixtures threshold pass: well grounded with th
 ───────────────────────────────────────────────────────
 Tool: t
 Sources: [readme]
-Questions: 1
+Tasks: 1
 
-Question: s
+Task: s
   ✓ Well grounded (100%)
   cited: [readme]
 
@@ -37,9 +37,9 @@ exports[`formatCheckReport golden fixtures partially grounded scenario 1`] = `
 ───────────────────────────────────────────────────────
 Tool: t
 Sources: [readme]
-Questions: 1
+Tasks: 1
 
-Question: s
+Task: s
   ⚠ Partially grounded (65%)
   reason: All required sources cited: readme
   cited: [readme]
@@ -54,9 +54,9 @@ exports[`formatCheckReport golden fixtures ungrounded scenario (NO, missing cita
 ───────────────────────────────────────────────────────
 Tool: t
 Sources: [readme]
-Questions: 1
+Tasks: 1
 
-Question: s
+Task: s
   ✗ Ungrounded (0%)
   reason: No required sources cited
   missing: [readme]
@@ -71,9 +71,9 @@ exports[`formatCheckReport golden fixtures matrix targets: same scenario run aga
 ───────────────────────────────────────────────────────
 Tool: t
 Sources: [readme]
-Questions: 2
+Tasks: 2
 
-Question: Installation
+Task: Installation
   [quick] ✓ Well grounded (100%)
     cited: [readme]
   [thorough] ✓ Well grounded (100%)

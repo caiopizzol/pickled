@@ -77,3 +77,19 @@ export function getBuildStatus(build: {
   }
   return { icon: "✗", label: "Did not build", confidence, tone: "error" };
 }
+
+/**
+ * The cell coordinate label shared by the reporter and the verbose progress
+ * stream. Public-schema cells render as `[agent · access]`; legacy/internal
+ * cells (sources × toolsets cross-product, no access name) fall back to
+ * `[interface · source · toolset]`.
+ */
+export function formatCellLabel(cell: {
+  interface?: string;
+  access?: string;
+  source?: string | null;
+  toolset?: string;
+}): string {
+  if (cell.access) return `[${cell.interface} · ${cell.access}]`;
+  return `[${cell.interface} · ${cell.source ?? "-"} · ${cell.toolset}]`;
+}

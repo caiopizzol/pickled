@@ -1,6 +1,6 @@
 # @pickled-dev/cli
 
-> Pickled asks your product's real questions at real agents, down different context paths, then scores the answers with deterministic checks.
+> Pickled tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence.
 
 The CLI for [Pickled](https://pickled.dev). Use it locally or in CI to check whether agents can answer from the product context you publish. No LLM grades another LLM.
 
@@ -41,9 +41,9 @@ agents:
 access:
   given_readme: { source: readme, tools: none }
 
-questions:
+tasks:
   - id: install
-    ask: How do I install my-product?
+    prompt: How do I install my-product?
     agents: [quick]
     access: [given_readme]
     checks:
@@ -52,7 +52,7 @@ questions:
 threshold: 80
 ```
 
-That runs one question with your README injected. Add more `access` paths to compare model memory, injected sources, web discovery, and MCP discovery.
+That runs one answer task with your README injected. Add more `access` paths to compare model memory, injected sources, web discovery, and MCP discovery. A build task (`kind: build`) instead has the agent edit a workspace and runs your `verify` commands; run it with `pickled build`.
 
 ## Cost controls
 
@@ -61,15 +61,15 @@ For paid agents, a run can expand to many `(agent × access)` cells. These flags
 ```bash
 pickled check . --plan                           # dry run: no model calls
 pickled check . --max-cells 10                   # fail before spending
-pickled check . --sample 2 --seed nightly-2026  # deterministic sample per question
+pickled check . --sample 2 --seed nightly-2026  # deterministic sample per task
 ```
 
-The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample.
+The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample. Build tasks also report `selectedExecutions` (cells x trials), which is what `--max-cells` gates.
 
 Narrow a run by the names in `pickled.yml`:
 
 ```bash
-pickled check . --question install
+pickled check . --task install
 pickled check . --agent quick
 pickled check . --access given_readme
 ```

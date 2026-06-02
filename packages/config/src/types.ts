@@ -252,6 +252,21 @@ export interface Scenario {
    * checks/examples model.
    */
   examples?: ScenarioExamples;
+
+  /**
+   * Task kind. "build" scenarios are run by the build runner (edit the
+   * workspace, run verify) instead of answer scoring; omitted or "answer" is
+   * the legacy answer path. Compiled from the public `tasks[].kind`. The build
+   * fields below are populated only for build scenarios and are inert until
+   * the runner is wired to consume them.
+   */
+  kind?: "answer" | "build";
+  /** Build scenarios only: the fixture the agent edits. */
+  workspace?: { path: string; setup?: string[] };
+  /** Build scenarios only: verification commands (the success contract). */
+  verify?: string[];
+  /** Build scenarios only: independent trials per cell (default 1). */
+  trials?: number;
 }
 
 export interface ScenarioExamples {

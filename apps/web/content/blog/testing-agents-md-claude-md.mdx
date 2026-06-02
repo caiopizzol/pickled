@@ -36,9 +36,9 @@ agents:
 access:
   given_agents_md: { source: agents_md, tools: none }
 
-questions:
+tasks:
   - id: package-manager
-    ask: What package manager does this repo use, and what installs dependencies?
+    prompt: What package manager does this repo use, and what installs dependencies?
     agents: [local]
     access: [given_agents_md]
     checks:
