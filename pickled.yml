@@ -11,15 +11,17 @@ sources:
   getting_started: https://docs.pickled.dev/getting-started
   llms: ./llms.txt
 
-# The agents that answer. `quick` is the cheap default; the two API agents
-# run the same task through the Anthropic and OpenAI servers so the
-# positioning answer can be compared across three providers. The API agents
-# need ANTHROPIC_API_KEY_PICKLED / OPENAI_API_KEY_PICKLED at run time.
+# The agents under test. `quick` is the cheap answer-task default; `builder`
+# gives build tasks enough turns to edit and verify a fixture.
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
     maxTurns: 5
+  builder:
+    provider: claude-code
+    model: claude-haiku-4-5
+    maxTurns: 30
   anthropic_api:
     provider: anthropic
     model: claude-haiku-4-5
@@ -80,5 +82,18 @@ tasks:
     checks:
       mustMention: [none, web, mcp, Claude Code]
       mustNotMention: [magic dashboard, Firecrawl]
+
+  # Build dogfood: can an agent use Pickled's own public context to author
+  # and validate a Pickled config for a tiny product fixture?
+  - id: write_pickled_config
+    kind: build
+    prompt: Create a pickled.yml for the BrineKit fixture product. The config should register the local llms.txt source, compare memory against injected llms context, define an answer task that verifies the documented install command while excluding stale npm install guidance, and define a build task named smoke_build that uses ./workspace, runs two trials, and verifies configured.txt exists.
+    agents: [builder]
+    access: [memory, given_llms]
+    workspace:
+      path: ./fixtures/pickled-config-authoring
+    verify:
+      - ./tests/verify-pickled-config.sh
+    trials: 3
 
 threshold: 60

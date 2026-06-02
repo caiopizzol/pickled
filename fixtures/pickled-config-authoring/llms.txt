@@ -1,0 +1,13 @@
+# BrineKit
+
+BrineKit is a fixture product for testing Pickled config authoring.
+
+## Install
+
+Use `bunx brinekit init`.
+
+Avoid `npm install brinekit`; it is stale guidance.
+
+## Build smoke
+
+Use the `./workspace` fixture. The build succeeds when `configured.txt` exists.

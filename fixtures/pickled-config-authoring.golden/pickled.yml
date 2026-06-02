@@ -1,0 +1,36 @@
+product:
+  name: BrineKit
+  description: CLI fixture for Pickled config authoring
+
+sources:
+  llms: ./llms.txt
+
+agents:
+  quick:
+    provider: claude-code
+    model: claude-haiku-4-5
+    maxTurns: 5
+
+access:
+  memory: { source: none, tools: none }
+  given_llms: { source: llms, tools: none }
+
+tasks:
+  - id: install
+    prompt: How do I install BrineKit?
+    agents: [quick]
+    access: [memory, given_llms]
+    checks:
+      mustMention: [bunx brinekit init]
+      mustNotMention: [npm install brinekit]
+
+  - id: smoke_build
+    kind: build
+    prompt: Create configured.txt in the BrineKit workspace.
+    agents: [quick]
+    access: [given_llms]
+    trials: 2
+    workspace:
+      path: ./workspace
+    verify:
+      - test -f configured.txt

@@ -9,7 +9,7 @@ The site exposes:
 - `/llms.mdx/<slug>/content.md` for per-page Markdown fetching.
 - `/og/<slug>/image.png` for Open Graph cards.
 
-The site doubles as a real public source for the dogfood: questions in the root `pickled.yml` register the deployed URLs and test what agents say about Pickled when the docs are the only source they can read.
+The site doubles as a real public source for the dogfood: tasks in the root `pickled.yml` register the deployed URLs and test what agents say about Pickled when the docs are the only source they can read.
 
 ## Scripts
 
