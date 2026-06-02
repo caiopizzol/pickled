@@ -286,6 +286,30 @@ describe("runBuildCell", () => {
     expect(cell.build).toBeUndefined();
   });
 
+  test("an agent that reaches the turn budget counts as a failed trial", async () => {
+    const fixture = makeFixture({ "src/placeholder.txt": "x\n" });
+    const cell = await runBuildCell(
+      baseInput(fixture, {
+        targetFactory: () => ({
+          category: "cli",
+          provider: "claude-code",
+          name: "turn-limit",
+          async run(): Promise<never> {
+            throw new Error(
+              "Claude Code returned an error result: Reached maximum number of turns (30)",
+            );
+          },
+        }),
+      }),
+    );
+    expect(cell.error).toBeUndefined();
+    expect(cell.answerable).toBe("NO");
+    expect(cell.build?.passedAttempts).toBe(0);
+    expect(cell.build?.totalAttempts).toBe(1);
+    expect(cell.build?.attempts[0]?.status).toBe("failed");
+    expect(cell.build?.attempts[0]?.reason).toContain("turn budget");
+  });
+
   test("an agent that exceeds the timeout is a failed trial and is cancelled", async () => {
     const fixture = makeFixture({ "src/placeholder.txt": "x\n" });
     let aborted = false;

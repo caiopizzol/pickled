@@ -225,12 +225,19 @@ async function runTrial(
         () => controller.abort(),
       );
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (isAgentTurnBudgetExhausted(message)) {
+        return {
+          status: "failed",
+          reason: `agent run reached the turn budget: ${message}`,
+        };
+      }
       // The agent run threw (e.g. codex exited non-zero). We cannot tell an
       // agent failure from an infra failure here, so quarantine it as an error
       // trial (excluded from the rate) rather than crash the whole cell.
       return {
         status: "error",
-        reason: `agent run failed: ${e instanceof Error ? e.message : String(e)}`,
+        reason: `agent run failed: ${message}`,
       };
     }
     if (timedOut) {
@@ -296,6 +303,10 @@ async function runTrial(
     });
     void res;
   }
+}
+
+function isAgentTurnBudgetExhausted(message: string): boolean {
+  return /reached maximum number of turns/i.test(message);
 }
 
 /**
