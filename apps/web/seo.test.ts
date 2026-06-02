@@ -55,6 +55,7 @@ test("blog posts have deterministic editorial order", async () => {
     "deterministic-agent-evals",
     "agent-evals-in-ci",
     "testing-agents-md-claude-md",
+    "testing-agent-builds-with-docs",
   ];
 
   for (const [index, slug] of orderedSlugs.entries()) {
