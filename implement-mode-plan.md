@@ -150,7 +150,12 @@ forces the shape. Discipline: simple schema, strong receipts, room to grow.
   permission semantics.
 - [ ] **PR 4 - chore (internal).** Attempts-shaped result model (`attempts[]`,
   `passedAttempts/totalAttempts`); reporter renders `k/n`; answer mode is n=1.
-- [ ] **PR 5 - chore (internal).** Build runner orchestrating the primitives:
+- [ ] **PR 5a - chore (internal).** Extract `resolveCellRuntime` (target config,
+  source injection, tool scoping, provenance matcher) from `runMatrixScenario`
+  into `cell-runtime.ts`, shared by both runners. Add `taskKind` on CellResult.
+  Behavior-preserving except one intentional fix: server-web provenance veto
+  names `web_search` (semantic expectedLabels), not `none of []`.
+- [ ] **PR 5b - chore (internal).** Build runner orchestrating the primitives:
   create -> setup (Error) -> baseline -> vacuous-fixture guard -> run
   edit-capable target -> capture diff -> empty-diff veto -> harness-protection
   veto -> run `verify` -> record attempt -> cleanup. Tested with fake/editing

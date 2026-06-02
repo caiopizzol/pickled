@@ -4,6 +4,7 @@ import type {
   Scenario,
   ScenarioMatrix,
 } from "@pickled-dev/config";
+import { resolveCellRuntime } from "./cell-runtime.js";
 import {
   buildPlanReport,
   type CellFilter,
@@ -623,258 +624,48 @@ async function runMatrixScenario(
         const key = `m:${scenario.name}\u0001${interfaceName}\u0001${accessName ?? ""}\u0001${sourceName ?? ""}\u0001${toolsetName}`;
         if (!matrixCellSelection.has(key)) continue;
       }
-      // Toolset resolution. Three toolset shapes run today:
-      // - "none": deterministic baseline. Source is injected. Citation
-      //   contract applies if requiredSources is declared.
-      // - web: `webSearch`/`webFetch` flags. Three wiring paths:
-      //     * Claude Code: scope the SDK's built-in tools via
-      //       `tools: [WebSearch, ...]` so default Read/Edit/Bash
-      //       cannot leak; allowedTools carries the same names to
-      //       skip permission prompts.
-      //     * Anthropic API: pass the server-side `web_search` tool
-      //       (`web_search_20250305`) to `messages.create` via the
-      //       provider-agnostic webTools intent on RunOptions.
-      //     * OpenAI API: pass the server-side `web_search` tool to
-      //       `responses.create` via the same webTools intent. The
-      //       adapter normalizes `web_search_call` output items into
-      //       the literal `web_search` provenance name.
-      //   Source NOT injected; citation contract skipped on any path.
-      // - mcp: `mcpServers` map. Two wiring paths:
-      //     * Claude Code: SDK built-ins disabled (`tools: []`);
-      //       MCP tools come from `mcpServers` and are auto-permitted
-      //       via `allowedTools: [mcp__<server>__*, ...]`.
-      //     * OpenAI API: each server becomes a hosted-MCP tool
-      //       entry on `responses.create` via the provider-agnostic
-      //       mcpTools intent on RunOptions. Provenance reads
-      //       `mcp_call` items and normalizes to `mcp__<server>__<tool>`.
-      //   Source NOT injected on either path.
-      // Mixed shapes (web+mcp in one toolset) are rejected because
-      // pickled cannot attribute provenance honestly across both.
-      // The SDK's `tools` option (not `allowedTools`) is what actually
-      // restricts availability; allowedTools alone is just a
-      // permission-prompt bypass list. See `restrictBuiltinTools` on
-      // RunOptions for the field that carries `tools` to the Claude
-      // Code adapter, and `webTools` for the server-side web adapters.
-      const toolsetConfig =
-        toolsetName === "none"
-          ? null
-          : (config.toolsets?.[toolsetName] ?? null);
-      const wantsWeb =
-        toolsetName !== "none" &&
-        (toolsetConfig?.webSearch === true || toolsetConfig?.webFetch === true);
-      const mcpServerNames =
-        toolsetName !== "none" && toolsetConfig?.mcpServers
-          ? Object.keys(toolsetConfig.mcpServers)
-          : [];
-      const wantsMcp = mcpServerNames.length > 0;
 
-      const { config: baseTargetConfig } = resolveTarget(
+      // Cell runtime prep (target config, source injection, tool scoping,
+      // provenance matcher) is shared with the build runner. Called outside the
+      // per-cell try so provider-gate validation errors bubble to the scenario
+      // error rather than collapsing into one NO cell.
+      const rt = resolveCellRuntime({
         interfaceName,
-        config.targets,
-      );
-
-      if (toolsetName !== "none") {
-        if (wantsWeb && wantsMcp) {
-          throw new Error(
-            `Toolset "${toolsetName}" mixes webSearch/webFetch with mcpServers; declare separate toolsets per shape so provenance can be attributed to one tool path.`,
-          );
-        }
-        if (!wantsWeb && !wantsMcp) {
-          throw new Error(
-            `Toolset "${toolsetName}" is declared but defines no runtime shape. Supported today: "none", web (webSearch/webFetch flags), MCP (mcpServers map). Other adapters (Firecrawl, native API search) land per release.`,
-          );
-        }
-        // Provider gates per toolset shape:
-        // - MCP runs on claude-code (Agent SDK natively wires
-        //   mcpServers) and on the openai Responses API target
-        //   (hosted-MCP tool entries on responses.create). Other
-        //   providers throw until their adapters land.
-        // - Web runs on claude-code (client tools WebSearch/WebFetch),
-        //   the anthropic API target (server-side web_search), and the
-        //   openai API target (server-side web_search). Other providers
-        //   (codex-cli) throw until their adapters land.
-        if (
-          wantsMcp &&
-          baseTargetConfig.provider !== "claude-code" &&
-          baseTargetConfig.provider !== "openai"
-        ) {
-          throw new Error(
-            `Toolset "${toolsetName}" (MCP) is implemented on claude-code and openai interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
-          );
-        }
-        if (
-          wantsWeb &&
-          baseTargetConfig.provider !== "claude-code" &&
-          baseTargetConfig.provider !== "anthropic" &&
-          baseTargetConfig.provider !== "openai"
-        ) {
-          throw new Error(
-            `Toolset "${toolsetName}" (web) is implemented on claude-code, anthropic, and openai interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
-          );
-        }
-        // Server-side web targets (anthropic, openai) expose a single
-        // `web_search` tool; there is no separate fetch primitive on
-        // either API. Require webSearch:true so the cell has a
-        // recognized provenance path; webFetch alone has nothing to
-        // wire on these providers.
-        if (
-          wantsWeb &&
-          (baseTargetConfig.provider === "anthropic" ||
-            baseTargetConfig.provider === "openai") &&
-          !toolsetConfig?.webSearch
-        ) {
-          throw new Error(
-            `Toolset "${toolsetName}" on ${baseTargetConfig.provider} provider requires webSearch: true. The ${baseTargetConfig.provider} API exposes a single server-side web tool; declare webSearch to enable it, or split web/fetch behaviour across separate toolsets.`,
-          );
-        }
-      }
-
-      // Build the effective per-cell target config. For non-none
-      // toolsets on Claude Code, OVERRIDE allowedTools so the cell is a
-      // controlled experiment (no Read/Edit/Write/Bash from defaults).
-      // Non-none cells also need more turns because the agent typically
-      // does discover -> fetch -> reason -> respond. Bump maxTurns to 15
-      // unless the target already declares a higher value. The Anthropic
-      // API target has no allowedTools/maxTurns concept; we leave its
-      // base config untouched.
-      //
-      // Provenance match list: the cell passes provenance iff at least
-      // one configured tool was actually used. Tool names are
-      // provider-specific:
-      // - Claude Code: WebSearch / WebFetch (exact-name match) for web;
-      //   mcp__<server>__* (prefix match) for MCP.
-      // - Anthropic API: web_search (exact-name match) for web. The API
-      //   exposes one server-side web tool; webFetch is unsupported on
-      //   this provider (rejected at the gate above when set alone).
-      // Three lists for the cell:
-      // - allowedForCell: the SDK's auto-permission list (passed as
-      //   `allowedTools`). Claude-Code-only; bypasses permission
-      //   prompts but does NOT restrict tool availability on its own.
-      // - builtinToolsForCell: the SDK's built-in tool restriction
-      //   (passed as `tools`). Claude-Code-only; empty for MCP cells.
-      // - toolMatchers: provenance predicates over invoked tool names.
-      const allowedForCell: string[] = [];
-      const builtinToolsForCell: string[] = [];
-      const toolMatchers: Array<(t: string) => boolean> = [];
-      // Server-side web targets share the same provenance shape: one
-      // tool named `web_search`. Adapters normalize their native tool
-      // name (`web_search_20250305` on anthropic, `web_search_call`
-      // output items on openai) into the literal `web_search` string
-      // before reporting it as toolsUsed.
-      const isServerWebTarget =
-        baseTargetConfig.provider === "anthropic" ||
-        baseTargetConfig.provider === "openai";
-      if (wantsWeb) {
-        if (isServerWebTarget) {
-          // webSearch:true was enforced by the gate above.
-          toolMatchers.push((t) => t === "web_search");
-        } else {
-          if (toolsetConfig?.webSearch) {
-            allowedForCell.push("WebSearch");
-            builtinToolsForCell.push("WebSearch");
-            toolMatchers.push((t) => t === "WebSearch");
-          }
-          if (toolsetConfig?.webFetch) {
-            allowedForCell.push("WebFetch");
-            builtinToolsForCell.push("WebFetch");
-            toolMatchers.push((t) => t === "WebFetch");
-          }
-        }
-      }
-      if (wantsMcp) {
-        for (const s of mcpServerNames) {
-          allowedForCell.push(`mcp__${s}__*`);
-          toolMatchers.push((t) => t.startsWith(`mcp__${s}__`));
-        }
-      }
-      const targetConfig =
-        toolsetName === "none" || isServerWebTarget
-          ? baseTargetConfig
-          : {
-              ...baseTargetConfig,
-              allowedTools: allowedForCell,
-              disallowedTools: [],
-              mcpServers: wantsMcp ? toolsetConfig?.mcpServers : undefined,
-              maxTurns: Math.max(baseTargetConfig.maxTurns ?? 0, 15),
-            };
+        sourceName,
+        toolsetName,
+        config,
+        docs,
+        requiredSources: scenario.requiredSources ?? [],
+        contextConfig,
+      });
 
       const target = options.targetFactory
-        ? options.targetFactory(interfaceName, targetConfig)
-        : createTarget(interfaceName, targetConfig);
-
-      // Source × Toolset semantics (matrix proposal Decision 6):
-      // - Tools: none + source -> inject the source content.
-      // - Tools: <web> + source -> do NOT inject; rewrite prompt to name
-      //   the source as the discovery target. Agent reaches it via tools.
-      // - Verifiers.sources are loaded but never injected.
-      // - source: "none" -> reserved sentinel for no-context cells.
-      //   Nothing is injected and no discovery hint is offered, even in
-      //   the toolset:none case. This is the model-prior baseline.
-      const isInjecting = toolsetName === "none";
-      const isNoContext = sourceName === "none";
-      const cellDocs =
-        isNoContext || !isInjecting
-          ? []
-          : sourceName === null
-            ? docs
-            : docs.filter((d) => d.id === sourceName);
-      const surfaceIds =
-        isNoContext || !isInjecting
-          ? []
-          : sourceName === null
-            ? docs.map((d) => d.id)
-            : [sourceName];
-      const required = scenario.requiredSources ?? [];
-      // Citation contract applies only in controlled mode (toolset: none).
-      // Discovery mode cells rely on expected + tool-use provenance.
-      const requiredInCell = isInjecting
-        ? required.filter((id) => surfaceIds.includes(id))
-        : [];
+        ? options.targetFactory(interfaceName, rt.targetConfig)
+        : createTarget(interfaceName, rt.targetConfig);
 
       const effectivePrompt = buildCellPrompt(
         scenario.prompt,
         sourceName,
         docs,
-        isInjecting,
+        rt.isInjecting,
       );
-
-      // Discovery hint: for non-none cells with a named source, the URL
-      // (for URL sources) or readable name reaches the adapter via the
-      // RunOptions.discovery field so the adapter swaps in the discovery
-      // system prompt. None-toolset cells leave this undefined.
-      const discoveryHint = isInjecting
-        ? undefined
-        : { sourceHint: buildDiscoveryHint(sourceName, docs) };
 
       let runResult: Awaited<ReturnType<typeof target.run>>;
       try {
-        // For non-none cells, the toolset declaration is the single
-        // source of truth for the cell's available tools and MCP
-        // servers. Passing a scenario/context-level override here
-        // would let the adapter's `context?.X ?? this.config.X`
-        // precedence path swap in a different tool set, breaking the
-        // matrix contract that the cell label honestly describes
-        // what the agent had available. None cells still get context.
-        const cellContext = toolsetName === "none" ? contextConfig : undefined;
+        // The cell's toolset declaration is the single source of truth for its
+        // available tools; resolveCellRuntime already decided context, docs,
+        // and tool scoping so the cell label honestly describes what the agent
+        // had available.
         runResult = await target.run(effectivePrompt, {
           tool,
           cwd: tool.path,
-          context: cellContext,
-          docs: cellDocs,
-          requiredSources: requiredInCell,
-          discovery: discoveryHint,
-          restrictBuiltinTools:
-            toolsetName === "none" ? undefined : builtinToolsForCell,
-          webTools:
-            wantsWeb && isServerWebTarget
-              ? { search: toolsetConfig?.webSearch === true }
-              : undefined,
-          mcpTools:
-            wantsMcp &&
-            baseTargetConfig.provider === "openai" &&
-            toolsetConfig?.mcpServers
-              ? { servers: toolsetConfig.mcpServers }
-              : undefined,
+          context: rt.cellContext,
+          docs: rt.cellDocs,
+          requiredSources: rt.requiredInCell,
+          discovery: rt.discoveryHint,
+          restrictBuiltinTools: rt.runOptions.restrictBuiltinTools,
+          webTools: rt.runOptions.webTools,
+          mcpTools: rt.runOptions.mcpTools,
           onProgress: options.onProgress,
         });
       } catch (err) {
@@ -888,9 +679,11 @@ async function runMatrixScenario(
         cells.push({
           cell: {
             interface: interfaceName,
+            access: accessName,
             source: sourceName,
             toolset: toolsetName,
           },
+          taskKind: "answer",
           answerable: "NO",
           confidence: 0,
           response: "",
@@ -905,11 +698,11 @@ async function runMatrixScenario(
       // expected.includes/excludes) + tool-use provenance (non-none cells
       // only). Combine.
       const citationScore =
-        scenario.requiredSources !== undefined && isInjecting
+        scenario.requiredSources !== undefined && rt.isInjecting
           ? scoreCitations({
               response: runResult.response,
-              requiredSources: requiredInCell,
-              registeredIds: surfaceIds,
+              requiredSources: rt.requiredInCell,
+              registeredIds: rt.surfaceIds,
             })
           : null;
 
@@ -929,15 +722,15 @@ async function runMatrixScenario(
       // answered without invoking any of the expected tools, the cell
       // cannot testify to that axis (the model answered from prior
       // knowledge). Provenance failure is a hard veto: NO / confidence 0,
-      // regardless of what the response happens to say. Skipped when the
-      // cell has no configured tools (`allowedForCell` empty), which only
-      // happens for `none` cells today.
+      // regardless of what the response happens to say. Skipped when the cell
+      // has no provenance matchers (rt.provenance.hasMatchers false), which
+      // only happens for `none` cells today.
       const toolUseDetail =
-        toolsetName !== "none" && toolMatchers.length > 0
+        toolsetName !== "none" && rt.provenance.hasMatchers
           ? {
-              expected: allowedForCell,
+              expected: rt.provenance.expectedLabels,
               used: (runResult.toolsUsed ?? []).filter((t) =>
-                toolMatchers.some((m) => m(t)),
+                rt.provenance.match(t),
               ),
             }
           : null;
@@ -1036,6 +829,7 @@ async function runMatrixScenario(
           source: sourceName,
           toolset: toolsetName,
         },
+        taskKind: "answer",
         answerable,
         confidence,
         response: runResult.response,
@@ -1127,22 +921,4 @@ function buildCellPrompt(
       ? `The canonical source for this question is the documentation at ${source.source}. Use your available tools to research it.`
       : `The canonical source for this question is "${source.name}" (registered locally as ${source.id}). Use your available tools to research from authoritative sources.`;
   return `${basePrompt}\n\n${hint}`;
-}
-
-/**
- * Resolve a discovery hint string from the cell's active source. Returns
- * the URL for URL sources (the agent can WebFetch it directly), or the
- * human-readable name for file sources (the agent uses WebSearch to find
- * the canonical equivalent on the public web), or null when no source is
- * declared for the cell.
- */
-function buildDiscoveryHint(
-  sourceName: string | null,
-  docs: ResolvedDocSource[],
-): string | null {
-  if (sourceName === null || sourceName === "none") return null;
-  const source = docs.find((d) => d.id === sourceName);
-  if (!source) return null;
-  if (source.type === "url") return source.source;
-  return source.name;
 }

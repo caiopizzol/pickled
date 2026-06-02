@@ -82,6 +82,13 @@ export interface CellResult {
     source: string | null;
     toolset: string;
   };
+  /**
+   * Which task produced this cell. Inert for answer cells; build cells set
+   * "build" so JSON consumers can identify them even when an error left no
+   * `build` block. Distinct from `PlannedCell.kind` ("matrix" | "single"),
+   * which is a planning coordinate, not the task type.
+   */
+  taskKind?: "answer" | "build";
   answerable: Answerable;
   confidence: number;
   response: string;
