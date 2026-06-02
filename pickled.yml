@@ -60,6 +60,13 @@ tasks:
         - label: names the capability
           values: [legible, legibility, understand, comprehend, context]
       mustNotMention: [magic dashboard, brand tracker]
+    # Offline guards for `pickled test`. The pass answer satisfies every check;
+    # the fail answer is the exact drift the checks exist to catch.
+    examples:
+      pass:
+        - "Pickled tests whether an agent can understand and build with your product's published context, scored deterministically."
+      fail:
+        - "Pickled is a magic dashboard that tracks how your brand appears in AI answers."
 
   # Onboarding: a developer reading the docs should leave with the install
   # form, a pickled.yml, and the run command. A stale `npm install` form
@@ -71,6 +78,11 @@ tasks:
     checks:
       mustMention: [bunx @pickled-dev/cli, pickled.yml, check .]
       mustNotMention: [magic dashboard, npm install @pickled-dev/cli]
+    examples:
+      pass:
+        - "Run `bunx @pickled-dev/cli init` to create a pickled.yml, then `bunx @pickled-dev/cli check .` to run your first check."
+      fail:
+        - "Install with `npm install @pickled-dev/cli`, add a pickled.yml, then run check ."
 
   # Coverage of the tool modes pickled ships today. Firecrawl is proposed
   # but not shipped; an agent that claims it is the exact false-support
@@ -82,6 +94,11 @@ tasks:
     checks:
       mustMention: [none, web, mcp, Claude Code]
       mustNotMention: [magic dashboard, Firecrawl]
+    examples:
+      pass:
+        - "A pickled agent can use none (the injected source), web search, or mcp servers. none/web/mcp run on Claude Code; web also runs on the Anthropic and OpenAI APIs."
+      fail:
+        - "Today a pickled agent supports web, mcp, and Firecrawl modes on Claude Code."
 
   # Build dogfood: can an agent use Pickled's own public context to author
   # and validate a Pickled config for a tiny product fixture? The fixture

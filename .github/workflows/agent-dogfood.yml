@@ -1,19 +1,41 @@
 name: Agent dogfood
 
-# Manual-only for now. Agent-target runs are stochastic and cost real LLM
-# tokens; we don't want every push to burn budget or block infra on a flaky
-# model day. Trigger from the Actions tab when you want a real signal, and
-# pick which target to run against (quick / codex / anthropic_api).
+# Manual-only. Real agent runs are stochastic and spend LLM tokens, so they
+# never run on push/PR (the deterministic dogfood - audit, test, check/build
+# --plan, init - runs in ci.yml every time). Trigger this from the Actions tab
+# when you want a real signal, choosing the command and optional filters.
+#
+# This replaces the old agent-dogfood + agent-dogfood-matrix pair. The matrix
+# hand-mirrored task/agent/access names from pickled.yml into YAML, which
+# silently drifted out of date and broke. If per-cell jobs are wanted again,
+# generate them from `pickled check --plan --json`, never by copying names.
+#
+# Secrets (set in repo settings; missing keys produce error receipts):
+# - ANTHROPIC_API_KEY_DOGFOOD (quick / anthropic_api / build agents)
+# - OPENAI_API_KEY_DOGFOOD     (openai_api cells)
 on:
   workflow_dispatch:
     inputs:
-      target:
-        description: "Which target from pickled.yml to run (e.g., quick, codex, anthropic_api)"
-        required: true
-        default: quick
+      command:
+        description: "Which Pickled command to run"
+        type: choice
+        options: [check, build]
+        default: check
+      task:
+        description: "Run only this task id (optional)"
+        required: false
+      agent:
+        description: "Run only this agent (optional)"
+        required: false
+      access:
+        description: "Run only this access path (optional)"
+        required: false
+      max_cells:
+        description: "Abort if planned executions exceed N (optional)"
+        required: false
 
 jobs:
-  check:
+  dogfood:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,30 +51,46 @@ jobs:
       - name: Build CLI
         run: bun run --cwd apps/cli build
 
-      # The check step is intentionally non-blocking. A low score is signal,
-      # not infra failure. The receipt (pickled-report.json) is uploaded
-      # regardless so a failing run still leaves an artifact to inspect.
-      - name: pickled check (--target ${{ inputs.target }})
-        id: check
-        continue-on-error: true
+      # Inputs reach the script through env, not string interpolation, so a
+      # crafted input cannot inject shell. The receipt is uploaded regardless;
+      # Pickled's real exit code is reflected by the final step, so a low score
+      # surfaces as a red run (product signal), not a swallowed pass.
+      - name: pickled run
+        id: run
         env:
+          PICKLED_COMMAND: ${{ inputs.command }}
+          PICKLED_TASK: ${{ inputs.task }}
+          PICKLED_AGENT: ${{ inputs.agent }}
+          PICKLED_ACCESS: ${{ inputs.access }}
+          PICKLED_MAX_CELLS: ${{ inputs.max_cells }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_DOGFOOD }}
         run: |
-          ./apps/cli/dist/index.js check . \
-            --target "${{ inputs.target }}" \
-            --output pickled-report.json \
-            --verbose
+          set +e
+          args=(. --output pickled-report.json --verbose)
+          [[ -n "$PICKLED_TASK" ]] && args+=(--task "$PICKLED_TASK")
+          [[ -n "$PICKLED_AGENT" ]] && args+=(--agent "$PICKLED_AGENT")
+          [[ -n "$PICKLED_ACCESS" ]] && args+=(--access "$PICKLED_ACCESS")
+          [[ -n "$PICKLED_MAX_CELLS" ]] && args+=(--max-cells "$PICKLED_MAX_CELLS")
+          ./apps/cli/dist/index.js "$PICKLED_COMMAND" "${args[@]}"
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Upload receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          # Distinguish artifacts per target so successive runs (e.g.,
-          # quick then anthropic_api) do not overwrite each other.
-          name: pickled-report-${{ inputs.target }}
+          name: pickled-report-${{ inputs.command }}
           path: pickled-report.json
-          # error, not warn: a missing receipt means the run failed before
-          # producing one (auth/config/runtime broke). A low-score receipt
-          # still exists and uploads cleanly; that's signal, not infra
-          # failure. Distinguish the two.
+          # error, not warn: a missing receipt means the run broke before
+          # producing one (auth/config/runtime). A low-score receipt still
+          # uploads cleanly; that is signal, not infra failure.
           if-no-files-found: error
+
+      - name: Reflect Pickled verdict
+        env:
+          PICKLED_COMMAND: ${{ inputs.command }}
+        run: |
+          code="${{ steps.run.outputs.exit_code }}"
+          echo "pickled $PICKLED_COMMAND exited with code $code (non-zero = score below threshold; see the uploaded receipt)"
+          exit "${code:-1}"

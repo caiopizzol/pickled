@@ -42,8 +42,34 @@ jobs:
       - name: Verify llms.txt sync
         run: diff llms.txt apps/web/public/llms.txt
 
+      # Dogfood every deterministic Pickled operation against the repo's own
+      # pickled.yml. No LLM calls, no secrets: audit scans context files, the
+      # --plan dry-runs expand the answer/build matrices and prove both
+      # commands are wired, test scores the offline examples, and init proves
+      # the starter template still produces a loadable config. Real (paid,
+      # stochastic) check/build agent runs live in the manual agent-dogfood
+      # workflow. This block would have caught the tasks-schema drift that
+      # silently broke the old dogfood workflows.
       - name: Pickled audit (dogfood)
         run: ./apps/cli/dist/index.js audit . --fail-on error
+
+      - name: Pickled test (offline examples)
+        run: ./apps/cli/dist/index.js test .
+
+      - name: Pickled check --plan (answer tasks expand)
+        run: ./apps/cli/dist/index.js check . --plan
+
+      - name: Pickled build --plan (build tasks expand)
+        run: ./apps/cli/dist/index.js build . --plan
+
+      - name: Pickled init (starter template loads)
+        run: |
+          tmp="$(mktemp -d)"
+          # The starter config registers ./README.md, so the temp project
+          # needs one or init's own config would not load.
+          echo "# smoke" > "$tmp/README.md"
+          ./apps/cli/dist/index.js init "$tmp"
+          ./apps/cli/dist/index.js check "$tmp" --plan
 
   deploy-web:
     needs: verify
