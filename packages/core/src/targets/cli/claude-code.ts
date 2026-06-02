@@ -6,6 +6,7 @@ import {
   DEFAULT_DISALLOWED_TOOLS,
   EDIT_ALLOWED_TOOLS,
 } from "@pickled-dev/config";
+import { buildTaskPrompt } from "../build-prompt.js";
 import { buildCitationPrompt } from "../citation-prompt.js";
 import { buildDiscoveryPrompt } from "../discovery-prompt.js";
 import type {
@@ -36,13 +37,16 @@ export function buildAgentOptions(
     discovery,
     restrictBuiltinTools,
     editMode,
+    buildContext,
   } = options;
 
-  // Discovery-mode cells get a different system prompt: no injected sources,
-  // agent uses its tools to research, optional canonical-source hint.
-  const systemPrompt = discovery
-    ? buildDiscoveryPrompt(tool, discovery.sourceHint)
-    : buildCitationPrompt(tool, docs, requiredSources);
+  // Build cells use the build prompt (no citation contract); discovery cells
+  // research with tools; otherwise inject sources and demand a Sources block.
+  const systemPrompt = buildContext
+    ? buildTaskPrompt(tool, buildContext.docs, buildContext.sourceHint)
+    : discovery
+      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
+      : buildCitationPrompt(tool, docs, requiredSources);
 
   const agentOptions: ClaudeAgentOptions = {
     cwd,

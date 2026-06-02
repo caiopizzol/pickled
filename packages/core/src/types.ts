@@ -54,7 +54,7 @@ export interface BuildAttempt {
    * was modified, a failing verify command, or a setup/environment error.
    */
   reason?: string;
-  changedFiles?: Array<{ status: string; path: string }>;
+  changedFiles?: Array<{ status: string; path: string; oldPath?: string }>;
   diff?: string;
   /**
    * Per-verify-command receipt, mirroring the command verifier's CommandResult

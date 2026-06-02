@@ -3,12 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CheckConfig } from "@pickled-dev/config";
-import { runCheck } from "../src/check.js";
+import { buildReport, runCheck } from "../src/check.js";
 import type {
   RunOptions,
   TargetResult,
   TargetRunner,
 } from "../src/targets/types.js";
+import type { CellResult, ScenarioResult } from "../src/types.js";
 
 function makeMockTarget(response: string): TargetRunner {
   return {
@@ -2608,5 +2609,112 @@ describe("runCheck codebase existence verification (implementation-readiness)", 
       // No hygiene note: null means "not checked", not "missing".
       expect(cell.reason).not.toContain("missing from codebase");
     });
+  });
+});
+
+describe("buildReport build-aware summary", () => {
+  function buildCell(over: Partial<CellResult>): CellResult {
+    return {
+      cell: { interface: "b", access: "given", source: "d", toolset: "none" },
+      answerable: "PARTIAL",
+      confidence: 67,
+      response: "",
+      reason: "",
+      citations: null,
+      ...over,
+    };
+  }
+  function scenarioWith(cells: CellResult[]): ScenarioResult {
+    return {
+      scenario: { name: "s", prompt: "p", requiredSources: [] },
+      answerable: null,
+      confidence: null,
+      response: null,
+      reason: null,
+      citations: null,
+      cells,
+    };
+  }
+
+  test("a PARTIAL build cell scores its rate directly, not rate * 0.5", () => {
+    const buildC = buildCell({
+      taskKind: "build",
+      answerable: "PARTIAL",
+      confidence: 67,
+      build: {
+        attempts: [
+          { status: "passed" },
+          { status: "passed" },
+          { status: "failed" },
+        ],
+        passedAttempts: 2,
+        totalAttempts: 3,
+      },
+    });
+    const report = buildReport(
+      { name: "t", description: "d", path: "/x" },
+      [],
+      [scenarioWith([buildC])],
+    );
+    expect(report.summary.score).toBe(67);
+  });
+
+  test("a PARTIAL answer cell still uses the halved curve", () => {
+    const answerC = buildCell({ answerable: "PARTIAL", confidence: 67 });
+    const report = buildReport(
+      { name: "t", description: "d", path: "/x" },
+      [],
+      [scenarioWith([answerC])],
+    );
+    expect(report.summary.score).toBe(34); // round(67 * 0.5)
+  });
+
+  test("a build Error cell (no build block) is excluded from the summary", () => {
+    // An errored build cell (setup/vacuous/all-errored) carries error and no
+    // build block; it must not count toward total or drag the score down.
+    const errored = buildCell({
+      taskKind: "build",
+      answerable: "NO",
+      confidence: 0,
+      error: "setup failed: bun install",
+    });
+    const built = buildCell({
+      taskKind: "build",
+      answerable: "YES",
+      confidence: 100,
+      build: {
+        attempts: [{ status: "passed" }],
+        passedAttempts: 1,
+        totalAttempts: 1,
+      },
+    });
+    const report = buildReport(
+      { name: "t", description: "d", path: "/x" },
+      [],
+      [scenarioWith([errored, built])],
+    );
+    // Only the scored build cell counts: 1 eval, score 100 (not 50 across 2).
+    expect(report.summary.total).toBe(1);
+    expect(report.summary.score).toBe(100);
+  });
+
+  test("a 0/n build cell (real failure) still counts in the summary", () => {
+    const failed = buildCell({
+      taskKind: "build",
+      answerable: "NO",
+      confidence: 0,
+      build: {
+        attempts: [{ status: "failed" }, { status: "failed" }],
+        passedAttempts: 0,
+        totalAttempts: 2,
+      },
+    });
+    const report = buildReport(
+      { name: "t", description: "d", path: "/x" },
+      [],
+      [scenarioWith([failed])],
+    );
+    expect(report.summary.total).toBe(1);
+    expect(report.summary.score).toBe(0);
   });
 });

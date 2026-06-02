@@ -84,6 +84,14 @@ export interface RunOptions {
    * loop), and the runner gates build tasks to edit-capable agents first.
    */
   editMode?: boolean;
+  /**
+   * Build-task context for the system prompt (kind: build). When set, the CLI
+   * adapter uses the build prompt (no citation contract, no `## Sources`
+   * block) instead of the citation/discovery prompt: `docs` are injected for
+   * `tools: none` cells, `sourceHint` names the discovery target otherwise.
+   * Paired with `editMode`. Internal only.
+   */
+  buildContext?: { docs: ResolvedDocSource[]; sourceHint: string | null };
   onProgress?: (msg: string) => void;
 }
 
