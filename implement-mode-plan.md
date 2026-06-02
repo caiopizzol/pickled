@@ -156,12 +156,16 @@ forces the shape. Discipline: simple schema, strong receipts, room to grow.
   into `cell-runtime.ts`, shared by both runners. Add `taskKind` on CellResult.
   Behavior-preserving except one intentional fix: server-web provenance veto
   names `web_search` (semantic expectedLabels), not `none of []`.
-- [ ] **PR 5b - chore (internal).** Build runner orchestrating the primitives:
-  create -> setup (Error) -> baseline -> vacuous-fixture guard -> run
-  edit-capable target -> capture diff -> empty-diff veto -> harness-protection
-  veto -> run `verify` -> record attempt -> cleanup. Tested with fake/editing
-  targets. `checkDiff` repositioned to power empty-diff + harness protection,
-  not public scoring.
+- [x] **PR 5b - chore, merged TBD.** `runBuildCell`: vacuous-fixture preflight
+  (Error if green/setup-fails), then `trials` INDEPENDENT trials each in a fresh
+  workspace (captureDiff stages against the per-trial baseline, so trials must
+  not share a workspace). Each trial: setup -> baseline -> edit-capable target
+  (`editMode` + `buildContext`, wall-clock timeout) -> capture diff -> empty-diff
+  veto -> harness veto (test files only) -> `verify` -> attempt. Strict k/n ->
+  answerable; build-aware summary (rate counts directly, not `* 0.5`).
+  `buildTaskPrompt` system prompt routed via `buildContext` (no citation
+  contract, never names verify commands). Tested with a fake editing target.
+  NOT yet wired into `runCheck` - PR 6 wires it to `kind: build`.
 - [ ] **PR 6 - feat -> RELEASE (the breaking PR).** Public schema
   `questions -> tasks` + `kind` + `workspace`/`verify`/`trials`; wire answer +
   build runners onto the shared planner; `pickled build` + gate; migrate the
