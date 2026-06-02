@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
   }
 }

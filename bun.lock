@@ -10,7 +10,7 @@
     },
     "apps/cli": {
       "name": "@pickled-dev/cli",
-      "version": "0.28.3",
+      "version": "0.32.0",
       "bin": {
         "pickled": "./dist/index.js",
       },
@@ -79,6 +79,9 @@
       "version": "0.1.0",
       "dependencies": {
         "yaml": "^2.8.2",
+      },
+      "devDependencies": {
+        "ajv": "^8.20.0",
       },
     },
     "packages/core": {

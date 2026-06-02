@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pickled.dev/schema/pickled.schema.json",
+  "title": "pickled.yml",
+  "description": "Configuration for testing whether agents understand a product. Editor/tooling contract; the pickled loader remains the authoritative validator (it owns cross-references, reserved names, and provider-specific rules).",
+  "type": "object",
+  "required": ["product", "agents", "access", "questions"],
+  "additionalProperties": false,
+  "properties": {
+    "product": { "$ref": "#/$defs/product" },
+    "sources": { "$ref": "#/$defs/sources" },
+    "agents": { "$ref": "#/$defs/agents" },
+    "access": { "$ref": "#/$defs/access" },
+    "questions": { "$ref": "#/$defs/questions" },
+    "threshold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Optional run score required for the run to pass. Omit to report the score with no pass/fail verdict."
+    }
+  },
+  "$defs": {
+    "product": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Named public context artifacts. Each value is a URL or a local file path.",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "agent": {
+      "type": "object",
+      "required": ["provider", "model"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": ["claude-code", "codex-cli", "anthropic", "openai"]
+        },
+        "model": { "type": "string", "minLength": 1 },
+        "temperature": { "type": "number" },
+        "maxTokens": { "type": "integer", "minimum": 1 },
+        "maxTurns": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/agent" }
+    },
+    "mcpServer": {
+      "type": "object",
+      "required": ["url"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "accessPath": {
+      "type": "object",
+      "required": ["source", "tools"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A registered source id, or \"none\" for no context."
+        },
+        "tools": { "enum": ["none", "web", "mcp"] },
+        "servers": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/mcpServer" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "tools": { "const": "mcp" } },
+            "required": ["tools"]
+          },
+          "then": { "required": ["servers"] },
+          "else": { "not": { "required": ["servers"] } }
+        }
+      ]
+    },
+    "access": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/accessPath" }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mustMention": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "mustMentionOneOf": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["label", "values"],
+            "additionalProperties": false,
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "values": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "mustNotMention": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "anyOf": [
+        { "required": ["mustMention"] },
+        { "required": ["mustMentionOneOf"] },
+        { "required": ["mustNotMention"] }
+      ]
+    },
+    "examples": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pass": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "fail": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "ask", "agents", "access", "checks"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "ask": { "type": "string", "minLength": 1 },
+        "agents": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "access": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "checks": { "$ref": "#/$defs/checks" },
+        "examples": { "$ref": "#/$defs/examples" }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/question" }
+    }
+  }
+}

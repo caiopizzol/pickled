@@ -5,6 +5,14 @@ description: Every field the loader accepts, with the rules each one enforces.
 
 A `pickled.yml` has five required top-level keys: `product`, `sources`, `agents`, `access`, and `questions`, plus an optional `threshold`. Checks and example answers live inside each question.
 
+For editor autocomplete and inline validation, point your YAML tooling at the published [JSON Schema](https://pickled.dev/schema/pickled.schema.json). `pickled init` adds the directive for you:
+
+```yaml
+# yaml-language-server: $schema=https://pickled.dev/schema/pickled.schema.json
+```
+
+The schema validates structure (shapes, required fields, allowed values). The loader stays the source of truth for cross-references (a source / agent / access id that does not exist), reserved names, and provider-specific rules, and it gives the better error messages.
+
 ## `product`
 
 ```yaml

@@ -1,7 +1,8 @@
 import path from "node:path";
 import chalk from "chalk";
 
-const TEMPLATE = `# pickled.yml - does an agent understand your product?
+const TEMPLATE = `# yaml-language-server: $schema=https://pickled.dev/schema/pickled.schema.json
+# pickled.yml - does an agent understand your product?
 
 product:
   name: your-product
