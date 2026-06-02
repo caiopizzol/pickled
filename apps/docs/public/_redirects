@@ -10,10 +10,15 @@
 /llms.mdx/docs/*      /llms.mdx/:splat     301
 /og/docs/*            /og/:splat           301
 
-# matrix-evaluation + toolsets merged into the single Access page.
-/matrix-evaluation            /access            301
-/toolsets                     /access            301
-/llms.mdx/matrix-evaluation   /llms.mdx/access   301
-/llms.mdx/toolsets            /llms.mdx/access   301
-/og/matrix-evaluation         /og/access         301
-/og/toolsets                  /og/access         301
+# Access folded into the pickled.yml reference. matrix-evaluation and
+# toolsets (earlier merged into Access) point at the same section, so the
+# old URLs reach the content in one hop rather than chaining through /access.
+/access                       /pickled-yml#access    301
+/matrix-evaluation            /pickled-yml#access    301
+/toolsets                     /pickled-yml#access    301
+/llms.mdx/access              /llms.mdx/pickled-yml  301
+/llms.mdx/matrix-evaluation   /llms.mdx/pickled-yml  301
+/llms.mdx/toolsets            /llms.mdx/pickled-yml  301
+/og/access                    /og/pickled-yml        301
+/og/matrix-evaluation         /og/pickled-yml        301
+/og/toolsets                  /og/pickled-yml        301
