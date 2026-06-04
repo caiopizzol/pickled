@@ -1,6 +1,4 @@
-// Types
-
-// Defaults
+// Defaults (execution-layer constants consumed by core)
 export {
   DEFAULT_ALLOWED_TOOLS,
   DEFAULT_DISALLOWED_TOOLS,
@@ -8,27 +6,45 @@ export {
   EDIT_ALLOWED_TOOLS,
 } from "./defaults.js";
 // Loader
-export { loadConfig } from "./loader.js";
+export { expandEnvVars, loadConfig } from "./loader.js";
+// Public schema types (the YAML shape users write)
+export type {
+  PublicAgent,
+  PublicBuild,
+  PublicCommand,
+  PublicConfig,
+  PublicContext,
+  PublicFact,
+  PublicMatch,
+  PublicMisstatement,
+  PublicQuestion,
+  PublicSource,
+  PublicVerifier,
+  PublicWorkspace,
+} from "./public-types.js";
+// Validation / resolution (exported for tests and tooling)
+export { resolvePublicConfig, validatePublicConfig } from "./transform.js";
+// Internal domain types (the normalized, validated model core consumes)
 export type {
   ApiProvider,
-  CheckConfig,
+  Build,
   CliProvider,
+  Command,
+  Config,
   Context,
-  DocSource,
-  DocSourceEntry,
-  DocSourceType,
-  DocsConfig,
-  ExpectedChecks,
+  ContextMode,
+  Fact,
   IdeProvider,
-  MatrixConfig,
+  Match,
   McpServerConfig,
-  NormalizedDocSource,
-  ResolvedDocSource,
-  Scenario,
-  ScenarioMatrix,
+  Misstatement,
+  Question,
+  QuestionExamples,
+  ResolvedSource,
+  Source,
+  SourceKind,
   Target,
   TargetCategory,
-  ToolsetConfig,
-  VerifierConfig,
+  Verifier,
+  Workspace,
 } from "./types.js";
-export { normalizeDocSource } from "./types.js";

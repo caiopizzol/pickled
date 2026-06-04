@@ -17,9 +17,9 @@ bunx @pickled-dev/cli <command>
 ## Commands
 
 - **`pickled init [path]`** writes a starter `pickled.yml`.
-- **`pickled test [path]`** scores `examples.pass` and `examples.fail` offline. No model calls.
-- **`pickled check [path]`** asks the configured agents and scores their answers.
-- **`pickled build [path]`** has edit-capable agents work in a fresh workspace and scores `verify` commands.
+- **`pickled test [path]`** scores a question's `examples.pass` / `examples.fail` offline. No model calls.
+- **`pickled check [path]`** runs the questions: asks the agents and scores their answers against the fact contract.
+- **`pickled build [path]`** has edit-capable agents work in a fresh workspace and scores the `verifier`.
 - **`pickled audit [path]`** scans agent-facing files for broken refs and oversized sections. No model calls.
 
 ## Minimum config
@@ -27,61 +27,69 @@ bunx @pickled-dev/cli <command>
 A registered source is the context Pickled is allowed to use: a local file or a URL. Anything not registered does not count.
 
 ```yaml
+schemaVersion: 2
+
 product:
   name: my-product
   description: short one-liner about what your product does
 
 sources:
-  readme: ./README.md
+  readme: { path: ./README.md }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_readme: { source: readme, tools: none }
+contexts:
+  from_readme: { mode: inject, source: readme }
 
-tasks:
+facts:
+  install_command:
+    statement: my-product installs with bunx my-product.
+    match:
+      allOf: ["bunx my-product"]
+
+questions:
   - id: install
-    prompt: How do I install my-product?
+    question: How do I install my-product?
     agents: [quick]
-    access: [given_readme]
-    checks:
-      mustMention: ["bunx my-product"]
+    contexts: [from_readme]
+    expects: [install_command]
 
-threshold: 80
+thresholds:
+  questions: 80
 ```
 
-That runs one answer task with your README injected. Add more `access` paths to compare model memory, injected sources, web discovery, and MCP discovery. A build task (`kind: build`) instead has the agent edit a workspace and runs your `verify` commands; run it with `pickled build`.
+That runs one question with your README injected. Add more `contexts` to compare model memory, injected sources, web discovery, and MCP discovery. A `build` instead has the agent edit a workspace and runs your `verifier`; run it with `pickled build`.
 
 ## Cost controls
 
-For paid agents, a run can expand to many `(agent × access)` cells. These flags keep that in check:
+For paid agents, a run can expand to many `(agent × context)` cells. These flags keep that in check:
 
 ```bash
 pickled check . --plan                           # dry run: no model calls
 pickled check . --max-cells 10                   # fail before spending
-pickled check . --sample 2 --seed nightly-2026  # deterministic sample per task
+pickled check . --sample 2 --seed nightly-2026   # deterministic sample per task
 pickled build . --plan                           # preview build cells and executions
 ```
 
-The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample. Build tasks also report `selectedExecutions` (cells x trials), which is what `--max-cells` gates.
+The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample. Builds also report `selectedExecutions` (cells x trials), which is what `--max-cells` gates.
 
 Narrow a run by the names in `pickled.yml`:
 
 ```bash
 pickled check . --task install
 pickled check . --agent quick
-pickled check . --access given_readme
+pickled check . --context from_readme
 ```
 
 ## Current support
 
 | Concept | Works today |
 | --- | --- |
-| Sources | local files, URLs |
-| Access tools | `none`, `web`, `mcp` |
+| Sources | local files, URLs, codebase globs |
+| Context modes | `memory`, `inject`, `web`, `mcp` |
 | Agents | Claude Code, Codex CLI, Anthropic API, OpenAI API |
 | Output | terminal, JSON, markdown audit reports |
 

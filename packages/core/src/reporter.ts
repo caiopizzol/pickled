@@ -1,524 +1,248 @@
 import chalk from "chalk";
 import {
-  formatCellLabel,
-  getBuildStatus,
-  getScenarioStatus,
-  type ScenarioStatus,
+  buildCellStatus,
+  questionCellStatus,
+  runPasses,
   type StatusTone,
 } from "./report-status.js";
-import type { Answerable, CheckReport, ScenarioResult } from "./types.js";
+import type {
+  BuildCell,
+  PlanSummary,
+  QuestionCell,
+  RunReport,
+} from "./types.js";
 
 const LINE = "─".repeat(55);
-
 type ChalkFn = typeof chalk.green;
 
-function toneToColor(tone: StatusTone): ChalkFn {
-  if (tone === "success") return chalk.green;
-  if (tone === "warning") return chalk.yellow;
+function tone(t: StatusTone): ChalkFn {
+  if (t === "success") return chalk.green;
+  if (t === "warning") return chalk.yellow;
   return chalk.red;
 }
 
-function getOverallColor(score: number): ChalkFn {
+function overallColor(score: number): ChalkFn {
   if (score >= 70) return chalk.green;
   if (score >= 50) return chalk.yellow;
   return chalk.red;
 }
 
-function renderStatusLine(status: ScenarioStatus): string {
-  // Error has no meaningful confidence; everything else shows the percent.
-  if (status.label === "Error") return status.label;
-  return `${status.label} (${status.confidence}%)`;
-}
-
-function getResultStatus(result: ScenarioResult): {
-  icon: string;
-  status: string;
-  color: ChalkFn;
-} {
-  // Single-mode result: top-level evaluation fields are populated.
-  const status = getScenarioStatus({
-    answerable: result.answerable ?? "NO",
-    confidence: result.confidence ?? 0,
-    error: result.error,
-  });
-  const color = toneToColor(status.tone);
-  return {
-    icon: color(status.icon),
-    status: renderStatusLine(status),
-    color,
-  };
-}
-
-function formatResultLabel(result: ScenarioResult): string {
-  const target = result.target?.target ?? "default";
-  const context = result.context?.name ?? "default";
-
-  if (target === "default" && context === "default") {
-    return "";
-  }
-
-  if (context === "default") {
-    return chalk.dim(`[${target}]`);
-  }
-
-  return chalk.dim(`[${target}/${context}]`);
-}
-
-function hasMatrixResults(results: ScenarioResult[]): boolean {
-  const scenarioNames = results.map((r) => r.scenario.name);
-  return new Set(scenarioNames).size !== scenarioNames.length;
-}
-
-export interface FormatReportOptions {
-  threshold?: number;
-  /** Report title / command label. The CLI passes "pickled check" or
-   *  "pickled build" so the dry-run header names the command that ran. */
+export interface FormatOptions {
   title?: string;
 }
 
-function formatIds(ids: string[]): string {
-  return ids.map((id) => `[${id}]`).join(", ");
-}
-
-interface DetailFields {
-  error?: string;
-  reason: string;
-  answerable: "YES" | "PARTIAL" | "NO";
-  citations: { cited: string[]; missing: string[]; unknown: string[] };
-}
-
-function formatDetailFields(fields: DetailFields, indent: string): string[] {
-  const lines: string[] = [];
-
-  if (fields.error) {
-    lines.push(chalk.dim(`${indent}error: ${fields.error}`));
-    return lines;
-  }
-
-  if (fields.reason && fields.answerable !== "YES") {
-    lines.push(chalk.dim(`${indent}reason: ${fields.reason}`));
-  }
-
-  if (fields.citations.cited.length > 0) {
-    lines.push(
-      chalk.dim(`${indent}cited: ${formatIds(fields.citations.cited)}`),
-    );
-  }
-  if (fields.citations.missing.length > 0) {
-    lines.push(
-      chalk.dim(`${indent}missing: ${formatIds(fields.citations.missing)}`),
-    );
-  }
-  if (fields.citations.unknown.length > 0) {
-    lines.push(
-      chalk.dim(`${indent}unknown: ${formatIds(fields.citations.unknown)}`),
-    );
-  }
-
-  return lines;
-}
-
-function formatDetails(result: ScenarioResult, indent: string): string[] {
-  // Single-mode only. Compare-mode rendering happens in formatCheckReport.
-  if (!result.citations) return [];
-  return formatDetailFields(
-    {
-      error: result.error,
-      reason: result.reason ?? "",
-      answerable: result.answerable ?? "NO",
-      citations: result.citations,
-    },
-    indent,
-  );
-}
-
-function formatResultLine(result: ScenarioResult): string {
-  const { icon, status, color } = getResultStatus(result);
-  const label = formatResultLabel(result);
-  const statusText = `${icon} ${status}`;
-  return label ? `${label} ${color(statusText)}` : color(statusText);
-}
-
 /**
- * Matrix-mode block. One row per cell;
- * public-schema cells render as `[agent · access]`. Legacy/internal cells
- * fall back to `[interface · source · toolset]`. Verifier sources, when
- * declared on the scenario, surface as a human-review note (NOT graded).
+ * Render a RunReport for the terminal. Pure function of the receipt: all label,
+ * score, and run-pass/fail decisions come from report-status, never from here.
  */
-function formatMatrixBlock(result: ScenarioResult, indent: string): string[] {
-  if (!result.cells) return [];
-  const lines: string[] = [];
-  const hasAccess = result.cells.some((cell) => cell.cell.access);
-  lines.push(
-    `${indent}${chalk.dim(hasAccess ? "Matrix cells (agent · access)" : "Matrix cells (interface · source · toolset)")}`,
-  );
-  for (const cell of result.cells) {
-    // Build cells score k/n over trials and get build language; answer cells
-    // (and errored build cells, which carry `error` and no `build`) use the
-    // grounded scale.
-    const status = cell.build
-      ? getBuildStatus(cell.build)
-      : getScenarioStatus(cell);
-    const color = toneToColor(status.tone);
-    const labelText = formatCellLabel(cell.cell);
-    const label = chalk.dim(labelText);
-    const statusText = cell.build
-      ? `${status.label} ${cell.build.passedAttempts}/${cell.build.totalAttempts}`
-      : renderStatusLine(status);
-    const statusLine = `${color(status.icon)} ${color(statusText)}`;
-    lines.push(`${indent}${label} ${statusLine}`);
-    lines.push(
-      ...formatDetailFields(
-        {
-          reason: cell.reason,
-          answerable: cell.answerable,
-          citations: cell.citations ?? {
-            cited: [],
-            required: [],
-            missing: [],
-            unknown: [],
-          },
-        },
-        `${indent}  `,
-      ),
-    );
-    if (cell.expected) {
-      const missing = cell.expected.includes
-        .filter((c) => !c.satisfied)
-        .map((c) => `"${c.value}"`);
-      const banned = cell.expected.excludes
-        .filter((c) => !c.satisfied)
-        .map((c) => `"${c.value}"`);
-      if (missing.length > 0) {
-        lines.push(
-          chalk.dim(
-            `${indent}  expected.includes missing: ${missing.join(", ")}`,
-          ),
-        );
-      }
-      if (banned.length > 0) {
-        lines.push(
-          chalk.dim(`${indent}  expected.excludes hit: ${banned.join(", ")}`),
-        );
-      }
-      const mustMentionOneOfMissed = cell.expected.mustMentionOneOf
-        .filter((g) => !g.satisfied)
-        .map((g) => g.label);
-      if (mustMentionOneOfMissed.length > 0) {
-        lines.push(
-          chalk.dim(
-            `${indent}  missing one of: ${mustMentionOneOfMissed.join(", ")}`,
-          ),
-        );
-      }
-    }
-    if (cell.toolsUsed && cell.toolsUsed.length > 0) {
-      lines.push(chalk.dim(`${indent}  tools: ${cell.toolsUsed.join(", ")}`));
-    }
-  }
-  if (result.verifierSamples && result.verifierSamples.length > 0) {
-    lines.push(
-      `${indent}${chalk.dim("Verifier samples (human review; never LLM-judged)")}`,
-    );
-    for (const sample of result.verifierSamples) {
-      const snippet = sample.content.slice(0, 200).replace(/\s+/g, " ").trim();
-      const ellipsis = sample.content.length > 200 ? "..." : "";
-      lines.push(chalk.dim(`${indent}  [${sample.id}] ${sample.name}`));
-      lines.push(chalk.dim(`${indent}    ${snippet}${ellipsis}`));
-    }
-  }
-  return lines;
-}
-
-/**
- * Compare-mode block.
- * One preamble line names the intersection citation contract; each surface
- * gets its own status line plus indented details. No synthesized top-level
- * aggregate.
- */
-function formatCompareBlock(result: ScenarioResult, indent: string): string[] {
-  if (!result.surfaces) return [];
-  const lines: string[] = [];
-  lines.push(
-    `${indent}${chalk.dim("Citations scoped to active surface (compare mode)")}`,
-  );
-  for (const surface of result.surfaces) {
-    const status = getScenarioStatus(surface);
-    const color = toneToColor(status.tone);
-    const surfaceLabel = chalk.dim(`[${surface.active.join(",")}]`);
-    const statusLine = `${color(status.icon)} ${color(renderStatusLine(status))}`;
-    lines.push(`${indent}${surfaceLabel} ${statusLine}`);
-    lines.push(
-      ...formatDetailFields(
-        {
-          reason: surface.reason,
-          answerable: surface.answerable,
-          citations: surface.citations,
-        },
-        `${indent}  `,
-      ),
-    );
-  }
-  return lines;
-}
-
-function getSummaryGuidance(scenarios: ScenarioResult[]): string {
-  // Count every evaluation that did not fully ground, across matrix cells
-  // and compare-mode surfaces. Each cell/surface is its own data point,
-  // mirroring the run-level score aggregation.
-  let weak = 0;
-  const tally = (answerable: Answerable | null): void => {
-    if (answerable !== "YES") weak++;
-  };
-  for (const result of scenarios) {
-    if (result.surfaces) {
-      for (const s of result.surfaces) tally(s.answerable);
-    } else if (result.cells) {
-      for (const c of result.cells) tally(c.answerable);
-    } else {
-      tally(result.answerable);
-    }
-  }
-
-  if (weak > 0) {
-    return "Review the answers that fell short of their checks.";
-  }
-  return "Every answer met its checks.";
-}
-
-function formatOverall(
-  report: CheckReport,
-  threshold: number | undefined,
+export function formatReport(
+  report: RunReport,
+  options: FormatOptions = {},
 ): string {
-  const score = report.summary.score;
-  const color = getOverallColor(score);
-  const base = `Overall: ${color(`${score}`)} / 100`;
-
-  // AIDEV-NOTE: Without a configured threshold, render Overall and stop. Do
-  // not emit run-pass/fail language. See brand.md §Interface Feedback →
-  // Verdict layers: run verdict only exists when a threshold is configured.
-  if (threshold === undefined || threshold <= 0) {
-    return base;
-  }
-
-  const passed = score >= threshold;
-  const result = passed ? chalk.green("run passes") : chalk.red("run fails");
-  return `${base} · threshold ${threshold} · ${result}`;
-}
-
-export function formatCheckReport(
-  report: CheckReport,
-  options: FormatReportOptions = {},
-): string {
-  const { tool, scenarios, summary } = report;
-  const results = scenarios;
   const lines: string[] = [];
-
-  lines.push(chalk.bold(options.title ?? "pickled check"));
+  const kindTitle =
+    report.kind === "questions" ? "pickled check" : "pickled build";
+  lines.push(chalk.bold(options.title ?? kindTitle));
   lines.push(LINE);
-  lines.push(`Tool: ${chalk.cyan(tool.name)}`);
+  lines.push(`Product: ${chalk.cyan(report.product.name)}`);
+  lines.push(
+    report.sources.length > 0
+      ? `Sources: ${chalk.dim(report.sources.map((s) => `[${s.id}]`).join(", "))}`
+      : `Sources: ${chalk.dim("none registered")}`,
+  );
 
-  if (report.docs.length > 0) {
-    lines.push(
-      `Sources: ${chalk.dim(formatIds(report.docs.map((d) => d.id)))}`,
-    );
-  } else {
-    lines.push(`Sources: ${chalk.dim("none registered")}`);
+  const plan = report.plan;
+  if (plan?.cells && !report.questions && !report.builds) {
+    return formatPlan(plan, lines);
   }
 
-  // In plan/dry-run mode no scenarios are scored (summary.total is 0), so
-  // report the count of distinct tasks that produced planned cells.
-  const scenarioCount =
-    report.plan?.cells != null
-      ? new Set(report.plan.cells.map((c) => c.scenario)).size
-      : summary.total;
-  lines.push(`Tasks: ${chalk.dim(String(scenarioCount))}`);
-  if (report.plan) {
-    const { expandedCells, selectedCells, selectedExecutions, seed } =
-      report.plan;
-    const sampled = selectedCells < expandedCells;
-    const cellsLine = sampled
-      ? `Cells: ${chalk.dim(`${selectedCells} of ${expandedCells} (sampled${seed ? `, seed=${seed}` : ""})`)}`
-      : `Cells: ${chalk.dim(String(expandedCells))}`;
-    lines.push(cellsLine);
-    // Build cells run multiple trials; the real agent-run count (what
-    // --max-cells gates) differs from the cell count, so surface it.
-    if (
-      selectedExecutions !== undefined &&
-      selectedExecutions !== selectedCells
-    ) {
-      lines.push(`Executions: ${chalk.dim(String(selectedExecutions))}`);
-    }
-  }
+  const taskCount = report.questions?.length ?? report.builds?.length ?? 0;
+  lines.push(`Tasks: ${chalk.dim(String(taskCount))}`);
   lines.push("");
 
-  // Dry-run reports carry the per-cell plan inline and no scenario results.
-  if (report.plan?.cells && results.length === 0) {
-    lines.push(
-      chalk.bold(
-        `Planned cells (${report.plan.selectedCells} of ${report.plan.expandedCells})`,
-      ),
-    );
-    if (report.plan.cells.length === 0) {
-      lines.push(chalk.dim("  (no cells after filters)"));
-    }
-    let currentScenario = "";
-    for (const c of report.plan.cells) {
-      if (c.scenario !== currentScenario) {
-        currentScenario = c.scenario;
-        lines.push(`  ${c.scenario}`);
-      }
-      const detail =
-        c.interface !== undefined
-          ? formatCellLabel(c)
-          : `[${c.target}${c.context && c.context !== "default" ? `/${c.context}` : ""}]`;
-      lines.push(`    ${chalk.dim(detail)}`);
-    }
-    lines.push("");
-    lines.push(LINE);
-    lines.push(
-      chalk.dim(
-        `Dry-run: no model calls. Re-run without --plan to execute these cells.`,
-      ),
-    );
-    return lines.join("\n");
-  }
-
-  if (hasMatrixResults(results)) {
-    const byScenario = new Map<string, ScenarioResult[]>();
-    for (const result of results) {
-      const name = result.scenario.name;
-      if (!byScenario.has(name)) {
-        byScenario.set(name, []);
-      }
-      byScenario.get(name)?.push(result);
-    }
-
-    for (const [scenarioName, scenarioResults] of byScenario) {
-      lines.push(`Task: ${scenarioName}`);
-
-      for (const result of scenarioResults) {
-        if (result.cells) {
-          lines.push(...formatMatrixBlock(result, "    "));
-        } else if (result.surfaces) {
-          lines.push(...formatCompareBlock(result, "    "));
-        } else {
-          lines.push(`  ${formatResultLine(result)}`);
-          lines.push(...formatDetails(result, "    "));
-        }
-      }
-
+  if (report.kind === "questions") {
+    for (const q of report.questions ?? []) {
+      lines.push(`Task: ${q.question}`);
+      for (const cell of q.cells) lines.push(...questionCellLines(cell));
       lines.push("");
     }
   } else {
-    for (const result of results) {
-      lines.push(`Task: ${result.scenario.name}`);
-      if (result.cells) {
-        lines.push(...formatMatrixBlock(result, "  "));
-      } else if (result.surfaces) {
-        lines.push(...formatCompareBlock(result, "  "));
-      } else {
-        lines.push(`  ${formatResultLine(result)}`);
-        lines.push(...formatDetails(result, "  "));
-      }
+    for (const b of report.builds ?? []) {
+      lines.push(`Task: ${b.goal}`);
+      for (const cell of b.cells) lines.push(...buildCellLines(cell));
       lines.push("");
     }
   }
 
-  if (report.readiness && report.readiness.diagnostics.length > 0) {
-    lines.push(chalk.bold("Readiness diagnostics"));
-    for (const d of report.readiness.diagnostics) {
-      lines.push(`  ${chalk.dim("·")} ${d.message}`);
-    }
-    lines.push("");
-  }
-
   lines.push(LINE);
-  lines.push(formatOverall(report, options.threshold));
-  lines.push(chalk.dim(getSummaryGuidance(scenarios)));
-
+  lines.push(formatOverall(report));
+  lines.push(chalk.dim(guidance(report)));
   return lines.join("\n");
 }
 
-export function printCheckReport(
-  report: CheckReport,
-  options: FormatReportOptions = {},
+function cellHead(
+  agent: string,
+  context: string,
+  status: ReturnType<typeof questionCellStatus>,
+): string {
+  const color = tone(status.tone);
+  const label = chalk.dim(`  [${agent} · ${context}]`);
+  const detail = status.detail ? ` ${chalk.dim(`(${status.detail})`)}` : "";
+  return `${label} ${color(`${status.icon} ${status.label} ${status.rate}`)}${detail}`;
+}
+
+function questionCellLines(cell: QuestionCell): string[] {
+  const out = [
+    cellHead(cell.coord.agent, cell.coord.context, questionCellStatus(cell)),
+  ];
+  if (cell.verdict !== "YES" && cell.reason) {
+    out.push(chalk.dim(`      reason: ${cell.reason}`));
+  }
+  const tools = uniqueTools(cell);
+  if (tools.length > 0) out.push(chalk.dim(`      tools: ${tools.join(", ")}`));
+  return out;
+}
+
+function buildCellLines(cell: BuildCell): string[] {
+  const out = [
+    cellHead(cell.coord.agent, cell.coord.context, buildCellStatus(cell)),
+  ];
+  if (cell.verdict !== "YES" && cell.reason) {
+    out.push(chalk.dim(`      reason: ${cell.reason}`));
+  }
+  const failed = cell.attempts.find((a) => a.status === "failed");
+  const failing =
+    failed?.commands
+      ?.filter((cmd) => !cmd.passed)
+      .map((cmd) => `${cmd.name} (${cmd.group})`) ?? [];
+  if (failing.length > 0) {
+    out.push(chalk.dim(`      failed: ${failing.join(", ")}`));
+  }
+  return out;
+}
+
+function uniqueTools(cell: QuestionCell): string[] {
+  const set = new Set<string>();
+  for (const t of cell.trials) {
+    if (t.status === "scored") {
+      for (const tool of t.toolsUsed) set.add(tool);
+    }
+  }
+  return [...set];
+}
+
+function formatOverall(report: RunReport): string {
+  const { score, errors } = report.summary;
+  const base = `Overall: ${overallColor(score)(String(score))} / 100`;
+  const passes = runPasses(report.summary, report.threshold);
+  // No threshold: show the score and stop (errored cells are carried by the
+  // per-cell receipts and the guidance line). See brand.md verdict layers.
+  if (passes === null) return base;
+  const verdict = passes ? chalk.green("run passes") : chalk.red("run fails");
+  const errNote = errors > 0 ? ` · ${chalk.red(`${errors} errored`)}` : "";
+  return `${base} · threshold ${report.threshold}${errNote} · ${verdict}`;
+}
+
+function guidance(report: RunReport): string {
+  const s = report.summary;
+  if (s.errors > 0) return "Some cells errored; review the receipts.";
+  if (report.kind === "questions") {
+    return s.yes === s.total
+      ? "Every question met its checks."
+      : "Review the answers that fell short of their checks.";
+  }
+  return s.yes === s.total
+    ? "Every build passed verification."
+    : "Review the build attempts that failed verification.";
+}
+
+function formatPlan(plan: PlanSummary, lines: string[]): string {
+  const sampled = plan.selectedCells < plan.expandedCells;
+  lines.push(
+    `Cells: ${chalk.dim(`${plan.selectedCells} of ${plan.expandedCells}${sampled && plan.seed ? ` (sampled, seed=${plan.seed})` : ""}`)}`,
+  );
+  if (plan.selectedExecutions !== plan.selectedCells) {
+    lines.push(`Executions: ${chalk.dim(String(plan.selectedExecutions))}`);
+  }
+  lines.push("");
+  lines.push(
+    chalk.bold(
+      `Planned cells (${plan.selectedCells} of ${plan.expandedCells})`,
+    ),
+  );
+  let current = "";
+  for (const c of plan.cells ?? []) {
+    if (c.task !== current) {
+      current = c.task;
+      lines.push(`  ${c.task}`);
+    }
+    const trials = c.trials ? ` ×${c.trials}` : "";
+    lines.push(`    ${chalk.dim(`[${c.agent} · ${c.context}]${trials}`)}`);
+  }
+  lines.push("");
+  lines.push(LINE);
+  lines.push(
+    chalk.dim("Dry-run: no agent calls. Re-run without --plan to execute."),
+  );
+  return lines.join("\n");
+}
+
+export function printReport(
+  report: RunReport,
+  options: FormatOptions = {},
 ): void {
-  console.log(formatCheckReport(report, options));
+  console.log(formatReport(report, options));
   console.log();
 }
 
 export interface FormatJSONOptions {
-  /** Include full source content + transcripts. Default omits both. */
   verbose?: boolean;
 }
 
 /**
- * Format report as JSON. By default omits source content and per-message
- * transcripts to keep output small and prevent leaking source text in CI
- * artifacts; pass `verbose: true` for the full payload.
- *
- * Strips in non-verbose mode:
- * - top-level docs[].content
- * - scenario.allResponses (transcript)
- * - scenario.verifierSamples[].content (verifier source text)
- * - scenario.cells[].allResponses (per-cell transcript)
- * - scenario.surfaces[].allResponses (per-surface transcript)
+ * Render the RunReport as JSON. Raw and receipt-first. By default strips heavy
+ * evidence (source content, per-trial transcripts, build diffs, command
+ * stdout/stderr) so CI artifacts stay small and source text does not leak;
+ * `verbose` keeps everything.
  */
-export function formatCheckJSON(
-  report: CheckReport,
+export function formatJSON(
+  report: RunReport,
   options: FormatJSONOptions = {},
 ): string {
-  if (options.verbose) {
-    return JSON.stringify(report, null, 2);
-  }
-  const slim: CheckReport = {
+  if (options.verbose) return JSON.stringify(report, null, 2);
+  const slim: RunReport = {
     ...report,
-    docs: report.docs.map((d) => ({ ...d, content: "" })),
-    scenarios: report.scenarios.map((s) => {
-      const { allResponses, verifierSamples, cells, surfaces, ...rest } = s;
-      void allResponses;
-      return {
-        ...rest,
-        verifierSamples: verifierSamples?.map((v) => ({
-          ...v,
-          content: "",
-        })),
-        cells: cells?.map((c) => {
-          const { allResponses: cellAll, build, ...cellRest } = c;
-          void cellAll;
-          if (!build) return cellRest;
-          // Keep the build receipt summary (status, reason, changed files,
-          // command names + exits) but strip heavy/leaky evidence - full diffs
-          // and command stdout/stderr - from non-verbose JSON, matching how
-          // source content and transcripts are stripped above.
+    sources: report.sources.map((s) => ({ ...s, content: "" })),
+    questions: report.questions?.map((q) => ({
+      ...q,
+      cells: q.cells.map((cell) => ({
+        ...cell,
+        trials: cell.trials.map((t) => {
+          const { allResponses, ...rest } = t;
+          void allResponses;
+          return rest;
+        }),
+      })),
+    })),
+    builds: report.builds?.map((b) => ({
+      ...b,
+      cells: b.cells.map((cell) => ({
+        ...cell,
+        attempts: cell.attempts.map((a) => {
+          const { diff, commands, ...rest } = a;
+          void diff;
           return {
-            ...cellRest,
-            build: {
-              ...build,
-              attempts: build.attempts.map((a) => {
-                const { diff, commands, ...attRest } = a;
-                void diff;
-                return {
-                  ...attRest,
-                  commands: commands?.map((cmd) => {
-                    const { stdout, stderr, ...cmdRest } = cmd;
-                    void stdout;
-                    void stderr;
-                    return cmdRest;
-                  }),
-                };
-              }),
-            },
+            ...rest,
+            commands: commands?.map((cmd) => {
+              const { stdout, stderr, ...cmdRest } = cmd;
+              void stdout;
+              void stderr;
+              return cmdRest;
+            }),
           };
         }),
-        surfaces: surfaces?.map((s2) => {
-          const { allResponses: surfAll, ...surfRest } = s2;
-          void surfAll;
-          return surfRest;
-        }),
-      };
-    }),
+      })),
+    })),
   };
   return JSON.stringify(slim, null, 2);
 }

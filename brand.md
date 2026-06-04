@@ -11,7 +11,7 @@ language: en
 
 ### Overview
 
-Pickled is an open-source CLI that tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence. The evidence is text checks (`mustMention`, `mustMentionOneOf`, `mustNotMention`), tool-use provenance, and build verification. No LLM grades another LLM.
+Pickled is an open-source CLI that tests whether real agents can answer and build with your product, across declared context paths, using deterministic evidence. The evidence is fact coverage and misstatement checks matched against the answer, tool-use provenance, and build verification. No LLM grades another LLM.
 
 Pickled started as a freshness checker for developer tool docs. It got rewritten when the real problem became clear, and the real problem has three surfaces, not one.
 
@@ -21,7 +21,7 @@ Pickled started as a freshness checker for developer tool docs. It got rewritten
 
 The same product can be legible in one agent surface and illegible in another, because each one gets a different slice. Pickled measures that per surface.
 
-**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, access paths, and tasks. The framework runs each task per `(agent x access)` cell: answer tasks score one response, build tasks score a pass rate across trials. Receipts per cell.
+**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, contexts, and tasks (questions and builds). The framework runs each task per `(agent x context)` cell: questions score fact coverage and misstatement rejection across trials, builds score a pass rate across trials. Receipts per cell.
 
 **The problem.** Every API-backed product now has multiple readers. Some are people. Some are agents. The agents get different context bundles depending on which surface they live in, and each one fails in characteristic ways:
 
@@ -54,14 +54,14 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 **Structural differentials.**
 
-- **Deterministic by contract.** The core score is parsed, not judged. Citations are extracted by code. Checks are matched as substrings. Build tasks pass or fail on commands. No LLM judges the result.
+- **Deterministic by contract.** The core score is parsed, not judged. Facts and misstatements are matched against the answer by code. Build tasks pass or fail on commands. No LLM judges the result.
 - **Registered source contract.** You declare what counts as the product's truth. Pickled does not magically introspect; it grades against the sources you registered. The contract is the strength.
 - **Product-specific tasks.** The tasks are your product's tasks, not a generic benchmark.
 - **Per-surface scoring.** The same task can pass on one surface and fail on another. Pickled reports per-surface results because legibility is per-surface, not global.
-- **Checks and verify commands you control.** A grounded answer can still be wrong. A build that does not pass your commands did not build. You declare the contract, and Pickled scores it deterministically.
+- **Facts, misstatements, and verifier commands you control.** A grounded answer can still be wrong. A build that does not pass your commands did not build. You declare the contract, and Pickled scores it deterministically.
 - **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Antigravity CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
 - **Source-agnostic.** Registers anything an agent can read. Public docs, private docs, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. URLs or local paths.
-- **The report is the receipt.** Each run produces a structured artifact: task, agent, access path, response or build attempt, registered sources cited, checks satisfied and missed, commands run, threshold result. The run fails on the receipt, not on a vibe.
+- **The report is the receipt.** Each run produces a structured artifact: task, agent, context, response or build attempt, facts covered, misstatements rejected, tools used, commands run, threshold result. The run fails on the receipt, not on a vibe.
 - **CLI-first. CI-native. No dashboard required.**
 - **Open source. MIT.**
 
@@ -75,7 +75,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 
 **Pickled IS.**
 
-- Citations over prose.
+- Receipts over prose.
 - Deterministic over interpreted.
 - CLI over dashboard.
 - Plain English over enterprise-speak.
@@ -136,7 +136,7 @@ We're an open-source CLI for testing what AI agents actually understand about yo
 
 We run on the agent surfaces your product actually reaches. Today, Claude Code and Codex CLI. Designed for future targets like Antigravity CLI, Amazon Q, Cursor, hosted API agents, and whatever else lands. We pull from every kind of context an agent could read on the way there. Your README. Your llms.txt. Your CLAUDE.md. Your AGENTS.md. Your JSDoc. Your inline comments. Your internal handbook. We run the same tasks across each agent surface and score the result against the contract you declared: answer checks or build verification.
 
-Nothing here is graded by another model. Citations are extracted by code. Checks are matched as substrings. Build tasks pass or fail on commands. The score is the score.
+Nothing here is graded by another model. Facts and misstatements are matched against the answer by code. Build tasks pass or fail on commands. The score is the score.
 
 Agent legibility is not a checkbox. It is behavior under test.
 
@@ -164,9 +164,9 @@ This is the line that defines the category for people who already know what's at
 
 **Slogans for different contexts.**
 
-- "Citations or it didn't happen." (Hero subhead, inspector mode)
+- "Evidence or it didn't happen." (Hero subhead, inspector mode)
 - "One config. Many surfaces. One score per surface." (Cross-surface explainer)
-- "If the agent can't cite it, it doesn't count." (Scoring explainer)
+- "If the cell can't prove it, it doesn't count." (Scoring explainer)
 - "Run the check. Read the score." (How-it-works)
 - "Anything an agent reads can be registered as a source." (Source coverage explainer)
 - "Comments are prompt surface." (Internal-team-use callout)
@@ -212,7 +212,7 @@ pickled
 
 ### Message Pillars
 
-**Scoring is deterministic by contract.** The score is parsed, not judged. Citations are extracted by code. Checks are matched deterministically. Build verification runs commands. No LLM judges the result. The score is the score.
+**Scoring is deterministic by contract.** The score is parsed, not judged. Facts and misstatements are matched deterministically. Build verification runs commands. No LLM judges the result. The score is the score.
 
 **Registered source contract.** Pickled does not magically introspect your product. You declare what counts as the truth: README, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. Anything an agent reads can be registered as a source. Anything not registered does not count. The contract is the strength.
 
@@ -228,9 +228,9 @@ pickled
 - Overbroad context: a vague rule overrode a specific one.
 - Surface-specific drift: the same task passed elsewhere.
 
-**Checks and verify commands you control.** A grounded answer can still be wrong. A build that does not pass your commands did not build. You declare what answer text must mention or what build commands must pass, and Pickled scores that contract deterministically.
+**Facts, misstatements, and verifier commands you control.** A grounded answer can still be wrong. A build that does not pass your commands did not build. You declare the facts an answer must cover, the misstatements it must not make, and the verifier commands a build must pass, and Pickled scores that contract deterministically.
 
-**The report is the receipt.** Each run leaves an artifact: task, agent, access path, response or build attempt, sources cited, checks satisfied and missed, commands run, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
+**The report is the receipt.** Each run leaves an artifact: task, agent, context, response or build attempt, facts covered, misstatements rejected, tools used, commands run, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
 
 **Internal-team use is first-class.** Pickled is for teams testing how the outside world's agents understand their product, and for teams testing whether their own context steers their own agents correctly inside their own codebase. Comments are prompt surface. Stale prompt surface is product debt, not harmless prose.
 
@@ -246,13 +246,13 @@ pickled
 - Agent legibility, measured.
 - Pickled sits after context and before trust.
 - Agent legibility is not a checkbox. It is behavior under test.
-- Citations or it didn't happen.
+- Evidence or it didn't happen.
 - The score is the score.
 - Comments are prompt surface.
 - Stale prompt surface is product debt, not harmless prose.
 - A grounded answer can still be wrong.
 - Anything an agent reads can be registered as a source.
-- Checks are matched deterministically.
+- Facts and misstatements are matched deterministically.
 - The report is the receipt.
 - One config. Many surfaces. One score per surface.
 - Test the brine before you ship the jar.
@@ -284,45 +284,45 @@ Every interface should use the same feedback grammar: CLI, CI logs, web demos, a
 **Default structure.**
 
 1. Command or screen name.
-2. Scope metadata: product, sources, tasks, agent, or access path when relevant.
+2. Scope metadata: product, sources, tasks, agent, or context when relevant.
 3. Task result (answer or build).
 4. Evidence lines.
 5. Overall score and threshold result.
 6. One next-action sentence.
 
-**Task result grammar.**
+**Task result grammar.** One line per `(agent · context)` cell. `k/n` is the
+trial rate; partial questions append fact coverage.
 
-Answer task:
+Question:
 
-- `Task: Error handling`
-- `✓ Well grounded (92%)`
-- `✓ Grounded (84%)`
-- `⚠ Partially grounded (65%)`
-- `✗ Ungrounded (0%)`
-- `✗ Error`
+- `Task: How do I install?`
+- `[quick · given_docs] ✓ Well grounded 1/1`
+- `[quick · memory] ⚠ Partially grounded 0/1 (60% facts)`
+- `[quick · web_open] ✗ Ungrounded 0/1`
+- `[quick · docs_mcp] ✗ Error`
 
-Build task:
+Build:
 
 - `Task: Toolbar integration`
-- `✓ Built 3/3`
-- `⚠ Partially built 2/3`
-- `✗ Did not build 0/3`
-- `✗ Error`
+- `[builder · given_docs] ✓ Built 3/3`
+- `[builder · given_docs] ⚠ Partially built 2/3`
+- `[builder · given_docs] ✗ Did not build 0/3`
+- `[builder · given_docs] ✗ Error`
 
 **Evidence line grammar.**
 
-- `cited: [readme], [llms]`
-- `missing: [llms]`
-- `unknown: [old-docs]`
-- `reason: missing includes: "z.treeifyError"`
-- `reason: hit excludes: "ZodError.format()"`
-- `changed: src/App.tsx`
-- `command: bun test -> exit 1`
+- `reason: missing facts: install_command`
+- `reason: misstatement: npm_install`
+- `reason: tool path not used (provenance)`
+- `tools: WebSearch`
+- `failed: toolbar behavior (failToPass)`
+- `verifier unproven` / `verifier broken (reference solution failed)`
 
 **Overall grammar.**
 
 - `Overall: 92 / 100 · threshold 80 · run passes`
 - `Overall: 42 / 100 · threshold 80 · run fails`
+- `Overall: 100 / 100 · threshold 80 · 1 errored · run fails`
 - `Overall: 92 / 100` (no threshold configured)
 
 Use `run passes` and `run fails` everywhere. Do not switch between `CI fails`, `build fails`, and `check failed` for the same state.
@@ -331,12 +331,12 @@ Use `run passes` and `run fails` everywhere. Do not switch between `CI fails`, `
 
 Pickled has two verdicts. They are orthogonal. Renderers must not conflate them.
 
-- **Cell verdict** answers whether one `(agent × access)` cell satisfied its contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Answer cells render as `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, or `Error`. Build cells render as `Built`, `Partially built`, `Did not build`, or `Error`.
-- **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
+- **Cell verdict** answers whether one `(agent × context)` cell satisfied its contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Question cells render as `Well grounded`, `Partially grounded`, `Ungrounded`, or `Error`. Build cells render as `Built`, `Partially built`, `Did not build`, or `Error`.
+- **Run verdict** answers whether the run met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop. A thresholded run with any errored cell fails: the score excludes error cells, so an unmeasured cell must never pass CI.
 
-The cell verdict determines the label family. For answer cells, confidence may refine `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90), but it must never upgrade `PARTIAL`, `NO`, or `Error`. A partial answer at 95% confidence is still `Partially grounded`, not `Well grounded`. Build cells use the build label family and render the pass rate as `k/n`; they must never use the grounded answer scale. The categorical signal wins.
+The cell verdict determines the label family. A question cell is `YES` only when every scored trial fully satisfied the contract (all expected facts covered, no rejected misstatement, the tool path used); the trial pass-rate and fact coverage are rendered as detail (`k/n`, `% facts`) but never upgrade `PARTIAL`, `NO`, or `Error`. Build cells use the build label family and render the pass rate as `k/n`; they never use the grounded scale. The categorical signal wins.
 
-Implementation rule: one shared helper returns the label, icon, and tone. Both progress output and final report consume it. Neither computes the label from raw confidence.
+Implementation rule: one shared helper (`report-status.ts`) returns the label, icon, tone, score, and run verdict. Every renderer (terminal, JSON, web) consumes it. None computes the label, the score, or the pass/fail itself.
 
 **Feedback tone.**
 
@@ -352,28 +352,29 @@ Implementation rule: one shared helper returns the label, icon, and tone. Both p
 
 ```text
 pickled check
-Tool: zod
+Product: zod
 Sources: [readme], [llms]
 Tasks: 1
 
-Task: Error handling
-  ⚠ Partially grounded (50%)
-  reason: missing includes: "z.treeifyError"
+Task: How do I parse safely?
+  [quick · given_docs] ✓ Well grounded 1/1
+  [quick · memory] ⚠ Partially grounded 0/1 (50% facts)
+      reason: missing facts: safe_parse
 
-Overall: 50 / 100 · threshold 80 · run fails
+Overall: 75 / 100 · threshold 80 · run fails
 Review the answers that fell short of their checks.
 ```
 
 ```text
 pickled build
-Tool: my-product
+Product: my-product
 Sources: [docs]
 Tasks: 1
 
 Task: Toolbar integration
-  ⚠ Partially built 2/3
-  changed: src/App.tsx
-  command: bun test -> exit 1
+  [builder · given_docs] ⚠ Partially built 2/3
+      reason: Built 2/3
+      failed: toolbar behavior (failToPass)
 
 Overall: 67 / 100 · threshold 80 · run fails
 Review the build attempts that failed verification.
@@ -391,7 +392,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **Bullet shape.** One sentence per change. Lead with what changed for the user, not the implementation. Bold the feature name. Use a hyphen, never an em dash, to join the name and the description.
 
-**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `cell verdict` and `run verdict` (not generic `pass rate`), `registered source` (not `source file`), `check` (the `mustMention` / `mustMentionOneOf` / `mustNotMention` contract; not `assertion` or `regression check`). Use `k/n` or build rate only for build-task attempts.
+**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `cell verdict` and `run verdict` (not generic `pass rate`), `registered source` (not `source file`), `fact` and `misstatement` (the question contract: `expects` facts, `rejects` misstatements; not `assertion`, `check`, or `regression check`), `context` (a `(source, mode)` delivery path; not `access path`). Use `k/n` for both question trials and build attempts.
 
 **Honesty constraints.** No absolutes. A smoke test `catches regressions in the example contract`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
 
@@ -404,7 +405,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 - **llms.txt as public agent surface** - Agents can read pickled's contracts, targets, verdict layers, JSON contract, and source requirements at `/llms.txt`.
 - **Brand and spec questions** - Five new dogfood questions covering verdict layers, JSON contract, target semantics, agent context contract, and comment policy.
-- **mustMentionOneOf checks** - A question can require the answer to satisfy at least one value from a group, not every one.
+- **Fact and misstatement contract** - A question scores on the facts its answer must cover and the misstatements it must not make, matched deterministically.
 
 ### Improvements
 
@@ -434,7 +435,7 @@ Open-source CLI. Tests what AI agents actually understand about your product. De
 
 **Website hero subhead.**
 
-An open-source CLI that tests what AI agents understand about your product. Today, on Claude Code and Codex CLI. Designed for the surfaces and sources that will keep landing. Citations are extracted by code. Checks are matched deterministically. The score is the score.
+An open-source CLI that tests what AI agents understand about your product. Today, on Claude Code and Codex CLI. Designed for the surfaces and sources that will keep landing. Facts and misstatements are matched deterministically. The score is the score.
 
 ### Tonal Rules
 
@@ -466,13 +467,13 @@ An open-source CLI that tests what AI agents understand about your product. Toda
 |---|---|
 | "Test what agents actually understand." | "Transform your product with agent magic." |
 | "Agent legibility, measured." | "Become AI-ready in minutes." |
-| "Citations or it didn't happen." | "Built on a proprietary AI scoring engine." |
+| "Evidence or it didn't happen." | "Built on a proprietary AI scoring engine." |
 | "The score is the score." | "See everything with one magic dashboard." |
 | "Deterministic by contract." | "Trust our intelligence layer." |
 | "Comments are prompt surface." | "Documentation lives outside the product." |
 | "One config. Many surfaces. One score per surface." | "Unified omnichannel evaluation suite." |
 | "Stale prompt surface is product debt." | "Optimize your content for AI ingestion." |
-| "Checks are matched deterministically." | "Anomaly detected in your AI signal." |
+| "Facts and misstatements are matched deterministically." | "Anomaly detected in your AI signal." |
 | "A pickle isn't fresh. A pickle is preserved." | "Stay fresh with cutting-edge AI insights." |
 
 ## Visual
@@ -498,7 +499,7 @@ The palette is electric, not earthy. The pickle here is preserved in glass under
 
 - Success `#00E676` (same as primary).
 - Warning `#FFD740` (same as accent).
-- Spoil Pink `#FF4081`. Failing checks, invalid citations, destructive states.
+- Spoil Pink `#FF4081`. Failed facts, rejected misstatements, destructive states.
 - Interface Blue `#64B5F6`. Target/interface metadata and neutral system information.
 
 **Backgrounds (dark by default).**
@@ -531,7 +532,7 @@ The palette is electric, not earthy. The pickle here is preserved in glass under
 
 - **Display.** Space Grotesk, 600–700. Headlines, section titles, strong product statements, campaign copy. The feel should be technical, compact, and slightly odd.
 - **Body.** DM Sans, 400–500. Paragraphs, UI copy, docs, cards, navigation. Keep line lengths moderate.
-- **Mono.** JetBrains Mono, 400–600 (Fira Code as fallback). CLI commands, source IDs, task ids, agent names, citations, config snippets, score numbers, report output. Mono text should feel like product evidence, not decoration.
+- **Mono.** JetBrains Mono, 400–600 (Fira Code as fallback). CLI commands, source IDs, task ids, agent names, fact ids, config snippets, score numbers, report output. Mono text should feel like product evidence, not decoration.
 
 The score number is always mono. Always. It is the receipt.
 

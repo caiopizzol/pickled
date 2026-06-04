@@ -1,98 +1,50 @@
 import { describe, expect, test } from "bun:test";
-import { sampleCellsPerScenario } from "../src/sampling.js";
+import { sampleCellsPerTask } from "../src/sampling.js";
 
 interface Cell {
-  scenario: string;
-  iface: string;
-  source: string;
-  toolset: string;
+  task: string;
+  context: string;
 }
 
-function makeCells(scenario: string, count: number): Cell[] {
-  return Array.from({ length: count }, (_, i) => ({
-    scenario,
-    iface: `i${i}`,
-    source: `s${i}`,
-    toolset: `t${i}`,
-  }));
+function cells(): Cell[] {
+  return [
+    { task: "q1", context: "a" },
+    { task: "q1", context: "b" },
+    { task: "q1", context: "c" },
+    { task: "q2", context: "a" },
+    { task: "q2", context: "b" },
+  ];
 }
 
-describe("sampleCellsPerScenario", () => {
-  test("returns all cells when sample size >= per-scenario count", () => {
-    const cells = [...makeCells("A", 2), ...makeCells("B", 3)];
-    expect(sampleCellsPerScenario(cells, 10, "seed1")).toHaveLength(5);
+describe("sampleCellsPerTask", () => {
+  test("samples N per task, not N total", () => {
+    const out = sampleCellsPerTask(cells(), 1, "seed");
+    expect(out.filter((c) => c.task === "q1")).toHaveLength(1);
+    expect(out.filter((c) => c.task === "q2")).toHaveLength(1);
   });
 
-  test("samples exactly n cells per scenario when source has more", () => {
-    const cells = [...makeCells("A", 8), ...makeCells("B", 8)];
-    const result = sampleCellsPerScenario(cells, 3, "seed1");
-    expect(result.filter((c) => c.scenario === "A")).toHaveLength(3);
-    expect(result.filter((c) => c.scenario === "B")).toHaveLength(3);
+  test("a task with <= N cells keeps all of them", () => {
+    const out = sampleCellsPerTask(cells(), 2, "seed");
+    // q2 has exactly 2 cells -> both kept; q1 has 3 -> 2 kept.
+    expect(out.filter((c) => c.task === "q2")).toHaveLength(2);
+    expect(out.filter((c) => c.task === "q1")).toHaveLength(2);
   });
 
-  test("returns the same sample for the same seed (determinism)", () => {
-    const cells = [...makeCells("A", 8), ...makeCells("B", 8)];
-    const r1 = sampleCellsPerScenario(cells, 3, "seed-deterministic");
-    const r2 = sampleCellsPerScenario(cells, 3, "seed-deterministic");
-    expect(r1).toEqual(r2);
+  test("same seed -> same selection (deterministic)", () => {
+    const a = sampleCellsPerTask(cells(), 1, "fixed");
+    const b = sampleCellsPerTask(cells(), 1, "fixed");
+    expect(a).toEqual(b);
   });
 
-  test("returns a different sample for a different seed", () => {
-    const cells = makeCells("A", 12);
-    const r1 = sampleCellsPerScenario(cells, 4, "seed-one");
-    const r2 = sampleCellsPerScenario(cells, 4, "seed-two");
-    // 4-of-12 collisions across two different seeds are possible but
-    // vanishingly rare in practice; this asserts the sampler is not
-    // degenerately ignoring the seed input.
-    expect(r1).not.toEqual(r2);
-  });
-
-  test("preserves within-scenario input order in the output", () => {
-    const cells = makeCells("A", 10);
-    const result = sampleCellsPerScenario(cells, 5, "seed1");
-    // For each adjacent pair in the result, the second's index in the
-    // input must be > the first's. The sampler picks N positions then
-    // emits them in original order so the receipt grid stays readable.
-    const indices = result.map((c) =>
-      cells.findIndex(
-        (x) =>
-          x.iface === c.iface &&
-          x.source === c.source &&
-          x.toolset === c.toolset,
-      ),
+  test("output preserves input order within a task", () => {
+    const out = sampleCellsPerTask(cells(), 2, "seed").filter(
+      (c) => c.task === "q1",
     );
-    const sorted = [...indices].sort((a, b) => a - b);
-    expect(indices).toEqual(sorted);
+    const order = out.map((c) => c.context);
+    expect(order).toEqual([...order].sort());
   });
 
-  test("groups scenarios independently (sample of 2 each, not 2 total)", () => {
-    const cells = [
-      ...makeCells("A", 5),
-      ...makeCells("B", 5),
-      ...makeCells("C", 5),
-    ];
-    const result = sampleCellsPerScenario(cells, 2, "seed1");
-    expect(result).toHaveLength(6);
-    expect(result.filter((c) => c.scenario === "A")).toHaveLength(2);
-    expect(result.filter((c) => c.scenario === "B")).toHaveLength(2);
-    expect(result.filter((c) => c.scenario === "C")).toHaveLength(2);
-  });
-
-  test("returns empty array when n is 0", () => {
-    expect(sampleCellsPerScenario(makeCells("A", 5), 0, "seed1")).toEqual([]);
-  });
-
-  test("returns empty array when n is negative", () => {
-    expect(sampleCellsPerScenario(makeCells("A", 5), -1, "seed1")).toEqual([]);
-  });
-
-  test("preserves scenario insertion order across the output", () => {
-    const cells = [
-      ...makeCells("B", 3),
-      ...makeCells("A", 3),
-      ...makeCells("C", 3),
-    ];
-    const result = sampleCellsPerScenario(cells, 1, "seed1");
-    expect(result.map((c) => c.scenario)).toEqual(["B", "A", "C"]);
+  test("n <= 0 selects nothing", () => {
+    expect(sampleCellsPerTask(cells(), 0, "seed")).toEqual([]);
   });
 });

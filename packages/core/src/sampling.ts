@@ -1,13 +1,11 @@
 /**
- * Deterministic per-scenario cell sampling for matrix runs. The default seed
- * (`"default"`) makes sampling reproducible across re-runs without the user
- * having to pick one; passing `--seed VALUE` lets a CI job pin a specific
- * sample so a failing receipt can be regenerated exactly.
+ * Deterministic per-task cell sampling. The default seed (`"default"`) makes
+ * sampling reproducible across re-runs without the user picking one; `--seed
+ * VALUE` lets a CI job pin a sample so a failing receipt regenerates exactly.
  *
- * The PRNG is mulberry32 seeded by a FNV-1a hash of the seed string. Both
- * are tiny, fast, and reproducible across Bun versions. We do not need
- * cryptographic strength here; we need every run with the same seed to
- * pick the same cells.
+ * The PRNG is mulberry32 seeded by an FNV-1a hash of the seed string. Tiny,
+ * fast, reproducible across Bun versions. Not cryptographic; we only need every
+ * run with the same seed to pick the same cells.
  */
 
 const FNV_OFFSET = 2166136261;
@@ -34,49 +32,50 @@ function mulberry32(seed: number): () => number {
 }
 
 /**
- * Deterministically sample `n` cells per scenario from the planned list.
- * Cells of the same scenario are grouped together first so the sample is
- * per-scenario (so `--sample 3` is "3 cells per scenario", not "3 cells
- * total across the whole run"). When a scenario has `n` or fewer cells,
- * all of them are kept.
- *
- * The sampling is order-stable: cells preserve the order they arrived in
- * within each scenario so the receipt grid stays readable.
+ * Deterministically sample `n` cells per task. Cells are grouped by task first
+ * so `--sample 3` means "3 cells per task," not "3 total." A task with `n` or
+ * fewer cells keeps all of them. Output is order-stable within each task so the
+ * receipt grid stays readable.
  */
-export function sampleCellsPerScenario<T extends { scenario: string }>(
+export function sampleCellsPerTask<T extends { task: string }>(
   cells: T[],
   n: number,
   seed: string,
 ): T[] {
   if (n <= 0) return [];
   const rng = mulberry32(hashSeed(seed));
-  const byScenario = new Map<string, T[]>();
-  // Preserve scenario-insertion order so the output grid order is stable.
-  const scenarioOrder: string[] = [];
+  const byTask = new Map<string, T[]>();
+  const taskOrder: string[] = [];
   for (const c of cells) {
-    if (!byScenario.has(c.scenario)) {
-      byScenario.set(c.scenario, []);
-      scenarioOrder.push(c.scenario);
+    let list = byTask.get(c.task);
+    if (list === undefined) {
+      list = [];
+      byTask.set(c.task, list);
+      taskOrder.push(c.task);
     }
-    byScenario.get(c.scenario)!.push(c);
+    list.push(c);
   }
+
   const selected: T[] = [];
-  for (const name of scenarioOrder) {
-    const list = byScenario.get(name)!;
+  for (const name of taskOrder) {
+    const list = byTask.get(name);
+    if (list === undefined) continue;
     if (list.length <= n) {
       selected.push(...list);
       continue;
     }
-    // Fisher-Yates partial shuffle: pick the first n positions of a
-    // deterministically shuffled list. The same seed always produces the
-    // same `n` cells in the same positions.
+    // Fisher-Yates partial shuffle: deterministically pick the first n.
     const picked = list.slice();
     for (let i = 0; i < n; i++) {
       const j = i + Math.floor(rng() * (picked.length - i));
-      [picked[i], picked[j]] = [picked[j]!, picked[i]!];
+      const a = picked[i];
+      const b = picked[j];
+      if (a !== undefined && b !== undefined) {
+        picked[i] = b;
+        picked[j] = a;
+      }
     }
-    // Re-sort the picked subset back to original input order so the
-    // receipt grid stays readable.
+    // Re-emit in original input order so the receipt grid stays readable.
     const pickedSet = new Set(picked.slice(0, n));
     for (const c of list) {
       if (pickedSet.has(c)) selected.push(c);

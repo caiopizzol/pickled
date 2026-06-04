@@ -2,7 +2,7 @@
 
 Test what agents actually understand about your product.
 
-Pickled is an open-source CLI that tests whether real agents can answer and build with your product (Claude Code, Codex CLI, Anthropic API, OpenAI API), across declared context paths (a source injected, or reached through `web` / `mcp` tools), using deterministic evidence: text checks (`mustMention`, `mustMentionOneOf`, `mustNotMention`), tool-use provenance, and build verification. No LLM grades another LLM.
+Pickled is an open-source CLI that tests whether real agents can answer and build with your product (Claude Code, Codex CLI, Anthropic API, OpenAI API), across declared context paths (a source injected, or reached through `web` / `mcp` tools), using deterministic evidence: fact coverage, misstatement rejection, tool-use provenance, and build verification. No LLM grades another LLM.
 
 ## Install
 
@@ -14,105 +14,112 @@ bun add -g @pickled-dev/cli
 
 - `pickled init [path]` - scaffold a pickled.yml config in your repo.
 - `pickled audit [path]` - static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.
-- `pickled check [path]` - run the answer tasks against the configured agents. `--plan` previews the cells without calling any model.
-- `pickled build [path]` - run the build tasks: the agent edits a workspace and your `verify` commands must pass. `--plan` previews cells and executions.
-- `pickled test [path]` - score declared example answers against each answer task's checks, offline. No model calls.
+- `pickled check [path]` - run the questions against the configured agents. `--plan` previews the cells without calling any model.
+- `pickled build [path]` - run the builds: the agent edits a workspace and your `verifier` must pass. `--plan` previews cells and executions.
+- `pickled test [path]` - score a question's declared example answers against its fact contract, offline. No model calls.
 
 ## Minimum config
 
 ```yaml
+schemaVersion: 2
+
 product:
   name: your-product
   description: One line about your product.
 
 sources:
-  readme: ./README.md
+  readme: { path: ./README.md }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_readme: { source: readme, tools: none }
+contexts:
+  from_readme: { mode: inject, source: readme }
 
-tasks:
+facts:
+  install_command:
+    statement: your-product installs with bunx your-product.
+    match:
+      allOf: ["bunx your-product"]
+
+questions:
   - id: install
-    prompt: How do I install your product?
+    question: How do I install your product?
     agents: [quick]
-    access: [given_readme]
-    checks:
-      mustMention: ["bunx your-product"]
+    contexts: [from_readme]
+    expects: [install_command]
 
-threshold: 80
+thresholds:
+  questions: 80
 ```
 
 ## Verdict contract
 
 Pickled has two orthogonal verdicts. Renderers must not conflate them.
 
-- **Cell verdict** answers whether one `(agent × access)` cell satisfied its check contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Rendered as `Well grounded`, `Grounded`, `Partially grounded`, `Ungrounded`, or `Error`.
-- **Run verdict** answers whether the aggregate score met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop.
+- **Cell verdict** answers whether one `(agent × context)` cell satisfied its contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Question cells render as `Well grounded`, `Partially grounded`, `Ungrounded`, or `Error`; builds as `Built`, `Partially built`, `Did not build`, or `Error`.
+- **Run verdict** answers whether the run met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop. A thresholded run with any errored cell fails.
 
-The cell verdict determines the label family. Confidence may refine `YES` into `Well grounded` (>= 90) or `Grounded` (< 90), but it never upgrades `PARTIAL`, `NO`, or `Error`. The categorical signal wins.
+The cell verdict determines the label family. A question cell is `YES` only when every scored trial fully satisfied the contract; the trial pass-rate (k of n) and fact coverage are detail, never an upgrade of `PARTIAL`, `NO`, or `Error`. The categorical signal wins.
 
 ## Source contract
 
-A registered source is the public context Pickled is allowed to score against: a local file or a URL. Anything not registered does not count for scoring. Anything an agent could read can be registered: README, llms.txt, CLAUDE.md, AGENTS.md, hosted docs bundles. Public or private. URLs or local paths. The id `none` is reserved for the no-context path.
+A registered source is the public context Pickled is allowed to score against: a local file, a URL, or a codebase glob. Anything not registered does not count for scoring. Anything an agent could read can be registered: README, llms.txt, CLAUDE.md, AGENTS.md, hosted docs bundles. Public or private. The id keys the source; declare exactly one of `url` / `path` / `codebase`.
 
-## Access: context paths
+## Contexts: how a source reaches the agent
 
-A task runs as one cell per `(agent × access)` pair. An access path is a named `(source, tools)` pair you compare across runs:
+A task runs as one cell per `(agent × context)` pair. A context is a `mode` plus an optional source:
 
-- `tools: none` - the source content is injected into the prompt; the agent answers from it.
-- `tools: web` - web research. On Claude Code the cell scopes built-ins to `[WebSearch, WebFetch]`; on the Anthropic API target it passes the server-side `web_search` tool (`web_search_20250305`) to `messages.create`; on the OpenAI API target it passes `web_search` to `responses.create`. The source is NOT injected; the agent must reach the answer with the tool.
-- `tools: mcp` - declared MCP servers (HTTP). On Claude Code the servers pass to the Agent SDK natively; on the OpenAI API target each becomes a hosted-MCP tool entry on `responses.create`. The source is NOT injected; the agent invokes `mcp__<server>__*` tools.
+- `mode: memory` - no source, no tools; measures the model's prior knowledge.
+- `mode: inject` - the source content is placed in the prompt; the agent answers from it.
+- `mode: web` - web research. On Claude Code the cell scopes built-ins to `[WebSearch, WebFetch]`; on the Anthropic and OpenAI API targets it passes the server-side `web_search` tool. The source is optional (omit for open discovery); nothing is injected.
+- `mode: mcp` - declared MCP servers (HTTP). On Claude Code the servers pass to the Agent SDK natively; on the OpenAI API target each becomes a hosted-MCP tool entry. The agent invokes `mcp__<server>__*` tools.
 
-`source: none` means no context: with `tools: none` it measures model memory; with `tools: web`/`mcp` it measures open discovery. A non-`none` access path that answers without invoking any of its tools is hard-vetoed to `NO` with confidence `0`, because an answer from model memory cannot testify to the tool path the cell is meant to test.
+For `web` and `mcp`, a cell that answers without invoking any of its tools is hard-vetoed to `NO`, because an answer from model memory cannot testify to the tool path the cell is meant to test.
 
-## Checks
+## Facts and misstatements
 
-An answer task carries at least one check. Each entry counts once; the cell verdict is `YES` (all satisfied), `PARTIAL` (some), or `NO` (none).
+A question scores on two reusable, deterministic registries:
 
-- `mustMention` - substrings the answer must contain.
-- `mustMentionOneOf` - groups of `{ label, values }`; each group is satisfied when the answer contains at least one of its values.
-- `mustNotMention` - substrings the answer must not contain.
+- `facts` - product truths the answer must cover (the coverage axis). Each fact has a `statement` and a `match` (`allOf` substrings must all appear; `anyOf` substrings need one). A question's `expects` lists fact ids.
+- `misstatements` - wrong claims the answer must not make (the precision axis). Same `match` shape. A question's `rejects` lists misstatement ids; a matched misstatement is a hard veto. A question with `rejects` requires `examples.pass` and `examples.fail` so the veto is calibrated offline.
 
-## Build tasks
+The cell verdict is `YES` (all expected facts covered, no misstatement, tool path used), `PARTIAL` (some facts), or `NO`.
 
-A build task (`kind: build`) measures whether an agent can BUILD with your context, not just answer. The agent edits a throwaway `workspace` and the task passes when your `verify` commands do; build tasks have no answer `checks`. Run them with `pickled build`. Each `(agent × access)` cell runs `trials` times in a fresh workspace and reports the pass rate (k of n) as `Built`, `Partially built`, or `Did not build` (never the grounded answer scale). Build tasks run on edit-capable CLI agents (`claude-code`, `codex-cli`) only.
+## Builds
+
+A build measures whether an agent can BUILD with your context, not just answer. The agent edits a throwaway `workspace` and the cell passes when the `verifier` does. The verifier is SWE-bench-style: `failToPass` commands must fail on the untouched fixture and pass after the agent; optional `passToPass` commands must pass before and after (the regression guard). Each `(agent × context)` cell runs `trials` times in a fresh workspace and reports the pass rate (k of n) as `Built`, `Partially built`, or `Did not build`. An optional `referenceSolution` patch is a positive control: if it does not pass the verifier on the baseline, the cell errors as an unproven/broken verifier rather than scoring the agent. Builds run on edit-capable CLI agents (`claude-code`, `codex-cli`) only.
 
 ## Agents today
 
-- `claude-code` - Claude Agent SDK. Supports `none`, `web`, and `mcp` tool modes.
-- `codex-cli` - Codex CLI binary. Supports `none` only.
-- `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. Supports `none` and `web` (server-side `web_search`); MCP lands per release. No workspace, no Agent SDK orchestration; comparable to CLI targets but not identical.
-- `openai` - OpenAI Responses API, direct SDK. Requires `OPENAI_API_KEY`. Supports `none`, `web` (server-side `web_search`), and `mcp` (hosted-MCP tool entries, HTTP servers only). No workspace, no Agent SDK orchestration.
+- `claude-code` - Claude Agent SDK. Supports `memory`, `inject`, `web`, and `mcp` contexts.
+- `codex-cli` - Codex CLI binary. Supports `memory` and `inject` only.
+- `anthropic` - Anthropic API, direct SDK. Requires `ANTHROPIC_API_KEY`. Supports `memory`, `inject`, and `web` (server-side `web_search`); MCP lands per release.
+- `openai` - OpenAI Responses API, direct SDK. Requires `OPENAI_API_KEY`. Supports `memory`, `inject`, `web` (server-side `web_search`), and `mcp` (hosted-MCP, HTTP servers only).
 
-Stubbed and not yet implemented: `amazon-q`, Google API target. Do not list these as supported in present tense. `gemini-cli` was removed when Google announced the consumer-tier sunset (2026-06-18) in favor of Antigravity CLI; a future Antigravity adapter will be its own provider.
+Stubbed and not yet implemented: `amazon-q`, Google API target. Do not list these as supported in present tense.
 
 ## JSON contract
 
-JSON output stays raw. It carries machine fields (`answerable`, `confidence`, `citations`). Human labels like `Well grounded` are derived in each renderer, not present in the JSON.
+JSON output stays raw. It carries machine fields (`verdict`, `passRate`, `meanCoverage`, `verifierProof`). Human labels like `Well grounded` are derived by the shared report-status helpers each renderer consumes, not present in the JSON.
 
 ## Cost and dry-run controls
 
-For paid agents, a run grows expensive as you add agents and access paths. These flags keep it in check:
+For paid agents, a run grows expensive as you add agents and contexts. These flags keep it in check:
 
 - `--plan` (dry run): expand the run, apply filters and sampling, print the cell list, exit. Zero model calls.
-- `--max-cells N`: hard fail before any model call if the selected execution count exceeds N. Build cells expand by `trials`, so this gates `cells × trials`.
+- `--max-cells N`: hard fail before any model call if the selected execution count exceeds N. Builds expand by `trials`, so this gates `cells × trials`.
 - `--sample N`: deterministic per-task sample.
 - `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` are reproducible.
-- `--task ID`, `--agent NAME`, `--access NAME`: narrow a run by names from `pickled.yml`.
-
-The report header (text and JSON) records `expandedCells`, `selectedCells`, `selectedExecutions`, and `seed` so a reviewer can see what was skipped and rerun the same sample.
+- `--task ID`, `--agent NAME`, `--context NAME`: narrow a run by names from `pickled.yml`.
 
 ## Read more
 
 - Project README: https://github.com/caiopizzol/pickled
 - CLI usage: https://github.com/caiopizzol/pickled/blob/main/apps/cli/README.md
-- Brand and product contracts: https://github.com/caiopizzol/pickled/blob/main/brand.md
-- Agent context for working in this repo: https://github.com/caiopizzol/pickled/blob/main/AGENTS.md
+- pickled.yml reference: https://docs.pickled.dev/pickled-yml
 
 ## License
 

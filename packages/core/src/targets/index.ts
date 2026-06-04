@@ -1,15 +1,15 @@
-import type { Context, Target } from "@pickled-dev/config";
+import type { Target } from "@pickled-dev/config";
 import { DEFAULT_TARGET } from "@pickled-dev/config";
 import { AnthropicApiTarget } from "./api/anthropic.js";
 import { OpenAIApiTarget } from "./api/openai.js";
 import { ClaudeCodeTarget } from "./cli/claude-code.js";
 import { CodexCliTarget } from "./cli/codex.js";
-import type { ResolvedContext, TargetRunner } from "./types.js";
+import type { TargetRunner } from "./types.js";
 
 export { DEFAULT_TARGET } from "@pickled-dev/config";
 export { assertEditCapable, isEditCapable } from "./capabilities.js";
 export type {
-  ResolvedContext,
+  PromptContext,
   RunOptions,
   TargetResult,
   TargetRunner,
@@ -82,21 +82,5 @@ export function resolveTarget(
   const declared = Object.keys(targets ?? {}).join(", ") || "(none)";
   throw new Error(
     `Unknown target "${targetRef}". Declared targets: ${declared}. Use "default" to fall back to the built-in Claude Code target.`,
-  );
-}
-
-export function resolveContext(
-  contextRef: string | undefined,
-  contexts: Record<string, Context> | undefined,
-): { name: string; config: ResolvedContext } {
-  if (!contextRef || contextRef === DEFAULT_SENTINEL) {
-    return { name: DEFAULT_SENTINEL, config: {} };
-  }
-  if (contexts?.[contextRef]) {
-    return { name: contextRef, config: contexts[contextRef] };
-  }
-  const declared = Object.keys(contexts ?? {}).join(", ") || "(none)";
-  throw new Error(
-    `Unknown context "${contextRef}". Declared contexts: ${declared}.`,
   );
 }

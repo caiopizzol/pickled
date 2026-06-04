@@ -1,10 +1,13 @@
 import path from "node:path";
-import type { CheckConfig } from "@pickled-dev/config";
+import type { Config } from "@pickled-dev/config";
 import {
-  formatCheckJSON,
+  formatJSON,
   loadConfig,
-  printCheckReport,
-  runCheck,
+  printReport,
+  type RunReport,
+  run,
+  runPasses,
+  type TaskKind,
 } from "@pickled-dev/core";
 import chalk from "chalk";
 
@@ -17,43 +20,44 @@ export interface CheckOptions {
   task?: string;
   /** Run only the named agent. */
   agent?: string;
-  /** Run only the named access path. */
-  access?: string;
-  /** Dry-run: expand and report planned cells without running adapters. */
+  /** Run only the named context. */
+  context?: string;
+  /** Dry-run: expand and report planned cells without running agents. */
   plan?: boolean;
-  /** Hard cap on selected cells; exits non-zero before any run if exceeded. */
+  /** Hard cap on selected executions; exits non-zero before any run if exceeded. */
   maxCells?: string;
   /** Deterministic per-task sample size. */
   sample?: string;
   /** Seed for --sample. */
   seed?: string;
+  /** Build only: keep failed workspaces for inspection. */
+  keepOnFailure?: boolean;
 }
 
 export async function check(
   targetPath: string,
   options: CheckOptions,
 ): Promise<void> {
-  return runTasks(targetPath, options, "answer");
+  return runTasks(targetPath, options, "question");
 }
 
 /**
- * Shared body for `pickled check` (answer tasks) and `pickled build` (build
- * tasks). Loads the config, narrows scenarios to the requested kind, then runs
- * the same matrix machinery. A config with only the other kind is "nothing to
- * run", not an error.
+ * Shared body for `pickled check` (questions) and `pickled build` (builds).
+ * Loads the config and dispatches to the v2 runner for the requested kind. A
+ * config with only the other kind is "nothing to run", not an error.
  */
 export async function runTasks(
   targetPath: string,
   options: CheckOptions,
-  taskKind: "answer" | "build",
+  kind: TaskKind,
 ): Promise<void> {
   const { json, output, verbose } = options;
-  const log = (msg: string) => !json && console.log(msg);
-
+  const log = (msg: string) => {
+    if (!json) console.log(msg);
+  };
   const resolvedPath = path.resolve(targetPath);
 
-  // 1. Load config (required)
-  let config: CheckConfig;
+  let config: Config;
   try {
     config = await loadConfig(resolvedPath);
   } catch (error) {
@@ -63,124 +67,103 @@ export async function runTasks(
     process.exit(1);
   }
 
-  // Narrow to the requested task kind. Build scenarios carry kind: "build";
-  // answer scenarios have it unset or "answer".
-  const scenarios = config.scenarios.filter((s) =>
-    taskKind === "build" ? s.kind === "build" : s.kind !== "build",
-  );
-  if (scenarios.length === 0) {
-    const noun = taskKind === "build" ? "build tasks" : "answer tasks";
-    const other = taskKind === "build" ? "pickled check" : "pickled build";
-    log(
-      chalk.dim(
-        `No ${noun} in pickled.yml. Nothing to run. (Did you mean \`${other}\`?)`,
-      ),
-    );
-    return;
-  }
-  config = { ...config, scenarios };
+  // Global options are validated regardless of whether this kind has tasks, so
+  // a malformed flag fails fast even on a config that has nothing of this kind.
+  // --agent/--context reference global config; --threshold/--sample/--max-cells
+  // are value checks. --task is kind-scoped and validated after the empty check
+  // below, so `pickled build --task x` on a questions-only config says "No
+  // builds" rather than "unknown task".
+  validateNamedFilter("agent", options.agent, Object.keys(config.agents));
+  validateNamedFilter("context", options.context, Object.keys(config.contexts));
 
-  validateNamedFilter(config, "task", options.task, listTasks);
-  validateNamedFilter(config, "agent", options.agent, listAgents);
-  validateNamedFilter(config, "access", options.access, listAccessPaths);
-
-  const tool = {
-    name: config.tool.name,
-    description: config.tool.description,
-    path: resolvedPath,
-  };
-
-  if (verbose) {
-    log(chalk.bold(taskKind === "build" ? "pickled build" : "pickled check"));
-    log("");
-    log(chalk.dim(`   Tool: ${tool.name}`));
-    log(chalk.dim(`   Tasks: ${config.scenarios.length}`));
-    for (const s of config.scenarios) {
-      log(chalk.dim(`   - ${s.name}`));
-    }
-  }
-
-  let threshold: number;
+  // CLI --threshold overrides the per-kind config threshold for this run.
+  let threshold: number | undefined;
   try {
-    threshold = resolveThreshold(options.threshold, config.threshold);
+    threshold = resolveThreshold(
+      options.threshold,
+      kind === "question"
+        ? config.thresholds.questions
+        : config.thresholds.builds,
+    );
   } catch (error) {
     console.error(chalk.red(error instanceof Error ? error.message : error));
     process.exit(1);
   }
 
-  // 2. Run check
-  const cellFilter =
-    options.agent || options.access
-      ? {
-          interface: options.agent,
-          access: options.access,
-        }
-      : undefined;
-  const scenarioFilter = options.task ? [options.task] : undefined;
+  const sampleN = parseOptionalInt(options.sample, "--sample");
+  const maxCellsN = parseOptionalInt(options.maxCells, "--max-cells");
 
-  let sampleN: number | undefined;
-  if (options.sample !== undefined) {
-    sampleN = parsePositiveInt(options.sample, "--sample");
-    if (sampleN === null) process.exit(1);
-  }
-  let maxCellsN: number | undefined;
-  if (options.maxCells !== undefined) {
-    maxCellsN = parsePositiveInt(options.maxCells, "--max-cells");
-    if (maxCellsN === null) process.exit(1);
+  const tasks = kind === "question" ? config.questions : config.builds;
+  if (tasks.length === 0) {
+    // Nothing of this kind to run is not a failure (exit 0). Human output gets a
+    // hint; machine consumers (--json / --output) get a valid empty RunReport so
+    // a parser never sees empty stdout.
+    if (json || output) {
+      const empty = emptyReport(config, kind);
+      if (output) await Bun.write(output, formatJSON(empty));
+      else await writeStdout(`${formatJSON(empty)}\n`);
+    } else {
+      const noun = kind === "build" ? "builds" : "questions";
+      const other = kind === "build" ? "pickled check" : "pickled build";
+      log(
+        chalk.dim(
+          `No ${noun} in pickled.yml. Nothing to run. (Did you mean \`${other}\`?)`,
+        ),
+      );
+    }
+    return;
   }
 
-  let report: Awaited<ReturnType<typeof runCheck>>;
+  validateNamedFilter(
+    "task",
+    options.task,
+    tasks.map((t) => t.id),
+  );
+
+  const tool = {
+    name: config.product.name,
+    description: config.product.description,
+    path: resolvedPath,
+  };
+
+  let report: RunReport;
   try {
-    report = await runCheck(tool, config, {
-      onProgress: verbose
-        ? (msg) => {
-            if (!json) {
-              log(chalk.dim(`   ${msg}`));
-            }
-          }
-        : undefined,
-      cellFilter,
-      scenarioFilter,
+    report = await run(kind, tool, config, {
+      onProgress:
+        verbose && !json ? (msg) => log(chalk.dim(`   ${msg}`)) : undefined,
+      cellFilter: { agent: options.agent, context: options.context },
+      taskFilter: options.task ? [options.task] : undefined,
       plan: options.plan,
       maxCells: maxCellsN,
       sample: sampleN,
       seed: options.seed,
+      keepOnFailure: options.keepOnFailure,
     });
   } catch (error) {
     console.error(chalk.red(error instanceof Error ? error.message : error));
     process.exit(1);
   }
 
-  // 3. Check threshold (skipped in plan / dry-run mode: a planning
-  // report has no task scores to compare against, and a non-zero
-  // exit there would defeat the purpose of a free pre-flight).
-  const thresholdFailed = shouldFailThreshold({
-    plan: options.plan === true,
-    threshold,
-    score: report.summary.score,
-  });
+  // The CLI threshold overrides whatever the runner stamped from config.
+  report.threshold = threshold;
 
-  // 4. Output
   if (output) {
-    await Bun.write(output, formatCheckJSON(report, { verbose }));
+    await Bun.write(output, formatJSON(report, { verbose }));
   } else if (json) {
-    await writeStdout(`${formatCheckJSON(report, { verbose })}\n`);
+    await writeStdout(`${formatJSON(report, { verbose })}\n`);
   } else {
-    printCheckReport(report, {
-      threshold,
-      title: taskKind === "build" ? "pickled build" : "pickled check",
-    });
+    printReport(report);
   }
 
-  if (thresholdFailed) {
+  // Dry-run never fails the gate: a plan has no scores to compare.
+  if (options.plan) return;
+  const passes = runPasses(report.summary, report.threshold);
+  if (passes === false) {
     if (json || output) {
       console.error(
         chalk.red(
-          `Overall: ${report.summary.score} / 100 · threshold ${threshold} · run fails`,
+          `Overall: ${report.summary.score} / 100 · threshold ${report.threshold} · run fails`,
         ),
-      );
-      console.error(
-        chalk.dim("Review failed tasks before trusting this surface."),
       );
     }
     process.exit(1);
@@ -188,77 +171,51 @@ export async function runTasks(
 }
 
 /**
- * Whether the run should exit non-zero on threshold. Dry-run (`--plan`)
- * always passes the threshold gate because the planning report has no
- * task scores; failing here would defeat the free pre-flight.
+ * Resolve the effective threshold. CLI value wins; else the per-kind config
+ * value (already validated 1-100 or undefined). Undefined means no gate.
  */
-export function shouldFailThreshold(args: {
-  plan: boolean;
-  threshold: number;
-  score: number;
-}): boolean {
-  if (args.plan) return false;
-  return args.threshold > 0 && args.score < args.threshold;
-}
-
 export function resolveThreshold(
   cliValue: string | undefined,
-  configValue: unknown,
-): number {
-  if (cliValue === undefined) {
-    if (configValue === undefined) return 0;
-    return parseThresholdValue(configValue, "pickled.yml threshold");
+  configValue: number | undefined,
+): number | undefined {
+  if (cliValue === undefined) return configValue;
+  if (!/^\d+$/.test(cliValue)) {
+    throw new Error(
+      `Invalid --threshold "${cliValue}". Expected an integer from 1 to 100.`,
+    );
   }
-
-  return parseThresholdValue(cliValue, "--threshold");
+  const n = Number(cliValue);
+  if (n < 1 || n > 100) {
+    throw new Error(
+      `Invalid --threshold "${cliValue}". Expected an integer from 1 to 100.`,
+    );
+  }
+  return n;
 }
 
-function parsePositiveInt(value: string, label: string): number | null {
-  if (!/^\d+$/.test(value)) {
+function parseOptionalInt(
+  value: string | undefined,
+  label: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (!/^\d+$/.test(value) || Number(value) < 1) {
     console.error(
-      chalk.red(
-        `Invalid ${label} "${value}". Expected a non-negative integer.`,
-      ),
+      chalk.red(`Invalid ${label} "${value}". Expected a positive integer.`),
     );
-    return null;
+    process.exit(1);
   }
   return Number(value);
 }
 
-function parseThresholdValue(value: unknown, label: string): number {
-  if (typeof value === "number") {
-    if (Number.isInteger(value) && value >= 0 && value <= 100) return value;
-    throw new Error(
-      `Invalid ${label} "${value}". Expected an integer from 0 to 100.`,
-    );
-  }
-
-  if (typeof value === "string" && /^\d+$/.test(value)) {
-    const threshold = Number(value);
-    if (threshold <= 100) return threshold;
-  }
-
-  if (typeof value === "string") {
-    throw new Error(
-      `Invalid ${label} "${value}". Expected an integer from 0 to 100.`,
-    );
-  }
-
-  throw new Error(`Invalid ${label}. Expected an integer from 0 to 100.`);
-}
-
 function validateNamedFilter(
-  config: CheckConfig,
-  label: "task" | "agent" | "access",
+  label: "task" | "agent" | "context",
   value: string | undefined,
-  list: (config: CheckConfig) => string[],
+  names: string[],
 ): void {
-  if (!value) return;
-  const names = list(config);
-  if (names.includes(value)) return;
+  if (!value || names.includes(value)) return;
   const available = names.length > 0 ? names.join(", ") : "(none)";
   const plural =
-    label === "access" ? "access paths" : label === "task" ? "tasks" : "agents";
+    label === "context" ? "contexts" : label === "task" ? "tasks" : "agents";
   console.error(
     chalk.red(
       `Unknown ${label}: "${value}". Available ${plural}: ${available}`,
@@ -267,22 +224,17 @@ function validateNamedFilter(
   process.exit(1);
 }
 
-function listTasks(config: CheckConfig): string[] {
-  return config.scenarios.map((s) => s.name);
-}
-
-function listAgents(config: CheckConfig): string[] {
-  return Object.keys(config.targets ?? {});
-}
-
-function listAccessPaths(config: CheckConfig): string[] {
-  const seen = new Set<string>();
-  for (const scenario of config.scenarios) {
-    for (const pair of scenario.matrix?.accessPairs ?? []) {
-      if (pair.access) seen.add(pair.access);
-    }
-  }
-  return [...seen];
+/** A valid, fully-shaped RunReport for "no tasks of this kind" (machine output). */
+function emptyReport(config: Config, kind: TaskKind): RunReport {
+  return {
+    product: config.product,
+    sources: [],
+    facts: config.facts,
+    misstatements: config.misstatements,
+    kind: kind === "question" ? "questions" : "builds",
+    ...(kind === "question" ? { questions: [] } : { builds: [] }),
+    summary: { total: 0, yes: 0, partial: 0, no: 0, errors: 0, score: 0 },
+  };
 }
 
 function writeStdout(text: string): Promise<void> {

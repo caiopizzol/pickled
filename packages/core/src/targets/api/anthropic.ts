@@ -1,7 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Target, TargetCategory } from "@pickled-dev/config";
-import { buildCitationPrompt } from "../citation-prompt.js";
-import { buildDiscoveryPrompt } from "../discovery-prompt.js";
+import { buildSystemPrompt } from "../prompt.js";
 import type {
   ResponseEntry,
   RunOptions,
@@ -10,26 +9,17 @@ import type {
 } from "../types.js";
 
 /**
- * Anthropic API target. Sends registered sources as controlled context to the
- * Messages API directly. Distinct from the Claude Code CLI target: no client
- * tools, no workspace, no Agent SDK orchestration. The model sees the citation
- * prompt as `system`, the scenario prompt as a single user message, and is
- * expected to return its answer with a `## Sources` section.
+ * Anthropic API target. Answers via the Messages API directly: no client
+ * tools, no workspace, no Agent SDK orchestration. The system prompt comes
+ * from the run's prompt context (memory / inject / web discovery); there is no
+ * `## Sources` citation contract. For `web` cells (`options.webTools.search`)
+ * the target passes the server-side `web_search` tool to `messages.create`;
+ * `server_tool_use` blocks are reported as `toolsUsed` so the provenance veto
+ * fires the same way as for client-tool cells. `webFetch` has no Anthropic API
+ * equivalent.
  *
- * For matrix `web` cells (`options.webTools.search`), the target passes the
- * server-side `web_search` tool to `messages.create` and switches to the
- * discovery prompt (no injected source). Server tool invocations are
- * extracted from `server_tool_use` blocks and reported as `toolsUsed`, so
- * the matrix runner's tool-use provenance hard-veto fires the same way it
- * does for client-tool cells.
- *
- * Requires `ANTHROPIC_API_KEY` in the environment. The model field is required
- * on the target config; the loader enforces this so silent defaults cannot
- * drift between releases.
- *
- * Distinct from chat surfaces (Claude chat, Claude Desktop): those have their
- * own system prompts, tool sets, and routing. API target results are
- * comparable to CLI target results but not identical.
+ * Requires `ANTHROPIC_API_KEY`. The model field is required (the loader enforces
+ * it) so silent defaults cannot drift between releases.
  */
 export class AnthropicApiTarget implements TargetRunner {
   readonly category: TargetCategory = "api";
@@ -46,7 +36,7 @@ export class AnthropicApiTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, docs, requiredSources, discovery, webTools } = options;
+    const { tool, promptContext, webTools } = options;
 
     if (!this.config.model) {
       // Defense in depth: the loader rejects API targets without a model, but
@@ -57,12 +47,7 @@ export class AnthropicApiTarget implements TargetRunner {
       );
     }
 
-    // Discovery-mode cells (matrix runner sets options.discovery) get a
-    // different system prompt: no injected sources, agent uses its tools
-    // to research, optional canonical-source hint.
-    const systemPrompt = discovery
-      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
-      : buildCitationPrompt(tool, docs, requiredSources);
+    const systemPrompt = buildSystemPrompt(tool, promptContext);
     const client = this.clientFactory();
 
     // SDK 0.40 typings predate the `web_search_20250305` server-tool entry,

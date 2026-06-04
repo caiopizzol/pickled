@@ -1,19 +1,11 @@
 import path from "node:path";
-import {
-  type DocSourceEntry,
-  normalizeDocSource,
-  type ResolvedDocSource,
-} from "@pickled-dev/config";
+import type { ResolvedSource, Source } from "@pickled-dev/config";
 import { Glob } from "bun";
 
 const CODEBASE_SOFT_CAP_BYTES = 256 * 1024;
 const CODEBASE_HARD_CAP_BYTES = 4 * 1024 * 1024;
 
-function isUrl(source: string): boolean {
-  return source.startsWith("http://") || source.startsWith("https://");
-}
-
-async function fetchUrl(id: string, url: string): Promise<ResolvedDocSource> {
+async function fetchUrl(id: string, url: string): Promise<ResolvedSource> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -23,10 +15,10 @@ async function fetchUrl(id: string, url: string): Promise<ResolvedDocSource> {
   const content = await response.text();
   return {
     id,
+    type: "url",
     source: url,
     content,
     name: new URL(url).hostname + new URL(url).pathname,
-    type: "url",
   };
 }
 
@@ -34,7 +26,7 @@ async function readFile(
   id: string,
   filePath: string,
   cwd: string,
-): Promise<ResolvedDocSource> {
+): Promise<ResolvedSource> {
   const resolved = path.isAbsolute(filePath)
     ? filePath
     : path.resolve(cwd, filePath);
@@ -45,21 +37,21 @@ async function readFile(
   const content = await file.text();
   return {
     id,
+    type: "file",
     source: filePath,
     content,
     name: path.basename(resolved),
-    type: "file",
   };
 }
 
 async function loadCodebase(
   id: string,
-  entry: DocSourceEntry,
+  src: { path: string; exclude?: string[]; maxBytes?: number },
   cwd: string,
   onProgress?: (msg: string) => void,
-): Promise<ResolvedDocSource> {
-  const includeGlob = new Glob(entry.path);
-  const excludeGlobs = (entry.exclude ?? []).map((p) => new Glob(p));
+): Promise<ResolvedSource> {
+  const includeGlob = new Glob(src.path);
+  const excludeGlobs = (src.exclude ?? []).map((p) => new Glob(p));
   const matched: string[] = [];
   for await (const rel of includeGlob.scan({
     cwd,
@@ -71,7 +63,7 @@ async function loadCodebase(
   }
   matched.sort();
 
-  const softCap = entry.maxBytes ?? CODEBASE_SOFT_CAP_BYTES;
+  const softCap = src.maxBytes ?? CODEBASE_SOFT_CAP_BYTES;
   const hardCap = CODEBASE_HARD_CAP_BYTES;
 
   const parts: string[] = [];
@@ -85,7 +77,7 @@ async function loadCodebase(
     totalBytes += header.length + text.length;
     if (totalBytes > hardCap) {
       throw new Error(
-        `Codebase source "${id}" exceeded hard cap of ${hardCap} bytes (matched glob ${entry.path}). Tighten the glob; the 4 MB ceiling is fixed to protect the agent request size.`,
+        `Codebase source "${id}" exceeded hard cap of ${hardCap} bytes (matched glob ${src.path}). Tighten the glob; the 4 MB ceiling is fixed to protect the agent request size.`,
       );
     }
   }
@@ -95,57 +87,43 @@ async function loadCodebase(
     );
   }
 
-  const content = parts.join("");
   return {
     id,
-    source: entry.path,
-    content,
-    name: `${matched.length} file${matched.length === 1 ? "" : "s"} in ${entry.path}`,
     type: "codebase",
+    source: src.path,
+    content: parts.join(""),
+    name: `${matched.length} file${matched.length === 1 ? "" : "s"} in ${src.path}`,
     matchedFiles: matched,
   };
 }
 
+/**
+ * Load one registered source to its content. The source kind is authoritative
+ * (set by the validator), so there is no auto-detect or type-mismatch path.
+ */
 export async function fetchSource(
   id: string,
-  source: string | DocSourceEntry,
+  source: Source,
   cwd: string,
   onProgress?: (msg: string) => void,
-): Promise<ResolvedDocSource> {
-  const { path: srcPath } = normalizeDocSource(source);
-  const explicitType = typeof source !== "string" ? source.type : undefined;
-
-  if (explicitType === "codebase") {
-    return loadCodebase(id, source as DocSourceEntry, cwd, onProgress);
+): Promise<ResolvedSource> {
+  switch (source.kind) {
+    case "url":
+      return fetchUrl(id, source.url);
+    case "file":
+      return readFile(id, source.path, cwd);
+    case "codebase":
+      return loadCodebase(id, source, cwd, onProgress);
   }
-  if (explicitType === "url") {
-    if (!isUrl(srcPath)) {
-      throw new Error(
-        `Source "${id}" declares type: url but path "${srcPath}" is not an http(s) URL. Use type: file for local paths, or omit type to auto-detect.`,
-      );
-    }
-    return fetchUrl(id, srcPath);
-  }
-  if (explicitType === "file") {
-    if (isUrl(srcPath)) {
-      throw new Error(
-        `Source "${id}" declares type: file but path "${srcPath}" is an http(s) URL. Use type: url for remote paths, or omit type to auto-detect.`,
-      );
-    }
-    return readFile(id, srcPath, cwd);
-  }
-  if (isUrl(srcPath)) return fetchUrl(id, srcPath);
-  return readFile(id, srcPath, cwd);
 }
 
 export async function fetchAllSources(
-  sources: Record<string, string | DocSourceEntry>,
+  sources: Record<string, Source>,
   cwd: string,
   onProgress?: (msg: string) => void,
-): Promise<ResolvedDocSource[]> {
+): Promise<ResolvedSource[]> {
   const entries = Object.entries(sources);
-  const resolved = await Promise.all(
+  return Promise.all(
     entries.map(([id, source]) => fetchSource(id, source, cwd, onProgress)),
   );
-  return resolved;
 }

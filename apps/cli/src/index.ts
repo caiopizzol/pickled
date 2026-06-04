@@ -38,16 +38,16 @@ program
 
 program
   .command("check")
-  .summary("Run answer tasks against your sources")
-  .description("Run answer tasks: ask the agents and score their answers")
+  .summary("Run questions against your sources")
+  .description("Run questions: ask the agents and score their answers")
   .argument("[path]", "Project path", ".")
   .option("--json", "Output as JSON")
   .option("-o, --output <file>", "Save report to file")
   .option("-v, --verbose", "Show detailed progress")
-  .option("-t, --threshold <percent>", "Minimum score to pass")
+  .option("-t, --threshold <percent>", "Minimum score to pass (1-100)")
   .option("--task <id>", "Run only the named task id")
   .option("--agent <name>", "Run only the named agent")
-  .option("--access <name>", "Run only the named access path")
+  .option("--context <name>", "Run only the named context")
   .option("--plan", "Print planned cells. No model calls.")
   .option("--max-cells <n>", "Abort if planned executions exceed N")
   .option("--sample <n>", "Sample N cells per task")
@@ -56,20 +56,23 @@ program
 
 program
   .command("build")
-  .summary("Run build tasks in a fresh workspace")
-  .description("Run build tasks: the agent edits a workspace, verify must pass")
+  .summary("Run builds in a fresh workspace")
+  .description(
+    "Run builds: the agent edits a workspace, the verifier must pass",
+  )
   .argument("[path]", "Project path", ".")
   .option("--json", "Output as JSON")
   .option("-o, --output <file>", "Save report to file")
   .option("-v, --verbose", "Show detailed progress")
-  .option("-t, --threshold <percent>", "Minimum score to pass")
+  .option("-t, --threshold <percent>", "Minimum score to pass (1-100)")
   .option("--task <id>", "Run only the named task id")
   .option("--agent <name>", "Run only the named agent")
-  .option("--access <name>", "Run only the named access path")
+  .option("--context <name>", "Run only the named context")
   .option("--plan", "Print planned cells and executions. No agent runs.")
   .option("--max-cells <n>", "Abort if planned executions exceed N")
   .option("--sample <n>", "Sample N cells per task")
   .option("--seed <value>", "Seed for --sample")
+  .option("--keep-on-failure", "Keep failed build workspaces for inspection")
   .action(build);
 
 program

@@ -5,6 +5,7 @@ import {
   type SpawnFn,
   type SpawnResult,
 } from "../../src/targets/cli/codex.js";
+import type { RunOptions } from "../../src/targets/types.js";
 
 const baseConfig: Target = {
   category: "cli",
@@ -12,11 +13,15 @@ const baseConfig: Target = {
   model: "gpt-5",
 };
 
-const baseRunOptions = {
+const baseRunOptions: RunOptions = {
   tool: { name: "t", description: "d", path: "/tmp/x" },
   cwd: "/tmp/x",
-  docs: [],
-  requiredSources: [],
+  promptContext: { kind: "question", mode: "memory" },
+};
+
+const buildRunOptions: RunOptions = {
+  ...baseRunOptions,
+  promptContext: { kind: "build", mode: "memory" },
 };
 
 function makeSpawn(result: SpawnResult): {
@@ -140,12 +145,12 @@ describe("CodexCliTarget - flag spelling", () => {
       spawn,
       readFile: makeReadFile("Done."),
     });
-    await target.run("q", { ...baseRunOptions, editMode: true });
+    await target.run("q", buildRunOptions);
     const args = calls[0]!.args;
     expect(args[args.indexOf("--sandbox") + 1]).toBe("workspace-write");
   });
 
-  test("writes the citation prompt to stdin, not argv", async () => {
+  test("writes the system prompt + question to stdin, not argv", async () => {
     const { spawn, calls } = makeSpawn({
       exitCode: 0,
       stdout: "",
@@ -157,7 +162,8 @@ describe("CodexCliTarget - flag spelling", () => {
     });
     await target.run("How do I install?", baseRunOptions);
     const stdin = calls[0]!.options.stdin;
-    expect(stdin).toContain("Answer using ONLY information");
+    expect(stdin).toContain('about "t"');
+    expect(stdin).not.toContain("## Sources");
     expect(stdin).toContain("How do I install?");
     expect(calls[0]!.args.join(" ")).not.toContain("How do I install?");
   });

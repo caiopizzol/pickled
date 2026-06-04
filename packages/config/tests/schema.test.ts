@@ -41,43 +41,55 @@ async function loaderAccepts(yaml: string): Promise<boolean> {
   }
 }
 
-// A config that exercises every section + all three tool modes + all three
-// check kinds + examples + threshold. Must pass BOTH validators.
+// Exercises every v2 section + all four context modes + a fact + a misstatement
+// + a question (expects/rejects + examples) + a build (verifier) + thresholds.
+// Must pass BOTH validators.
 const VALID = `
+schemaVersion: 2
 product: { name: my-product, description: a dev tool }
 sources:
-  llms: https://my-product.dev/llms.txt
+  llms: { url: https://my-product.dev/llms.txt }
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5, maxTurns: 5 }
   api: { provider: openai, model: gpt-5.2, temperature: 0, maxTokens: 4096 }
-access:
-  memory: { source: none, tools: none }
-  given_llms: { source: llms, tools: none }
-  web_llms: { source: llms, tools: web }
+contexts:
+  memory: { mode: memory }
+  given_llms: { mode: inject, source: llms }
+  web_llms: { mode: web, source: llms }
   mcp_x:
-    source: none
-    tools: mcp
+    mode: mcp
     servers:
-      s:
-        url: https://my-product.dev/mcp
-        headers: { Authorization: "Bearer x" }
-tasks:
+      s: { url: https://my-product.dev/mcp, headers: { Authorization: "Bearer x" } }
+facts:
+  install: { statement: install command, match: { allOf: ["bunx my-product"] } }
+misstatements:
+  legacy: { statement: legacy adapter, match: { anyOf: ["legacyAdapter"] } }
+questions:
   - id: install
-    prompt: How do I install my-product?
+    question: How do I install my-product?
     agents: [quick, api]
-    access: [memory, given_llms, web_llms, mcp_x]
-    checks:
-      mustMention: [bunx my-product]
-      mustMentionOneOf:
-        - { label: package manager, values: [bunx, npx] }
-      mustNotMention: [legacyAdapter]
+    contexts: [memory, given_llms, web_llms, mcp_x]
+    expects: [install]
+    rejects: [legacy]
     examples:
       pass: ["install with bunx my-product"]
       fail: ["use legacyAdapter"]
-threshold: 80
+builds:
+  - id: smoke
+    goal: Add a basic usage.
+    agents: [quick]
+    contexts: [given_llms]
+    trials: 2
+    workspace: { path: ./fixtures/app, setup: [bun install] }
+    verifier:
+      failToPass: [{ name: tests, run: bun test }]
+      passToPass: [{ run: bun run typecheck }]
+thresholds:
+  questions: 80
+  builds: 80
 `;
 
-describe("pickled.schema.json", () => {
+describe("pickled.schema.json (v2)", () => {
   test("schema compiles under JSON Schema 2020-12", () => {
     expect(typeof validate).toBe("function");
   });
@@ -93,11 +105,10 @@ describe("pickled.schema.json", () => {
     expect(await loaderAccepts(VALID)).toBe(true);
   });
 
-  // Each bad config plus which validator(s) must reject it. The loader is the
-  // authoritative gate; the schema is a shape layer that agrees on structural
-  // errors (unknown top-level keys, bad shapes) and is looser only on
-  // cross-references (unknown source/agent/access ids), which the loader owns,
-  // so those are not listed here.
+  // Each bad config plus which validator(s) reject it. The loader is the
+  // authoritative gate; the schema agrees on structural errors (unknown keys,
+  // bad shapes, missing schemaVersion) and is looser on cross-references
+  // (unknown source/agent/fact ids) and mode rules, which the loader owns.
   const INVALID: Array<{
     label: string;
     yaml: string;
@@ -105,68 +116,54 @@ describe("pickled.schema.json", () => {
     loaderRejects: boolean;
   }> = [
     {
-      label: "object source (codebase) is not in the public schema",
+      label: "missing schemaVersion",
       yaml: `
 product: { name: t, description: d }
-sources:
-  code: { path: "src/**/*.ts", type: codebase }
 agents: { q: { provider: claude-code, model: m } }
-access: { m: { source: none, tools: none } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [m], checks: { mustMention: [x] } }
+contexts: { mem: { mode: memory } }
+facts: { f: { statement: s, match: { allOf: ["x"] } } }
+questions:
+  - { id: q, question: a, agents: [q], contexts: [mem], expects: [f] }
 `,
       schemaRejects: true,
       loaderRejects: true,
     },
     {
-      label: "tools: mcp without servers",
+      label: "v1 'tasks' key present",
       yaml: `
+schemaVersion: 2
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
-access: { mcp_x: { source: none, tools: mcp } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+contexts: { mem: { mode: memory } }
+tasks: []
 `,
       schemaRejects: true,
       loaderRejects: true,
     },
     {
-      label: "servers on a tools: web path",
+      label: "context mode outside the enum",
       yaml: `
+schemaVersion: 2
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
-access:
-  web_x: { source: none, tools: web, servers: { s: { url: https://x/mcp } } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [web_x], checks: { mustMention: [x] } }
+contexts: { x: { mode: firecrawl } }
+facts: { f: { statement: s, match: { allOf: ["x"] } } }
+questions:
+  - { id: q, question: a, agents: [q], contexts: [x], expects: [f] }
 `,
       schemaRejects: true,
       loaderRejects: true,
     },
     {
-      label: "empty check array",
+      label: "match with neither allOf nor anyOf",
       yaml: `
+schemaVersion: 2
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
-access: { m: { source: none, tools: none } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [m], checks: { mustMention: [] } }
-`,
-      schemaRejects: true,
-      loaderRejects: true,
-    },
-    {
-      label: "type inside an MCP server",
-      yaml: `
-product: { name: t, description: d }
-agents: { q: { provider: claude-code, model: m } }
-access:
-  mcp_x:
-    source: none
-    tools: mcp
-    servers: { s: { type: stdio, command: foo, url: https://x/mcp } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+contexts: { mem: { mode: memory } }
+facts: { f: { statement: s, match: {} } }
+questions:
+  - { id: q, question: a, agents: [q], contexts: [mem], expects: [f] }
 `,
       schemaRejects: true,
       loaderRejects: true,
@@ -174,44 +171,46 @@ tasks:
     {
       label: "MCP server url is not http(s)",
       yaml: `
+schemaVersion: 2
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
-access:
-  mcp_x:
-    source: none
-    tools: mcp
-    servers: { s: { url: ftp://x/mcp } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [mcp_x], checks: { mustMention: [x] } }
+contexts:
+  m: { mode: mcp, servers: { s: { url: ftp://x/mcp } } }
+facts: { f: { statement: s, match: { allOf: ["x"] } } }
+questions:
+  - { id: q, question: a, agents: [q], contexts: [m], expects: [f] }
 `,
       schemaRejects: true,
       loaderRejects: true,
     },
     {
-      label: "bad examples shape (pass is not an array)",
+      label: "build verifier missing failToPass",
       yaml: `
+schemaVersion: 2
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
-access: { m: { source: none, tools: none } }
-tasks:
-  - id: q
-    prompt: a
+contexts: { mem: { mode: memory } }
+builds:
+  - id: b
+    goal: g
     agents: [q]
-    access: [m]
-    checks: { mustMention: [x] }
-    examples: { pass: "not an array" }
+    contexts: [mem]
+    workspace: { path: ./ws }
+    verifier: {}
 `,
       schemaRejects: true,
       loaderRejects: true,
     },
     {
-      label: "unknown top-level key (rejected by both)",
+      label: "unknown top-level key",
       yaml: `
+schemaVersion: 2
 product: { name: t, description: d }
 agents: { q: { provider: claude-code, model: m } }
-access: { m: { source: none, tools: none } }
-tasks:
-  - { id: q, prompt: a, agents: [q], access: [m], checks: { mustMention: [x] } }
+contexts: { mem: { mode: memory } }
+facts: { f: { statement: s, match: { allOf: ["x"] } } }
+questions:
+  - { id: q, question: a, agents: [q], contexts: [mem], expects: [f] }
 typo_section: oops
 `,
       schemaRejects: true,

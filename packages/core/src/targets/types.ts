@@ -1,8 +1,9 @@
 import type {
   McpServerConfig,
-  ResolvedDocSource,
+  ResolvedSource,
   TargetCategory,
 } from "@pickled-dev/config";
+import type { ToolInfo } from "../types.js";
 
 export { DEFAULT_TARGET } from "@pickled-dev/config";
 
@@ -12,9 +13,9 @@ export interface ResponseEntry {
 }
 
 export interface TargetResult {
-  /** The final response (what the user sees as the answer) */
+  /** The final response (what the user sees as the answer). */
   response: string;
-  /** All responses captured during execution, for detailed reporting */
+  /** All responses captured during execution, for detailed reporting. */
   allResponses: ResponseEntry[];
   toolsUsed: string[];
   sources: string[];
@@ -26,86 +27,55 @@ export interface TargetResult {
   };
 }
 
+/**
+ * Explicit prompt context: what the agent is asked and what material it gets.
+ * The adapter switches on this to build its system prompt, so there is no
+ * inference from loose flags and no fallback to a citation prompt.
+ * - memory: answer from own knowledge (no injection, no tools).
+ * - inject: source content placed in the prompt.
+ * - web/mcp: research with tools; `sourceHint` names the canonical reference.
+ * `build` uses the build prompt for the same three material shapes.
+ */
+export type PromptContext =
+  | { kind: "question"; mode: "memory" }
+  | { kind: "question"; mode: "inject"; docs: ResolvedSource[] }
+  | { kind: "question"; mode: "web" | "mcp"; sourceHint: string | null }
+  | { kind: "build"; mode: "memory" }
+  | { kind: "build"; mode: "inject"; docs: ResolvedSource[] }
+  | { kind: "build"; mode: "web" | "mcp"; sourceHint: string | null };
+
 export interface RunOptions {
-  tool: import("../types.js").ToolInfo;
+  tool: ToolInfo;
   cwd: string;
-  context?: ResolvedContext;
-  /** Documentation sources to inject into the target prompt. Empty for
-   *  discovery cells. */
-  docs: ResolvedDocSource[];
-  /** Source IDs the scenario requires the answer to cite. Empty for
-   *  discovery cells (no citation contract). */
-  requiredSources: string[];
+  promptContext: PromptContext;
   /**
-   * Discovery-mode hint. Set by the matrix runner for cells with a non-none
-   * toolset. When present, the adapter uses the discovery system prompt
-   * instead of the citation prompt: source content is not injected; the
-   * agent uses its tools to research, with `sourceHint` named as the
-   * canonical reference (URL or human-readable name). When undefined,
-   * normal citation mode applies.
-   */
-  discovery?: { sourceHint: string | null };
-  /**
-   * Restrict the SDK's built-in tool set for this run. The Claude Agent
-   * SDK's `tools` option ([] disables all built-ins; a string array
-   * scopes to those built-ins; preset uses defaults). Matrix runner sets
-   * this for non-none cells so the agent cannot fall back to Read/Bash
-   * and bypass the configured tool path the cell is meant to test.
-   * Adapters that ignore this field (Codex, Anthropic API) treat all
-   * non-none toolsets as unsupported elsewhere.
+   * Restrict the SDK's built-in tool set for this run (Claude Agent SDK
+   * `tools`). The runner sets it for web/mcp cells so the agent cannot fall
+   * back to Read/Bash and bypass the configured tool path. Adapters that scope
+   * tools differently (Codex, API targets) ignore it.
    */
   restrictBuiltinTools?: string[];
   /**
-   * Provider-agnostic web-tool intent. Matrix runner sets this for web
-   * cells on providers that do not consume `restrictBuiltinTools` (e.g.
-   * the Anthropic API target, which maps `search: true` to the server-
-   * side `web_search` tool entry on `messages.create`). Adapters that
-   * scope tools via SDK built-ins (Claude Code) ignore this field and
-   * read `restrictBuiltinTools` instead.
+   * Provider-agnostic web-tool intent for providers that do not consume
+   * `restrictBuiltinTools` (the Anthropic/OpenAI API targets map `search: true`
+   * to their server-side `web_search` tool). The Claude Code adapter ignores it.
    */
   webTools?: { search?: boolean };
   /**
-   * Provider-agnostic MCP-server intent. Matrix runner sets this for
-   * `mcp` cells on the OpenAI Responses target (the OpenAI adapter
-   * translates each entry to a hosted-MCP tool entry on
-   * `responses.create`). The Claude Code adapter reads `mcpServers`
-   * from its target config directly via the Agent SDK and ignores this
-   * field. Each server's key in the map is used as the OpenAI
-   * `server_label`, so the matrix runner's `mcp__<server>__*`
-   * provenance matcher works across providers.
+   * Provider-agnostic hosted-MCP intent for the OpenAI Responses target (each
+   * entry becomes a hosted-MCP tool on `responses.create`; the map key is the
+   * `server_label`, so the `mcp__<server>__*` provenance matcher works across
+   * providers). The Claude Code adapter reads `mcpServers` from its target
+   * config via the Agent SDK and ignores this field.
    */
   mcpTools?: { servers: Record<string, McpServerConfig> };
   /**
-   * Build mode: run the agent as an editor of the workspace. The CLI adapters
-   * switch to their edit profile (claude-code: workspace toolset +
-   * permissionMode "bypassPermissions"; codex: --sandbox workspace-write).
-   * Internal only - the build runner sets it for `kind: build` cells; it is
-   * never exposed in the public schema. API adapters ignore it (no repo-edit
-   * loop), and the runner gates build tasks to edit-capable agents first.
-   */
-  editMode?: boolean;
-  /**
-   * Build-task context for the system prompt (kind: build). When set, the CLI
-   * adapter uses the build prompt (no citation contract, no `## Sources`
-   * block) instead of the citation/discovery prompt: `docs` are injected for
-   * `tools: none` cells, `sourceHint` names the discovery target otherwise.
-   * Paired with `editMode`. Internal only.
-   */
-  buildContext?: { docs: ResolvedDocSource[]; sourceHint: string | null };
-  /**
-   * Cancellation for the run. The build runner aborts this when the wall-clock
-   * budget elapses; the CLI adapters wire it to a real teardown (claude-code:
-   * the SDK's abortController; codex: killing the spawned process) so a hung
-   * agent does not orphan a process. Internal only.
+   * Cancellation for the run. The build runner aborts this on a wall-clock
+   * timeout; the CLI adapters wire it to a real teardown so a hung agent does
+   * not orphan a process.
    */
   signal?: AbortSignal;
   onProgress?: (msg: string) => void;
-}
-
-export interface ResolvedContext {
-  allowedTools?: string[];
-  disallowedTools?: string[];
-  mcpServers?: Record<string, unknown>;
 }
 
 export interface TargetRunner {

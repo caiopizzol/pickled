@@ -4,7 +4,7 @@ import type { TargetCategory } from "@pickled-dev/config";
 const EDIT_CAPABLE_PROVIDERS = new Set(["claude-code", "codex-cli"]);
 
 /**
- * Whether a target can run `kind: build` tasks - edit files and run commands
+ * Whether a target can run build tasks - edit files and run commands
  * in a workspace. Only the CLI coding agents qualify today; API providers
  * (anthropic/openai) have no repo-edit loop, so they are answer-only.
  */
@@ -20,7 +20,7 @@ export function isEditCapable(target: {
 /**
  * Gate a build task to an edit-capable agent. Throws with the agent name and
  * the supported providers so the failure is actionable. The build runner calls
- * this before invoking any agent for a `kind: build` cell.
+ * this before invoking any agent for a build cell.
  */
 export function assertEditCapable(
   name: string,

@@ -1,89 +1,162 @@
 import { describe, expect, test } from "bun:test";
-import { getBuildStatus, getScenarioStatus } from "../src/report-status.js";
-import type { ScenarioResult } from "../src/types.js";
+import {
+  buildCellStatus,
+  questionCellStatus,
+  runPasses,
+  summarizeBuilds,
+  summarizeQuestions,
+} from "../src/report-status.js";
+import type { BuildCell, QuestionCell } from "../src/types.js";
 
-function makeResult(overrides: Partial<ScenarioResult> = {}): ScenarioResult {
+function qCell(over: Partial<QuestionCell>): QuestionCell {
   return {
-    scenario: { name: "s", prompt: "p", requiredSources: [] },
-    answerable: "YES",
-    confidence: 100,
-    response: "",
+    coord: { agent: "a", context: "c" },
+    mode: "memory",
+    source: null,
+    verdict: "YES",
+    passedTrials: 1,
+    totalTrials: 1,
+    passRate: 100,
+    meanCoverage: 100,
+    trials: [],
     reason: "",
-    citations: { cited: [], required: [], missing: [], unknown: [] },
-    ...overrides,
+    ...over,
   };
 }
 
-describe("getScenarioStatus", () => {
-  test("YES + 90 renders Well grounded", () => {
-    const status = getScenarioStatus(
-      makeResult({ answerable: "YES", confidence: 90 }),
-    );
-    expect(status.label).toBe("Well grounded");
-    expect(status.icon).toBe("✓");
-    expect(status.tone).toBe("success");
-  });
+function bCell(over: Partial<BuildCell>): BuildCell {
+  return {
+    coord: { agent: "a", context: "c" },
+    mode: "memory",
+    source: null,
+    verdict: "YES",
+    passedAttempts: 1,
+    totalAttempts: 1,
+    passRate: 100,
+    attempts: [],
+    reason: "",
+    verifierProof: "not_declared",
+    ...over,
+  };
+}
 
-  test("YES + 89 renders Grounded", () => {
-    const status = getScenarioStatus(
-      makeResult({ answerable: "YES", confidence: 89 }),
+describe("questionCellStatus - label from verdict", () => {
+  test("YES -> Well grounded", () => {
+    expect(questionCellStatus(qCell({ verdict: "YES" })).label).toBe(
+      "Well grounded",
     );
-    expect(status.label).toBe("Grounded");
-    expect(status.icon).toBe("✓");
-    expect(status.tone).toBe("success");
   });
-
-  test("PARTIAL + 95 renders Partially grounded (categorical wins over confidence)", () => {
-    const status = getScenarioStatus(
-      makeResult({ answerable: "PARTIAL", confidence: 95 }),
+  test("PARTIAL -> Partially grounded with coverage detail", () => {
+    const s = questionCellStatus(
+      qCell({ verdict: "PARTIAL", meanCoverage: 60, passedTrials: 0 }),
     );
-    expect(status.label).toBe("Partially grounded");
-    expect(status.icon).toBe("⚠");
-    expect(status.tone).toBe("warning");
+    expect(s.label).toBe("Partially grounded");
+    expect(s.detail).toBe("60% facts");
+    expect(s.rate).toBe("0/1");
   });
-
-  test("NO renders Ungrounded", () => {
-    const status = getScenarioStatus(
-      makeResult({ answerable: "NO", confidence: 0 }),
+  test("NO -> Ungrounded", () => {
+    expect(questionCellStatus(qCell({ verdict: "NO" })).label).toBe(
+      "Ungrounded",
     );
-    expect(status.label).toBe("Ungrounded");
-    expect(status.tone).toBe("error");
   });
-
-  test("error result renders Error and overrides everything", () => {
-    const status = getScenarioStatus(
-      makeResult({
-        answerable: "YES",
-        confidence: 100,
-        error: "Target crashed",
+  test("error -> Error", () => {
+    expect(questionCellStatus(qCell({ error: "x", verdict: "NO" })).label).toBe(
+      "Error",
+    );
+  });
+  test("a high pass-rate PARTIAL never upgrades to Well grounded", () => {
+    const s = questionCellStatus(
+      qCell({
+        verdict: "PARTIAL",
+        passRate: 95,
+        passedTrials: 19,
+        totalTrials: 20,
       }),
     );
-    expect(status.label).toBe("Error");
-    expect(status.tone).toBe("error");
+    expect(s.label).toBe("Partially grounded");
   });
 });
 
-describe("getBuildStatus", () => {
-  test("all attempts pass renders Built with the rate as confidence", () => {
-    const status = getBuildStatus({ passedAttempts: 2, totalAttempts: 2 });
-    expect(status.label).toBe("Built");
-    expect(status.icon).toBe("✓");
-    expect(status.tone).toBe("success");
-    expect(status.confidence).toBe(100);
+describe("buildCellStatus", () => {
+  test("YES -> Built", () => {
+    expect(buildCellStatus(bCell({ verdict: "YES" })).label).toBe("Built");
+  });
+  test("PARTIAL -> Partially built", () => {
+    expect(buildCellStatus(bCell({ verdict: "PARTIAL" })).label).toBe(
+      "Partially built",
+    );
+  });
+  test("NO -> Did not build", () => {
+    expect(buildCellStatus(bCell({ verdict: "NO" })).label).toBe(
+      "Did not build",
+    );
+  });
+  test("not_declared verifier surfaces 'verifier unproven'", () => {
+    expect(
+      buildCellStatus(bCell({ verifierProof: "not_declared" })).detail,
+    ).toBe("verifier unproven");
+  });
+  test("a failed reference solution surfaces a broken-verifier detail", () => {
+    const s = buildCellStatus(
+      bCell({ error: "x", verifierProof: "failed", verdict: "NO" }),
+    );
+    expect(s.label).toBe("Error");
+    expect(s.detail).toContain("verifier broken");
+  });
+});
+
+describe("summarize", () => {
+  test("questions: counts + score = mean meanCoverage over non-error cells", () => {
+    const s = summarizeQuestions([
+      qCell({ verdict: "YES", meanCoverage: 100 }),
+      qCell({ verdict: "PARTIAL", meanCoverage: 50 }),
+      qCell({ verdict: "NO", error: "x", meanCoverage: 0 }),
+    ]);
+    expect(s).toMatchObject({ total: 3, yes: 1, partial: 1, no: 0, errors: 1 });
+    expect(s.score).toBe(75); // (100 + 50) / 2 over the 2 scored cells
   });
 
-  test("some attempts pass renders Partially built", () => {
-    const status = getBuildStatus({ passedAttempts: 1, totalAttempts: 3 });
-    expect(status.label).toBe("Partially built");
-    expect(status.icon).toBe("⚠");
-    expect(status.tone).toBe("warning");
-    expect(status.confidence).toBe(33);
+  test("builds: score = mean passRate over non-error cells", () => {
+    const s = summarizeBuilds([
+      bCell({ verdict: "YES", passRate: 100 }),
+      bCell({ verdict: "NO", passRate: 0 }),
+    ]);
+    expect(s.score).toBe(50);
+    expect(s).toMatchObject({ total: 2, yes: 1, no: 1, errors: 0 });
   });
+});
 
-  test("no attempts pass renders Did not build", () => {
-    const status = getBuildStatus({ passedAttempts: 0, totalAttempts: 3 });
-    expect(status.label).toBe("Did not build");
-    expect(status.icon).toBe("✗");
-    expect(status.tone).toBe("error");
+describe("runPasses", () => {
+  test("null when no threshold configured", () => {
+    expect(
+      runPasses(
+        { total: 1, yes: 1, partial: 0, no: 0, errors: 0, score: 100 },
+        undefined,
+      ),
+    ).toBeNull();
+  });
+  test("passes when score meets threshold and no errors", () => {
+    expect(
+      runPasses(
+        { total: 1, yes: 1, partial: 0, no: 0, errors: 0, score: 90 },
+        80,
+      ),
+    ).toBe(true);
+  });
+  test("fails when score below threshold", () => {
+    expect(
+      runPasses(
+        { total: 1, yes: 0, partial: 0, no: 1, errors: 0, score: 40 },
+        80,
+      ),
+    ).toBe(false);
+  });
+  test("a thresholded run with any errored cell fails even at score 100", () => {
+    expect(
+      runPasses(
+        { total: 2, yes: 1, partial: 0, no: 0, errors: 1, score: 100 },
+        80,
+      ),
+    ).toBe(false);
   });
 });

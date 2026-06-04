@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Target } from "@pickled-dev/config";
 import type OpenAI from "openai";
 import { OpenAIApiTarget } from "../../src/targets/api/openai.js";
+import type { RunOptions } from "../../src/targets/types.js";
 
 // Cast through unknown to satisfy the OpenAIApiTarget signature with a
 // structural mock. Avoids `any` so biome's noExplicitAny does not fire and
@@ -17,12 +18,19 @@ const baseConfig: Target = {
   model: "gpt-5.2",
 };
 
-const baseRunOptions = {
+const baseRunOptions: RunOptions = {
   tool: { name: "t", description: "d", path: "/tmp/x" },
   cwd: "/tmp/x",
-  docs: [],
-  requiredSources: [],
+  promptContext: { kind: "question", mode: "memory" },
 };
+
+function webOptions(sourceHint: string | null): RunOptions {
+  return {
+    ...baseRunOptions,
+    promptContext: { kind: "question", mode: "web", sourceHint },
+    webTools: { search: true },
+  };
+}
 
 interface CapturedCreateCall {
   model: string;
@@ -111,7 +119,7 @@ describe("OpenAIApiTarget", () => {
     });
   });
 
-  test("passes citation prompt as instructions, user prompt as input", async () => {
+  test("passes the question prompt as instructions, user prompt as input (no citation block)", async () => {
     const { client, calls } = makeMockClient("ok");
     const target = new OpenAIApiTarget("oai", baseConfig, () =>
       asOpenAI(client),
@@ -120,8 +128,8 @@ describe("OpenAIApiTarget", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0]!;
     expect(call.model).toBe("gpt-5.2");
-    expect(call.instructions).toContain("Answer using ONLY information");
-    expect(call.instructions).toContain("End your response with a");
+    expect(call.instructions).toContain('about "t"');
+    expect(call.instructions).not.toContain("## Sources");
     expect(call.input).toBe("How do I install?");
   });
 
@@ -174,13 +182,8 @@ describe("OpenAIApiTarget", () => {
     const target = new OpenAIApiTarget("oai", baseConfig, () =>
       asOpenAI(client),
     );
-    await target.run("How?", {
-      ...baseRunOptions,
-      discovery: { sourceHint: "https://example.com/docs" },
-    });
-    expect(calls[0]?.instructions).not.toContain(
-      "Answer using ONLY information",
-    );
+    await target.run("How?", webOptions("https://example.com/docs"));
+    expect(calls[0]?.instructions).not.toContain("## Sources");
     expect(calls[0]?.instructions).toContain("https://example.com/docs");
   });
 
@@ -198,11 +201,7 @@ describe("OpenAIApiTarget", () => {
     const target = new OpenAIApiTarget("oai", baseConfig, () =>
       asOpenAI(client),
     );
-    await target.run("?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: null },
-    });
+    await target.run("?", webOptions(null));
     expect(calls[0]?.tools).toEqual([{ type: "web_search" }]);
   });
 
@@ -225,11 +224,7 @@ describe("OpenAIApiTarget", () => {
     const target = new OpenAIApiTarget("oai", baseConfig, () =>
       asOpenAI(client),
     );
-    const result = await target.run("?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: null },
-    });
+    const result = await target.run("?", webOptions(null));
     // Normalized to the provider-agnostic "web_search" string the matrix
     // runner's matcher expects (same shape the anthropic adapter emits).
     expect(result.toolsUsed).toEqual(["web_search"]);
@@ -264,7 +259,7 @@ describe("OpenAIApiTarget", () => {
           },
         },
       },
-      discovery: { sourceHint: null },
+      promptContext: { kind: "question", mode: "mcp", sourceHint: null },
     });
     expect(calls[0]?.tools).toEqual([
       {
@@ -290,7 +285,7 @@ describe("OpenAIApiTarget", () => {
             local_stdio: { type: "stdio", command: "node", args: ["x.js"] },
           },
         },
-        discovery: { sourceHint: null },
+        promptContext: { kind: "question", mode: "mcp", sourceHint: null },
       }),
     ).rejects.toThrow(/has no url/);
   });
@@ -328,7 +323,7 @@ describe("OpenAIApiTarget", () => {
           context7: { type: "http", url: "https://mcp.context7.com/mcp" },
         },
       },
-      discovery: { sourceHint: null },
+      promptContext: { kind: "question", mode: "mcp", sourceHint: null },
     });
     expect(result.toolsUsed).toContain("mcp__context7__resolve-library-id");
     expect(result.toolsUsed).toContain("mcp__context7__query-docs");
@@ -357,7 +352,7 @@ describe("OpenAIApiTarget", () => {
           context7: { type: "http", url: "https://mcp.context7.com/mcp" },
         },
       },
-      discovery: { sourceHint: null },
+      promptContext: { kind: "question", mode: "mcp", sourceHint: null },
     });
     expect(calls[0]?.tools?.map((t) => t.type).sort()).toEqual([
       "mcp",
@@ -379,11 +374,7 @@ describe("OpenAIApiTarget", () => {
     const target = new OpenAIApiTarget("oai", baseConfig, () =>
       asOpenAI(client),
     );
-    const result = await target.run("?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: null },
-    });
+    const result = await target.run("?", webOptions(null));
     // No web_search_call item means the model answered without
     // searching. The matrix runner's provenance hard-veto reads empty
     // toolsUsed for a web cell and forces NO/0; the adapter itself

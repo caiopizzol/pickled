@@ -2,23 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pickled.dev/schema/pickled.schema.json",
   "title": "pickled.yml",
-  "description": "Configuration for testing whether agents understand a product. Editor/tooling contract; the pickled loader remains the authoritative validator (it owns cross-references, reserved names, and provider-specific rules).",
+  "description": "Configuration for testing whether agents understand a product (v2). Editor/tooling contract; the pickled loader remains the authoritative validator (it owns cross-references, mode-specific rules, and provider-specific rules).",
   "type": "object",
-  "required": ["product", "agents", "access", "tasks"],
+  "required": ["schemaVersion", "product", "agents", "contexts"],
   "additionalProperties": false,
   "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "description": "Schema version. Must be 2."
+    },
     "product": { "$ref": "#/$defs/product" },
     "sources": { "$ref": "#/$defs/sources" },
     "agents": { "$ref": "#/$defs/agents" },
-    "access": { "$ref": "#/$defs/access" },
-    "tasks": { "$ref": "#/$defs/tasks" },
-    "threshold": {
-      "type": "number",
-      "minimum": 0,
-      "maximum": 100,
-      "description": "Optional run score required for the run to pass. Omit to report the score with no pass/fail verdict.",
-      "examples": [80]
-    }
+    "contexts": { "$ref": "#/$defs/contexts" },
+    "facts": { "$ref": "#/$defs/facts" },
+    "misstatements": { "$ref": "#/$defs/misstatements" },
+    "questions": { "$ref": "#/$defs/questions" },
+    "builds": { "$ref": "#/$defs/builds" },
+    "thresholds": { "$ref": "#/$defs/thresholds" }
   },
   "$defs": {
     "product": {
@@ -43,12 +44,37 @@
     },
     "sources": {
       "type": "object",
-      "description": "Named context artifacts Pickled can inject or point agents toward.",
+      "description": "Named context artifacts, keyed by id. Each declares exactly one kind: url, path, or codebase.",
       "additionalProperties": {
-        "type": "string",
-        "minLength": 1,
-        "description": "A URL or local file path.",
-        "examples": ["https://docs.example.com/llms.txt", "./README.md"]
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "A fetched URL source.",
+            "examples": ["https://docs.example.com/llms.txt"]
+          },
+          "path": {
+            "type": "string",
+            "description": "A local file source.",
+            "examples": ["./README.md"]
+          },
+          "codebase": {
+            "type": "string",
+            "description": "A glob over a code tree, loaded as one source.",
+            "examples": ["./src/**/*.ts"]
+          },
+          "exclude": {
+            "type": "array",
+            "description": "codebase only: globs to exclude.",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "maxBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "codebase only: max total bytes loaded."
+          }
+        }
       }
     },
     "agent": {
@@ -58,8 +84,7 @@
       "properties": {
         "provider": {
           "enum": ["claude-code", "codex-cli", "anthropic", "openai"],
-          "description": "Agent provider or interface to run.",
-          "examples": ["claude-code"]
+          "description": "Agent provider or interface to run."
         },
         "model": {
           "type": "string",
@@ -102,196 +127,270 @@
         },
         "headers": {
           "type": "object",
-          "description": "Optional HTTP headers for the MCP server. ${VAR} values are expanded from the environment by the loader.",
-          "additionalProperties": {
-            "type": "string",
-            "examples": ["Bearer ${DOCS_TOKEN}"]
-          }
+          "description": "Optional HTTP headers. ${VAR} values are expanded from the environment by the loader.",
+          "additionalProperties": { "type": "string" }
         }
       }
     },
-    "accessPath": {
+    "context": {
       "type": "object",
-      "required": ["source", "tools"],
+      "required": ["mode"],
       "additionalProperties": false,
+      "description": "How a source reaches the agent. The loader enforces per-mode rules (memory: no source/servers; inject: source required; web: source optional; mcp: servers required).",
       "properties": {
+        "mode": {
+          "enum": ["memory", "inject", "web", "mcp"],
+          "description": "memory (prior knowledge), inject (source content placed in the prompt), web (agent uses web tools), mcp (agent uses MCP servers)."
+        },
         "source": {
           "type": "string",
           "minLength": 1,
-          "description": "A registered source id, or \"none\" for no context.",
-          "examples": ["none", "llms"]
-        },
-        "tools": {
-          "enum": ["none", "web", "mcp"],
-          "description": "How the agent reaches context: none injects the source, web uses web search, mcp uses the declared MCP servers."
+          "description": "A registered source id."
         },
         "servers": {
           "type": "object",
-          "description": "MCP servers for this access path. Required when tools is mcp, forbidden otherwise.",
+          "description": "mcp only: MCP servers, keyed by label.",
           "minProperties": 1,
           "additionalProperties": { "$ref": "#/$defs/mcpServer" }
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": { "tools": { "const": "mcp" } },
-            "required": ["tools"]
-          },
-          "then": { "required": ["servers"] },
-          "else": { "not": { "required": ["servers"] } }
-        }
-      ]
+      }
     },
-    "access": {
+    "contexts": {
       "type": "object",
-      "description": "Named paths that say how an agent reaches context: a (source, tools) pair.",
+      "description": "Named delivery paths: how (or whether) a source reaches the agent.",
       "minProperties": 1,
-      "additionalProperties": { "$ref": "#/$defs/accessPath" }
+      "additionalProperties": { "$ref": "#/$defs/context" }
     },
-    "checks": {
+    "match": {
       "type": "object",
-      "description": "The answer contract for an answer task. At least one check is required.",
+      "description": "Deterministic substring match. Satisfied when all allOf and at least one anyOf appear. Declare at least one side.",
       "additionalProperties": false,
       "properties": {
-        "mustMention": {
+        "allOf": {
           "type": "array",
           "minItems": 1,
-          "description": "Case-sensitive substrings that must all appear in the answer.",
+          "description": "Substrings that must all appear.",
           "items": { "type": "string", "minLength": 1 }
         },
-        "mustMentionOneOf": {
+        "anyOf": {
           "type": "array",
           "minItems": 1,
-          "description": "Groups where the answer must include at least one value from each group.",
-          "items": {
-            "type": "object",
-            "required": ["label", "values"],
-            "additionalProperties": false,
-            "properties": {
-              "label": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Human-readable name for this one-of group, shown in receipts.",
-                "examples": ["package manager"]
-              },
-              "values": {
-                "type": "array",
-                "minItems": 1,
-                "description": "Candidate substrings; at least one must appear.",
-                "items": { "type": "string", "minLength": 1 }
-              }
-            }
-          }
-        },
-        "mustNotMention": {
-          "type": "array",
-          "minItems": 1,
-          "description": "Case-sensitive substrings that must not appear in the answer.",
+          "description": "Substrings of which at least one must appear.",
           "items": { "type": "string", "minLength": 1 }
         }
       },
-      "anyOf": [
-        { "required": ["mustMention"] },
-        { "required": ["mustMentionOneOf"] },
-        { "required": ["mustNotMention"] }
-      ]
+      "anyOf": [{ "required": ["allOf"] }, { "required": ["anyOf"] }]
+    },
+    "matchEntry": {
+      "type": "object",
+      "required": ["statement", "match"],
+      "additionalProperties": false,
+      "properties": {
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable statement shown in receipts."
+        },
+        "match": { "$ref": "#/$defs/match" }
+      }
+    },
+    "facts": {
+      "type": "object",
+      "description": "Reusable product truths an answer must cover (coverage axis), keyed by id.",
+      "additionalProperties": { "$ref": "#/$defs/matchEntry" }
+    },
+    "misstatements": {
+      "type": "object",
+      "description": "Reusable wrong claims an answer must not make (precision axis), keyed by id.",
+      "additionalProperties": { "$ref": "#/$defs/matchEntry" }
     },
     "examples": {
       "type": "object",
-      "description": "Offline sample answers checked by pickled test (no model calls).",
+      "description": "Offline sample answers checked by pickled test (no model calls). Required when a question declares rejects.",
       "additionalProperties": false,
       "properties": {
         "pass": {
           "type": "array",
-          "description": "Answers that should satisfy every check.",
+          "description": "Answers that should score YES.",
           "items": { "type": "string", "minLength": 1 }
         },
         "fail": {
           "type": "array",
-          "description": "Answers that should fail at least one check.",
+          "description": "Answers that should not score YES (and must trip a rejected misstatement when rejects is set).",
           "items": { "type": "string", "minLength": 1 }
         }
       }
+    },
+    "question": {
+      "type": "object",
+      "required": ["id", "question", "agents", "contexts"],
+      "additionalProperties": false,
+      "description": "A source-legibility probe: scored on fact coverage (expects) and misstatement rejection (rejects). At least one of expects/rejects is required.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable task id used in reports and CLI filters (--task)."
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The question asked of the agent."
+        },
+        "agents": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Agent ids declared in the top-level agents map.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "contexts": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Context ids declared in the top-level contexts map.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "expects": {
+          "type": "array",
+          "description": "Fact ids the answer must cover.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "rejects": {
+          "type": "array",
+          "description": "Misstatement ids the answer must not make (hard veto).",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "examples": { "$ref": "#/$defs/examples" }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "description": "Source-legibility probes.",
+      "items": { "$ref": "#/$defs/question" }
     },
     "workspace": {
       "type": "object",
       "required": ["path"],
       "additionalProperties": false,
-      "description": "Build tasks only: the throwaway fixture the agent edits.",
+      "description": "The throwaway fixture a build edits.",
       "properties": {
         "path": {
           "type": "string",
           "minLength": 1,
-          "description": "Fixture directory the agent edits, relative to pickled.yml.",
-          "examples": ["./fixtures/react-app"]
+          "description": "Fixture directory the agent edits, relative to pickled.yml."
         },
         "setup": {
           "type": "array",
           "description": "Commands run to prepare the fixture before the agent.",
-          "items": { "type": "string", "minLength": 1 },
-          "examples": [["bun install --frozen-lockfile"]]
+          "items": { "type": "string", "minLength": 1 }
         }
       }
     },
-    "task": {
+    "command": {
       "type": "object",
-      "required": ["id", "prompt", "agents", "access"],
+      "required": ["run"],
       "additionalProperties": false,
-      "description": "An intent a developer cares about. Answer tasks prove success with text checks; build tasks edit a workspace and run verify. Field separation (checks vs workspace/verify) is enforced by the loader.",
       "properties": {
-        "id": {
+        "name": {
           "type": "string",
           "minLength": 1,
-          "description": "Stable task id used in reports and CLI filters (--task).",
-          "examples": ["install"]
+          "description": "Optional receipt label; defaults to run."
         },
-        "prompt": {
+        "run": {
           "type": "string",
           "minLength": 1,
-          "description": "Prompt for the answer task, or the work to build.",
-          "examples": ["How do I install my-product?"]
+          "description": "Shell command. Passes on exit 0."
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "required": ["failToPass"],
+      "additionalProperties": false,
+      "description": "SWE-bench-style verifier: failToPass must fail on the untouched fixture and pass after; passToPass must pass before and after.",
+      "properties": {
+        "failToPass": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/command" }
         },
-        "kind": {
-          "enum": ["answer", "build"],
-          "description": "How success is proven. \"answer\" (default): deterministic text checks. \"build\": edit the workspace and pass verify commands.",
-          "examples": ["answer", "build"]
+        "passToPass": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/command" }
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": ["id", "goal", "agents", "contexts", "workspace", "verifier"],
+      "additionalProperties": false,
+      "description": "An implementation proof: the agent edits a workspace and the verifier scores it, k/n over trials.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The work the agent must do."
         },
         "agents": {
           "type": "array",
           "minItems": 1,
-          "description": "Agent names declared in the top-level agents map.",
           "items": { "type": "string", "minLength": 1 }
         },
-        "access": {
+        "contexts": {
           "type": "array",
           "minItems": 1,
-          "description": "Access path names declared in the top-level access map.",
           "items": { "type": "string", "minLength": 1 }
-        },
-        "checks": { "$ref": "#/$defs/checks" },
-        "examples": { "$ref": "#/$defs/examples" },
-        "workspace": { "$ref": "#/$defs/workspace" },
-        "verify": {
-          "type": "array",
-          "minItems": 1,
-          "description": "Build tasks only: commands that must pass after the agent stops.",
-          "items": { "type": "string", "minLength": 1 },
-          "examples": [["bun test", "bun run typecheck"]]
         },
         "trials": {
           "type": "integer",
           "minimum": 1,
-          "description": "Build tasks only: independent trials per cell (default 1).",
-          "examples": [3]
+          "description": "Independent trials per cell (default 1)."
+        },
+        "requires": {
+          "type": "array",
+          "description": "Fact ids linked for diagnostic reporting.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "workspace": { "$ref": "#/$defs/workspace" },
+        "verifier": { "$ref": "#/$defs/verifier" },
+        "referenceSolution": {
+          "type": "object",
+          "required": ["patch"],
+          "additionalProperties": false,
+          "description": "Optional positive control: a patch that must pass the verifier on the baseline.",
+          "properties": {
+            "patch": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Path to a patch file."
+            }
+          }
         }
       }
     },
-    "tasks": {
+    "builds": {
       "type": "array",
-      "description": "Tasks for agents: answer tasks (text checks) and build tasks (edit a workspace, run verify).",
-      "minItems": 1,
-      "items": { "$ref": "#/$defs/task" }
+      "description": "Implementation proofs.",
+      "items": { "$ref": "#/$defs/build" }
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "Per-kind run gates. Omit a key for no gate.",
+      "additionalProperties": false,
+      "properties": {
+        "questions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Minimum questions score (1-100) for pickled check to pass."
+        },
+        "builds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Minimum builds score (1-100) for pickled build to pass."
+        }
+      }
     }
   }
 }

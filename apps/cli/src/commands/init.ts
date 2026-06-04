@@ -4,14 +4,16 @@ import chalk from "chalk";
 const TEMPLATE = `# yaml-language-server: $schema=https://pickled.dev/schema/pickled.schema.json
 # pickled.yml - does an agent understand your product?
 
+schemaVersion: 2
+
 product:
   name: your-product
   description: A short description of what your product does
 
 # The public context an outside agent can read about your product.
 sources:
-  readme: ./README.md
-  # docs: https://your-site.example/llms.txt
+  readme: { path: ./README.md }
+  # docs: { url: https://your-site.example/llms.txt }
 
 # The agent that answers. claude-code needs the Claude Code CLI installed.
 agents:
@@ -19,31 +21,49 @@ agents:
     provider: claude-code
     model: claude-haiku-4-5
 
-# Named context paths. Each pairs a source with a tool mode. The point is
-# to compare them: run the same task down each path and see which one
-# gets the agent to the right answer.
-access:
-  memory: { source: none, tools: none } # no context, model memory only
-  given_readme: { source: readme, tools: none } # your README injected
+# Named contexts: how a source reaches the agent. The point is to compare
+# them - run the same question down each and see which path gets it right.
+contexts:
+  memory: { mode: memory } # prior knowledge only, nothing injected
+  from_readme: { mode: inject, source: readme } # your README placed in context
 
-# Tasks are the unit of work. An answer task (the default) asks a question and
-# scores the answer with checks. A build task (kind: build) has the agent edit
-# a workspace and runs verify commands; see docs.pickled.dev/pickled-yml.
-tasks:
+# Reusable product truths an answer must cover (the coverage axis).
+facts:
+  install_command:
+    statement: The product is installed with its documented command.
+    match:
+      allOf: ["install"] # edit: a substring a correct answer must contain
+
+# Reusable wrong claims an answer must not make (the precision axis).
+# misstatements:
+#   deprecated_path:
+#     statement: The answer recommends a deprecated install path.
+#     match:
+#       anyOf: ["old-deprecated-command"]
+
+# Questions probe whether the agent can surface the facts from a context.
+questions:
   - id: getting-started
-    prompt: How do I install and set up this product?
+    question: How do I install and set up this product?
     agents: [claude]
-    access: [memory, given_readme]
-    checks:
-      # Edit these: phrases a correct answer must (or must not) contain.
-      mustMention: [install]
-      # mustNotMention: [deprecated-thing]
-      # mustMentionOneOf:
-      #   - label: names the entry point
-      #     values: [quickstart, getting-started]
+    contexts: [memory, from_readme]
+    expects: [install_command]
+    # rejects: [deprecated_path]   # if set, examples.pass + examples.fail are required
 
-# Optional: fail CI if the overall score falls below this.
-# threshold: 80
+# Builds prove the agent can implement with your product (optional).
+# builds:
+#   - id: smoke
+#     goal: Add a basic usage of the product to the fixture.
+#     agents: [claude]
+#     contexts: [from_readme]
+#     workspace: { path: ./fixtures/app, setup: [npm install] }
+#     verifier:
+#       failToPass: [{ run: npm test }]
+
+# Optional per-kind gates: fail CI if the score falls below these (1-100).
+# thresholds:
+#   questions: 80
+#   builds: 80
 `;
 
 export async function init(targetPath: string): Promise<void> {

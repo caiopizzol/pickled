@@ -1,180 +1,181 @@
 import { describe, expect, test } from "bun:test";
-import type { CheckConfig, ResolvedDocSource } from "@pickled-dev/config";
+import type {
+  Config,
+  Context,
+  ResolvedSource,
+  TargetCategory,
+} from "@pickled-dev/config";
 import { resolveCellRuntime } from "../src/cell-runtime.js";
 
-const DOCS: ResolvedDocSource[] = [
+const SOURCES: ResolvedSource[] = [
   {
     id: "llms",
+    type: "url",
     source: "https://x.dev/llms.txt",
     content: "DOC CONTENT",
     name: "llms.txt",
-    type: "url",
   },
 ];
 
-function config(provider: string, category: "cli" | "api"): CheckConfig {
+function config(provider: string, category: TargetCategory): Config {
   return {
-    tool: { name: "t", description: "d" },
-    targets: { agent: { category, provider, model: "m" } },
-    toolsets: {
-      none: {},
-      web: { webSearch: true, webFetch: true },
-      websearch: { webSearch: true },
-      mcp: { mcpServers: { mintlify: { type: "http", url: "https://x/mcp" } } },
-      empty: {},
-    },
-    docs: { sources: { llms: "./llms.txt" } },
-    scenarios: [],
+    product: { name: "t", description: "d" },
+    sources: { llms: { kind: "url", url: "https://x.dev/llms.txt" } },
+    agents: { agent: { category, provider, model: "m" } },
+    contexts: {},
+    facts: {},
+    misstatements: {},
+    questions: [],
+    builds: [],
+    thresholds: {},
   };
 }
 
 function resolve(args: {
   provider: string;
-  category: "cli" | "api";
-  source: string | null;
-  toolset: string;
+  category: TargetCategory;
+  context: Context;
 }) {
   return resolveCellRuntime({
-    interfaceName: "agent",
-    sourceName: args.source,
-    toolsetName: args.toolset,
+    agent: "agent",
+    context: args.context,
     config: config(args.provider, args.category),
-    docs: DOCS,
-    requiredSources: ["llms"],
-    contextConfig: { allowedTools: ["Read"] },
+    sources: SOURCES,
+    kind: "question",
   });
 }
 
 describe("resolveCellRuntime", () => {
-  test("tools:none + source injects docs and passes the context", () => {
+  test("memory: no injection, no provenance, bare prompt context", () => {
     const rt = resolve({
       provider: "claude-code",
       category: "cli",
-      source: "llms",
-      toolset: "none",
+      context: { mode: "memory" },
     });
-    expect(rt.isInjecting).toBe(true);
-    expect(rt.cellDocs.map((d) => d.id)).toEqual(["llms"]);
-    expect(rt.surfaceIds).toEqual(["llms"]);
-    expect(rt.requiredInCell).toEqual(["llms"]);
-    expect(rt.cellContext).toEqual({ allowedTools: ["Read"] });
-    expect(rt.discoveryHint).toBeUndefined();
+    expect(rt.promptContext).toEqual({ kind: "question", mode: "memory" });
+    expect(rt.provenance.hasMatchers).toBe(false);
     expect(rt.runOptions.restrictBuiltinTools).toBeUndefined();
+    expect(rt.sourceId).toBeNull();
   });
 
-  test("tools:web + source does not inject docs and returns a discovery hint", () => {
+  test("inject: places the source in the prompt context, no provenance", () => {
     const rt = resolve({
       provider: "claude-code",
       category: "cli",
-      source: "llms",
-      toolset: "web",
+      context: { mode: "inject", source: "llms" },
     });
-    expect(rt.isInjecting).toBe(false);
-    expect(rt.cellDocs).toEqual([]);
-    expect(rt.requiredInCell).toEqual([]);
-    expect(rt.cellContext).toBeUndefined();
-    expect(rt.discoveryHint).toEqual({ sourceHint: "https://x.dev/llms.txt" });
+    expect(rt.promptContext.kind).toBe("question");
+    expect(rt.promptContext.mode).toBe("inject");
+    if (rt.promptContext.mode === "inject") {
+      expect(rt.promptContext.docs.map((d) => d.id)).toEqual(["llms"]);
+    }
+    expect(rt.provenance.hasMatchers).toBe(false);
+    expect(rt.sourceId).toBe("llms");
   });
 
-  test("Claude web scopes built-ins to WebSearch/WebFetch", () => {
+  test("web (claude-code): scopes built-ins, names the discovery hint, sets provenance", () => {
     const rt = resolve({
       provider: "claude-code",
       category: "cli",
-      source: "none",
-      toolset: "web",
+      context: { mode: "web", source: "llms" },
     });
+    expect(rt.promptContext.mode).toBe("web");
+    if (rt.promptContext.mode === "web") {
+      expect(rt.promptContext.sourceHint).toBe("https://x.dev/llms.txt");
+    }
     expect(rt.runOptions.restrictBuiltinTools).toEqual([
       "WebSearch",
       "WebFetch",
     ]);
     expect(rt.runOptions.webTools).toBeUndefined();
     expect(rt.provenance.expectedLabels).toEqual(["WebSearch", "WebFetch"]);
+    expect(rt.provenance.match("WebSearch")).toBe(true);
   });
 
-  test("Claude MCP disables built-ins and wires the servers", () => {
+  test("web (open discovery, no source): sourceHint null", () => {
     const rt = resolve({
       provider: "claude-code",
       category: "cli",
-      source: "none",
-      toolset: "mcp",
+      context: { mode: "web" },
     });
-    expect(rt.runOptions.restrictBuiltinTools).toEqual([]);
-    expect(rt.targetConfig.mcpServers).toBeDefined();
+    if (rt.promptContext.mode === "web") {
+      expect(rt.promptContext.sourceHint).toBeNull();
+    }
+    expect(rt.sourceId).toBeNull();
+  });
+
+  test("web (openai server): wires webTools, web_search provenance, target untouched", () => {
+    const rt = resolve({
+      provider: "openai",
+      category: "api",
+      context: { mode: "web", source: "llms" },
+    });
+    expect(rt.runOptions.webTools).toEqual({ search: true });
+    expect(rt.runOptions.restrictBuiltinTools).toBeUndefined();
+    expect(rt.provenance.expectedLabels).toEqual(["web_search"]);
+  });
+
+  test("mcp (claude-code): wires servers + provenance, scopes built-ins", () => {
+    const rt = resolve({
+      provider: "claude-code",
+      category: "cli",
+      context: {
+        mode: "mcp",
+        servers: { mintlify: { type: "http", url: "https://x/mcp" } },
+      },
+    });
+    expect(rt.target.mcpServers).toBeDefined();
     expect(rt.provenance.expectedLabels).toEqual(["mcp__mintlify__*"]);
     expect(rt.provenance.match("mcp__mintlify__search")).toBe(true);
     expect(rt.provenance.match("WebSearch")).toBe(false);
   });
 
-  test("server-side web (openai) wires webTools and the web_search label, target config untouched", () => {
+  test("mcp (openai): wires mcpTools, normalized provenance", () => {
     const rt = resolve({
       provider: "openai",
       category: "api",
-      source: "none",
-      toolset: "websearch",
-    });
-    expect(rt.runOptions.webTools).toEqual({ search: true });
-    expect(rt.runOptions.restrictBuiltinTools).toEqual([]);
-    expect(rt.provenance.expectedLabels).toEqual(["web_search"]);
-    // server-web targets pass baseTargetConfig through unchanged
-    expect(rt.targetConfig).toBe(rt.baseTargetConfig);
-  });
-
-  test("server API webFetch-only throws (no fetch primitive on the API)", () => {
-    const cfg = config("openai", "api");
-    cfg.toolsets = { fetchonly: { webFetch: true } };
-    expect(() =>
-      resolveCellRuntime({
-        interfaceName: "agent",
-        sourceName: "none",
-        toolsetName: "fetchonly",
-        config: cfg,
-        docs: DOCS,
-        requiredSources: [],
-        contextConfig: {},
-      }),
-    ).toThrow(/requires webSearch: true/);
-  });
-
-  test("mixed web + MCP in one toolset throws", () => {
-    const cfg = config("claude-code", "cli");
-    cfg.toolsets = {
-      mixed: {
-        webSearch: true,
-        mcpServers: { m: { type: "http", url: "https://x/mcp" } },
+      context: {
+        mode: "mcp",
+        servers: { mintlify: { type: "http", url: "https://x/mcp" } },
       },
-    };
-    expect(() =>
-      resolveCellRuntime({
-        interfaceName: "agent",
-        sourceName: "none",
-        toolsetName: "mixed",
-        config: cfg,
-        docs: DOCS,
-        requiredSources: [],
-        contextConfig: {},
-      }),
-    ).toThrow(/mixes webSearch\/webFetch with mcpServers/);
+    });
+    expect(rt.runOptions.mcpTools?.servers.mintlify).toBeDefined();
+    expect(rt.provenance.match("mcp__mintlify__search")).toBe(true);
   });
 
-  test("MCP on an unsupported provider throws before the target runs", () => {
+  test("web on codex throws before any run", () => {
     expect(() =>
       resolve({
         provider: "codex-cli",
         category: "cli",
-        source: "none",
-        toolset: "mcp",
+        context: { mode: "web", source: "llms" },
       }),
-    ).toThrow(/MCP\) is implemented on claude-code and openai/);
+    ).toThrow(/mode "web" is not supported on provider "codex-cli"/);
   });
 
-  test("a toolset with no recognized shape throws", () => {
+  test("mcp on codex throws", () => {
     expect(() =>
       resolve({
-        provider: "claude-code",
+        provider: "codex-cli",
         category: "cli",
-        source: "none",
-        toolset: "empty",
+        context: {
+          mode: "mcp",
+          servers: { m: { type: "http", url: "https://x/mcp" } },
+        },
       }),
-    ).toThrow(/defines no runtime shape/);
+    ).toThrow(/mode "mcp" is not supported on provider "codex-cli"/);
+  });
+
+  test("mcp on anthropic throws (web-only API)", () => {
+    expect(() =>
+      resolve({
+        provider: "anthropic",
+        category: "api",
+        context: {
+          mode: "mcp",
+          servers: { m: { type: "http", url: "https://x/mcp" } },
+        },
+      }),
+    ).toThrow(/mode "mcp" is not supported on provider "anthropic"/);
   });
 });

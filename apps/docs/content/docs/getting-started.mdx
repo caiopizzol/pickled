@@ -15,36 +15,44 @@ This writes a starter `pickled.yml` in the current directory.
 
 ## The smallest config
 
-A config needs a `product`, at least one `agent`, one named `access` path, and one `task`. An answer task (the default) carries at least one check.
+A config needs `schemaVersion: 2`, a `product`, at least one `agent`, one named `context`, and one `question` or `build`. A question carries at least one `expects` fact or `rejects` misstatement.
 
 ```yaml
+schemaVersion: 2
+
 product:
   name: my-product
   description: short one-liner about what your product does
 
 sources:
-  readme: ./README.md
+  readme: { path: ./README.md }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_readme: { source: readme, tools: none }
+contexts:
+  from_readme: { mode: inject, source: readme }
 
-tasks:
+facts:
+  install_command:
+    statement: my-product installs with bunx my-product.
+    match:
+      allOf: ["bunx my-product"]
+
+questions:
   - id: install
-    prompt: How do I install my-product?
+    question: How do I install my-product?
     agents: [quick]
-    access: [given_readme]
-    checks:
-      mustMention: ["bunx my-product"]
+    contexts: [from_readme]
+    expects: [install_command]
 
-threshold: 80
+thresholds:
+  questions: 80
 ```
 
-`threshold` is optional. Set it to make the run pass or fail on the overall score; omit it to see the score with no verdict.
+`thresholds` is optional. Set `thresholds.questions` to make `pickled check` pass or fail on the score; omit it to see the score with no verdict.
 
 ## Preview the run
 
@@ -60,74 +68,74 @@ bunx @pickled-dev/cli check . --plan
 bunx @pickled-dev/cli check .
 ```
 
-Pickled spawns the agent, injects the registered source, asks the question, and checks the answer:
+Pickled spawns the agent, injects the registered source, asks the question, and scores the answer against the facts:
 
 ```
-Task: install
-  ✓ Well grounded (100%)
+Task: How do I install my-product?
+  [quick · from_readme] ✓ Well grounded 1/1
 
 Overall: 100 / 100 · threshold 80 · run passes
-Every answer met its checks.
+Every question met its checks.
 ```
 
 ## Compare context paths
 
-The point of pickled is the comparison. Add a no-context path and run the same task down both:
+The point of pickled is the comparison. Add a memory context and run the same question down both:
 
 ```yaml
-access:
-  memory: { source: none, tools: none } # model memory only
-  given_readme: { source: readme, tools: none } # your README injected
+contexts:
+  memory: { mode: memory } # model memory only
+  from_readme: { mode: inject, source: readme } # your README injected
 
-tasks:
+questions:
   - id: install
-    prompt: How do I install my-product?
+    question: How do I install my-product?
     agents: [quick]
-    access: [memory, given_readme]
-    checks:
-      mustMention: ["bunx my-product"]
+    contexts: [memory, from_readme]
+    expects: [install_command]
 ```
 
-Now `pickled check .` runs two cells. If `memory` fails and `given_readme` passes, your README is doing the work. If `memory` already passes, the model knew it without your docs. If `given_readme` fails, the answer is not in the source you registered: fix the context.
+Now `pickled check .` runs two cells. If `memory` fails and `from_readme` passes, your README is doing the work. If `memory` already passes, the model knew it without your docs. If `from_readme` fails, the answer is not in the source you registered: fix the context.
 
 ## Reach the live site with tools
 
-Add a `web` access path to make the agent discover the answer instead of reading injected content:
+Add a `web` context to make the agent discover the answer instead of reading injected content:
 
 ```yaml
-access:
-  web_open: { source: none, tools: web }
+contexts:
+  web_open: { mode: web }
 ```
 
 A `web` (or `mcp`) cell that answers without invoking a tool is vetoed to `NO`: model memory does not count as evidence for a tool path.
 
 ## Score example answers offline
 
-`pickled test` scores `examples.pass` / `examples.fail` strings against a task's checks with zero model calls, so you can catch brittle checks before a paid run:
+`pickled test` scores a question's `examples.pass` / `examples.fail` strings against its fact contract with zero model calls, so you can catch a brittle contract before a paid run:
 
 ```bash
 bunx @pickled-dev/cli test .
 ```
 
-## Build tasks
+## Builds
 
-The checks above score an agent's *answer*. A build task instead has the agent *do the work*: it edits a throwaway workspace, and you score the result with `verify` commands. Set `kind: build`, declare a `workspace` and `verify`, and run it with `pickled build`:
+The facts above score an agent's *answer*. A build instead has the agent *do the work*: it edits a throwaway workspace, and you score the result with a `verifier`. Declare a `workspace` and `verifier`, and run it with `pickled build`:
 
 ```yaml
-tasks:
+builds:
   - id: add-endpoint
-    kind: build
-    prompt: Add a health-check endpoint using my-product.
+    goal: Add a health-check endpoint using my-product.
     agents: [quick]
-    access: [given_readme]
+    contexts: [from_readme]
     trials: 3
     workspace:
       path: ./fixtures/app
       setup: [bun install]
-    verify: [bun test]
+    verifier:
+      failToPass:
+        - { run: bun test }
 ```
 
-Each `(agent × access)` cell runs `trials` times in a fresh workspace; the result is `k/n`. Build tasks run on edit-capable CLI agents (`claude-code`, `codex-cli`) and forbid `checks`/`examples` (their contract is `verify`). See the [pickled.yml reference](/pickled-yml) for the full build contract.
+Each `(agent × context)` cell runs `trials` times in a fresh workspace; the result is `k/n`. Builds run on edit-capable CLI agents (`claude-code`, `codex-cli`). The `failToPass` commands must fail on the untouched fixture and pass after the agent. See the [pickled.yml reference](/pickled-yml) for the full build contract.
 
 ## Next steps
 

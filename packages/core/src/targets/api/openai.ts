@@ -4,8 +4,7 @@ import type {
   TargetCategory,
 } from "@pickled-dev/config";
 import OpenAI from "openai";
-import { buildCitationPrompt } from "../citation-prompt.js";
-import { buildDiscoveryPrompt } from "../discovery-prompt.js";
+import { buildSystemPrompt } from "../prompt.js";
 import type {
   ResponseEntry,
   RunOptions,
@@ -14,13 +13,12 @@ import type {
 } from "../types.js";
 
 /**
- * OpenAI Responses API target. Sends registered sources as controlled
- * context to the Responses API directly. Distinct from CLI targets: no
- * workspace, no Agent SDK orchestration. The model sees the citation
- * prompt as `instructions`, the scenario prompt as `input`, and is
- * expected to return its answer with a `## Sources` section.
+ * OpenAI Responses API target. Answers via the Responses API directly: no
+ * workspace, no Agent SDK orchestration. The system prompt (instructions)
+ * comes from the run's prompt context (memory / inject / web / mcp discovery);
+ * there is no `## Sources` citation contract.
  *
- * Toolset support today: `none`, `web`, and `mcp`.
+ * Context modes today: `memory`, `inject`, `web`, and `mcp`.
  *
  * - `web` cells (`options.webTools.search`): passes the server-side
  *   `web_search` tool to `responses.create` and switches to the
@@ -54,8 +52,7 @@ export class OpenAIApiTarget implements TargetRunner {
   }
 
   async run(prompt: string, options: RunOptions): Promise<TargetResult> {
-    const { tool, docs, requiredSources, discovery, webTools, mcpTools } =
-      options;
+    const { tool, promptContext, webTools, mcpTools } = options;
 
     if (!this.config.model) {
       // Defense in depth: the loader rejects API targets without a model,
@@ -66,9 +63,7 @@ export class OpenAIApiTarget implements TargetRunner {
       );
     }
 
-    const instructions = discovery
-      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
-      : buildCitationPrompt(tool, docs, requiredSources);
+    const instructions = buildSystemPrompt(tool, promptContext);
     const client = this.clientFactory();
 
     const requestTools: Array<Record<string, unknown>> = [];
