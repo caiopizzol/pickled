@@ -1,7 +1,23 @@
-// Target categories for different LLM interaction modes
-export type TargetCategory = "api" | "cli" | "ide";
+/**
+ * The internal domain model for v2: the validated, defaulted, normalized shape
+ * the runners and reporter consume. It is deliberately distinct from the public
+ * YAML shape (public-types.ts, what users write). After the resolver in
+ * transform.ts runs, optionals are filled and illegal states are gone, so core
+ * never has to ask "did validation fill this in?":
+ * - Command.name defaults to its `run`.
+ * - Build.trials defaults to 1; Build.requires defaults to [].
+ * - Question.expects / rejects default to [].
+ * - Verifier.passToPass defaults to [].
+ * - Workspace.setup defaults to [].
+ * - Context is a discriminated union; each mode carries exactly its fields.
+ *
+ * The v2 nouns are canonical; there is no v1 scenario/toolset/expected model
+ * behind this.
+ */
 
-// Providers by category
+// ---- Execution layer (consumed by the target adapters in core) ----
+
+export type TargetCategory = "api" | "cli" | "ide";
 export type ApiProvider = "anthropic" | "openai" | "google";
 export type CliProvider = "claude-code" | "codex-cli" | "amazon-q";
 export type IdeProvider = "cursor" | "copilot" | "windsurf";
@@ -15,372 +31,175 @@ export interface McpServerConfig {
 }
 
 /**
- * Target definition - reusable LLM interface configuration
- *
- * For CLI targets (claude-code), these options map to the Claude Agent SDK Options:
- * @see https://platform.claude.com/docs/en/agent-sdk/typescript
+ * Resolved agent runtime config the target adapters consume (createTarget).
+ * The public `agents` map resolves to this. Named `Target` because it is the
+ * adapter-facing execution config; the product noun is "agent".
  */
 export interface Target {
   category: TargetCategory;
   provider: string;
-
-  /**
-   * Model to use. For claude-code, accepts:
-   * - Aliases: "sonnet", "opus", "haiku", "sonnet[1m]", "opusplan"
-   * - Full names: "claude-sonnet-4-5-20250929", "claude-opus-4-20250514"
-   * @default "sonnet"
-   */
   model?: string;
-
-  // === CLI-specific options (claude-code via Agent SDK) ===
-
-  /**
-   * List of tool names that are allowed.
-   * @see SDK Options.allowedTools
-   */
+  // CLI / Agent-SDK options
   allowedTools?: string[];
-
-  /**
-   * List of tool names that are disallowed.
-   * @see SDK Options.disallowedTools
-   */
   disallowedTools?: string[];
-
-  /**
-   * MCP server configurations.
-   * @see SDK Options.mcpServers
-   */
   mcpServers?: Record<string, McpServerConfig>;
-
-  /**
-   * Permission mode for the session.
-   * @see SDK Options.permissionMode
-   */
   permissionMode?: "default" | "acceptEdits" | "bypassPermissions" | "plan";
-
-  /**
-   * Maximum number of conversation turns.
-   * @see SDK Options.maxTurns
-   */
   maxTurns?: number;
-
-  /**
-   * Maximum tokens for the thinking/reasoning process.
-   * @see SDK Options.maxThinkingTokens
-   */
   maxThinkingTokens?: number;
-
-  /**
-   * Maximum budget in USD for the query.
-   * @see SDK Options.maxBudgetUsd
-   */
   maxBudgetUsd?: number;
-
-  // === API-specific options (future) ===
-
-  /** Temperature for API calls */
+  // API options
   temperature?: number;
-
-  /** Max tokens for API calls */
   maxTokens?: number;
-
-  // === IDE-specific options (future) ===
-
-  /** Whether to include workspace context */
+  // IDE options (future)
   workspaceContext?: boolean;
-
-  // === Pickled-specific ===
-
-  /** Per-target threshold for passing */
-  threshold?: number;
 }
 
-// Context definition - reusable capability configuration
-export interface Context {
-  allowedTools?: string[];
-  disallowedTools?: string[];
-  mcpServers?: Record<string, McpServerConfig>;
-}
+// ---- Sources ----
+
+export type SourceKind = "url" | "file" | "codebase";
 
 /**
- * Toolset profile. Names a tool configuration the matrix can iterate over.
- * `none` is the deterministic baseline cell (pickled injects sources; agent
- * has no tools). The `web` shape (`webSearch`/`webFetch` flags) runs on
- * Claude Code (client `WebSearch`/`WebFetch`), the Anthropic API target
- * (server-side `web_search`), and the OpenAI API target (server-side
- * `web_search`); the `mcp` shape (`mcpServers` map) runs on Claude Code
- * (Agent SDK native) and on the OpenAI API target (hosted-MCP on
- * `responses.create`, HTTP transports only). Pickled has no server-
- * specific knowledge (Context7 is a dogfood example, not a special case).
- * Other shapes (Firecrawl, native search on additional providers) are
- * recognized by the loader; their adapters land per release.
+ * A validated source declaration, discriminated by kind. The map key in
+ * `Config.sources` is the id; content is loaded separately into ResolvedSource.
  */
-export interface ToolsetConfig {
-  /** Reserved for future tool flags; `none` is `{}`. */
-  webSearch?: boolean;
-  webFetch?: boolean;
-  mcpServers?: Record<string, McpServerConfig>;
-}
+export type Source =
+  | { kind: "url"; url: string }
+  | { kind: "file"; path: string }
+  | { kind: "codebase"; path: string; exclude?: string[]; maxBytes?: number };
 
 /**
- * Matrix declaration on a scenario. Expands the scenario into one cell per
- * (interface × source × toolset) combination. Each cell becomes one
- * evaluation in the report.
+ * A loaded source: declaration plus fetched content, consumed by the adapters
+ * for injection. Field names match the former `ResolvedDocSource`
+ * (`type`/`source`) so the adapter layer changes only an import, not field
+ * access. `type` mirrors `Source.kind`; `source` is the origin location.
  */
-export interface ScenarioMatrix {
-  interfaces?: string[];
-  sources?: string[];
-  toolsets?: string[];
-  /**
-   * Explicit (source, toolset) cell pairs. When set, the runner iterates
-   * THESE pairs instead of the `sources × toolsets` cross-product (the
-   * fallback when this is absent). `source: null` keeps its legacy meaning
-   * (no source axis declared); the public `access` model compiles the
-   * no-context path to the string `"none"`, never null. The public schema's
-   * `access` list compiles to this.
-   */
-  accessPairs?: Array<{
-    access?: string;
-    source: string | null;
-    toolset: string;
-  }>;
-}
-
-/**
- * Deterministic substring checks the cell must satisfy. Each entry is a
- * literal substring of the agent's response. Strings only today; a regex
- * shape may follow.
- */
-export interface ExpectedChecks {
-  includes?: string[];
-  excludes?: string[];
-  /**
-   * Implementation-readiness groups. Each is scored with the SAME
-   * deterministic substring matcher as `includes`; the split is
-   * presentational so the reporter can say WHAT kind of comprehension
-   * failed (a missing `symbols` entry means the agent did not name the
-   * right API; a missing `options` entry means the agent did not name
-   * the required config field; etc.).
-   *
-   * These do NOT buy semantic grading. `constraints` is not "the agent
-   * understood the ordering rule"; it is "the agent's response contains
-   * the substring you declared as a constraint." Use the labels for
-   * diagnosis; do not claim more than substring presence in vendor docs.
-   *
-   * Back-compatible: omit any/all of these to score only `includes` /
-   * `excludes` exactly as before. See issue #19 for the design.
-   */
-  symbols?: string[];
-  paths?: string[];
-  options?: string[];
-  constraints?: string[];
-  /**
-   * One-of mention groups: each group is satisfied iff at least one of its
-   * `values` appears (substring). Contributes exactly +1 to the check total
-   * per group. Use when several answers are equally valid (e.g. multiple
-   * valid hook names). The public schema exposes this as
-   * `checks.mustMentionOneOf`.
-   */
-  mustMentionOneOf?: Array<{ label: string; values: string[] }>;
-}
-
-/**
- * Verifier sources are loaded at run time and surfaced side-by-side in the
- * report for HUMAN review only. They are never injected into the agent's
- * prompt unless they also appear in the cell's active source. They are
- * never LLM-judged.
- */
-export interface VerifierConfig {
-  sources?: string[];
-}
-
-// Scenario - a test case
-export interface Scenario {
-  name: string;
-  prompt: string;
-  target?: string; // Reference to named target
-  context?: string; // Reference to named context
-
-  /**
-   * Source IDs (from docs.sources) the answer must cite. Use `[]` to allow
-   * any registered source as a valid citation without requiring a specific
-   * one. Omit entirely to skip citation scoring (matrix scenarios that
-   * score on `expected` instead). At least one of `requiredSources`,
-   * `expected`, or `compareSurfaces` must be declared on the scenario.
-   * Non-none matrix cells skip citation scoring because the source is not
-   * injected, so they need `expected` regardless of whether `requiredSources`
-   * is also set.
-   */
-  requiredSources?: string[];
-
-  /**
-   * Compare-surfaces mode. Each entry is a list of source IDs forming
-   * one surface. The scenario runs once per declared surface, with only
-   * those sources visible to the agent. Per-surface results live in
-   * `ScenarioResult.surfaces[]`; the top-level evaluation fields are
-   * `null` when this is set.
-   */
-  compareSurfaces?: string[][];
-
-  /**
-   * Matrix declaration. When set, the scenario runs once per cell formed
-   * by (interfaces × sources × toolsets). Per-cell results live in
-   * `ScenarioResult.cells[]`; top-level evaluation fields are `null`.
-   */
-  matrix?: ScenarioMatrix;
-
-  /**
-   * Deterministic substring checks applied to the agent's response.
-   * Contributes to per-cell scoring alongside citation scoring.
-   */
-  expected?: ExpectedChecks;
-
-  /**
-   * Verifier configuration. Sources listed here are loaded at run time and
-   * surfaced side-by-side in the report for human review. Never injected
-   * into the agent's prompt; never LLM-judged.
-   */
-  verifiers?: VerifierConfig;
-
-  /**
-   * Sample answers for `pickled test` to score offline, with no model calls.
-   * Each `pass` string must satisfy the scenario's `expected` checks; each
-   * `fail` string must NOT (at least one check missing). Catches brittle or
-   * over-specific checks before a paid run. Only the deterministic `expected`
-   * contract is scored; citation/`requiredSources` is not, since an example
-   * has no source-injection context. `pass`/`fail` map to the public
-   * checks/examples model.
-   */
-  examples?: ScenarioExamples;
-
-  /**
-   * Task kind. "build" scenarios are run by the build runner (edit the
-   * workspace, run verify) instead of answer scoring; omitted or "answer" is
-   * the legacy answer path. Compiled from the public `tasks[].kind`. The build
-   * fields below are populated only for build scenarios and are inert until
-   * the runner is wired to consume them.
-   */
-  kind?: "answer" | "build";
-  /** Build scenarios only: the fixture the agent edits. */
-  workspace?: { path: string; setup?: string[] };
-  /** Build scenarios only: verification commands (the success contract). */
-  verify?: string[];
-  /** Build scenarios only: independent trials per cell (default 1). */
-  trials?: number;
-}
-
-export interface ScenarioExamples {
-  pass?: string[];
-  fail?: string[];
-}
-
-export type DocSourceType = "url" | "file" | "codebase";
-
-export interface DocSource {
-  content: string;
-  name: string;
-  type: DocSourceType;
-}
-
-/**
- * Object form of a docs.sources entry. Allows per-source audit metadata,
- * source-type selection, and codebase glob options alongside the file path
- * or URL. The plain string form (just the path) stays valid and is the
- * default for single-file or single-URL sources.
- */
-export interface DocSourceEntry {
-  path: string;
-  /**
-   * Source loader to use. Default (when omitted) is to auto-detect file vs
-   * URL based on the path prefix. Set explicitly to `codebase` to treat
-   * `path` as a glob and load every matching file as one logical source.
-   */
-  type?: "file" | "url" | "codebase";
-  /**
-   * Exclude patterns for `type: codebase` sources. Each entry is a glob
-   * applied AFTER the include glob in `path`. Ignored for other types.
-   */
-  exclude?: string[];
-  /**
-   * Maximum total concatenated content size in bytes for `type: codebase`
-   * sources. Defaults to 262144 (256 KB). Loading emits a warning to
-   * `onProgress` if exceeded; hard cap at 4194304 (4 MB) always throws.
-   * Ignored for other types.
-   */
-  maxBytes?: number;
-}
-
-export interface DocsConfig {
-  /**
-   * Named sources, keyed by ID. Value is either a file path / URL (string
-   * form) or a `DocSourceEntry` object.
-   */
-  sources: Record<string, string | DocSourceEntry>;
-}
-
-/** Canonical normalized form of a docs.sources entry. */
-export interface NormalizedDocSource {
-  path: string;
-}
-
-/** Normalize a string or object docs.sources entry to the canonical form. */
-export function normalizeDocSource(
-  value: string | DocSourceEntry,
-): NormalizedDocSource {
-  if (typeof value === "string") {
-    return { path: value };
-  }
-  return { path: value.path };
-}
-
-/** A loaded source with its registry ID and original location. */
-export interface ResolvedDocSource extends DocSource {
+export interface ResolvedSource {
   id: string;
+  type: SourceKind;
+  /** Human-readable label (filename, URL, or glob). */
+  name: string;
+  /** Origin: the URL or path it was loaded from. */
   source: string;
-  /**
-   * For `type: codebase` sources, the relative paths of every file the
-   * glob expanded to. Absent for file and URL sources.
-   */
+  content: string;
+  /** For codebase sources, the relative paths the glob expanded to. */
   matchedFiles?: string[];
 }
 
-// Matrix configuration for running scenarios across multiple targets/contexts
-export interface MatrixConfig {
-  target?: string[];
-  context?: string[];
+// ---- Matching ----
+
+/**
+ * Deterministic substring match. Satisfied iff every declared `allOf` entry is
+ * present AND, when `anyOf` is declared, at least one `anyOf` entry is present.
+ * Both stay optional: undefined means "no constraint on this side." They are
+ * intentionally NOT defaulted to [] - an empty `anyOf` would mean "one of
+ * nothing," which is never satisfiable. The validator requires at least one of
+ * the two to be declared.
+ */
+export interface Match {
+  allOf?: string[];
+  anyOf?: string[];
 }
 
-export interface CheckConfig {
-  tool: {
-    name: string;
-    description: string;
-  };
+/** A product truth: a human-readable statement plus the substrings that evidence it. */
+export interface Fact {
+  statement: string;
+  match: Match;
+}
 
-  // Named targets (reusable LLM interface definitions)
-  targets?: Record<string, Target>;
+/** A wrong claim: `statement` describes the error; `match` detects it. */
+export interface Misstatement {
+  statement: string;
+  match: Match;
+}
 
-  // Named contexts (reusable capability configurations) - future
-  contexts?: Record<string, Context>;
+// ---- Contexts (discriminated after validation) ----
 
-  // Matrix for running all scenarios across multiple targets/contexts - future
-  matrix?: MatrixConfig;
+/**
+ * A delivery path, fully resolved. Each mode carries exactly its fields, so
+ * core can switch on `mode` without optional-field guards.
+ */
+export type Context =
+  | { mode: "memory" }
+  | { mode: "inject"; source: string }
+  | { mode: "web"; source?: string }
+  | {
+      mode: "mcp";
+      source?: string;
+      servers: Record<string, McpServerConfig>;
+    };
 
-  /**
-   * Named toolset profiles for the matrix evaluation `toolset` axis.
-   * `none` is reserved as the deterministic baseline (no tools); the `web`
-   * shape (`webSearch`/`webFetch` flags) runs on Claude Code, the
-   * Anthropic API target, and the OpenAI API target today. Other profiles
-   * (MCP servers, third-party crawlers) are recognized by the loader;
-   * their tool adapters land per release.
-   */
-  toolsets?: Record<string, ToolsetConfig>;
+export type ContextMode = Context["mode"];
 
-  // Scenarios to run
-  scenarios: Scenario[];
+// ---- Builds ----
 
-  // Documentation source (optional)
-  docs?: DocsConfig;
+export interface Workspace {
+  /** Fixture directory the agent edits, relative to pickled.yml. */
+  path: string;
+  /** Commands run to prepare the fixture before the agent. Defaulted to []. */
+  setup: string[];
+}
 
-  // Global threshold
-  threshold?: number;
+export interface Command {
+  /** Receipt label; defaulted to `run` when the author omits it. */
+  name: string;
+  run: string;
+}
+
+export interface Verifier {
+  failToPass: Command[];
+  /** Regression guard; defaulted to []. */
+  passToPass: Command[];
+}
+
+export interface Build {
+  id: string;
+  goal: string;
+  agents: string[];
+  contexts: string[];
+  trials: number;
+  /** Fact ids linked for diagnostic reporting. Defaulted to []. */
+  requires: string[];
+  workspace: Workspace;
+  verifier: Verifier;
+  /** Optional positive control: a patch that must pass the verifier on the baseline. */
+  referenceSolution?: { patch: string };
+}
+
+// ---- Questions ----
+
+export interface QuestionExamples {
+  pass: string[];
+  fail: string[];
+}
+
+export interface Question {
+  id: string;
+  question: string;
+  agents: string[];
+  contexts: string[];
+  /** Fact ids the answer must support (coverage). Defaulted to []. */
+  expects: string[];
+  /** Misstatement ids the answer must not make (hard veto). Defaulted to []. */
+  rejects: string[];
+  /** Offline calibration for `pickled test`; required when `rejects` is non-empty. */
+  examples?: QuestionExamples;
+}
+
+// ---- The canonical validated config ----
+
+export interface Config {
+  product: { name: string; description: string };
+  /** Registered sources by id (declaration form; content loaded at run time). */
+  sources: Record<string, Source>;
+  /** Agents by id, resolved to adapter execution config. */
+  agents: Record<string, Target>;
+  /** Delivery paths by id. */
+  contexts: Record<string, Context>;
+  /** Reusable product truths by id (coverage axis). */
+  facts: Record<string, Fact>;
+  /** Reusable wrong claims by id (precision axis). */
+  misstatements: Record<string, Misstatement>;
+  questions: Question[];
+  builds: Build[];
+  thresholds: { questions?: number; builds?: number };
 }
