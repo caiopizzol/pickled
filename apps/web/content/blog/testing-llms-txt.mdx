@@ -2,7 +2,7 @@
 title: "You added llms.txt. Can an agent actually use it?"
 description: "An llms.txt is a promise to agents. Adding the file is not the same as the promise paying off. Here is how to put it under test."
 date: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-04
 order: 2
 author: Caio Pizzol
 tags: [llms-txt, agent-evals, ci]
@@ -22,7 +22,7 @@ These are different failures and they need different tests. One asks "is the con
 
 ## Test both, in the same question
 
-Register your `llms.txt` as a source and run one question across two access paths: an injected cell that hands the agent the file directly, and a `web` cell that makes the agent go find it.
+Register your `llms.txt` as a source and run one question across two contexts: an injected cell that hands the agent the file directly, and a `web` cell that makes the agent reach it through a tool.
 
 ```yaml
 product:
@@ -30,31 +30,37 @@ product:
   description: short one-liner
 
 sources:
-  llms: https://my-product.dev/llms.txt
+  llms: { url: https://my-product.dev/llms.txt }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_llms: { source: llms, tools: none }
-  web_llms: { source: llms, tools: web }
+contexts:
+  given_llms: { mode: inject, source: llms }
+  web_llms: { mode: web, source: llms }
 
-tasks:
+facts:
+  pricing:
+    statement: my-product is free and open source.
+    match:
+      allOf: ["free", "open source"]
+
+questions:
   - id: pricing
-    prompt: How is my-product priced?
+    question: How is my-product priced?
     agents: [quick]
-    access: [given_llms, web_llms]
-    checks:
-      mustMention: ["free", "open source"]
+    contexts: [given_llms, web_llms]
+    expects: [pricing]
 
-threshold: 80
+thresholds:
+  questions: 80
 ```
 
 The `given_llms` cell injects your `llms.txt` into the prompt. That is the content test: if it fails here, your `llms.txt` does not actually answer the question. The `web_llms` cell does not inject the file. It gives the agent the canonical `llms.txt` URL and requires a real web tool call. That is the discovery test: if it fails here while `given_llms` passes, your content is fine but the agent did not use it through the configured web path.
 
-Both cells use the same `mustMention` checks for the answer you want. The web tool calls are real. No model grades another model. The score is the score.
+Both cells use the same `facts` contract for the answer you want. The web tool calls are real. No model grades another model. The score is the score.
 
 ## Why this beats reading it yourself
 
@@ -67,5 +73,5 @@ Run this on the questions that matter most for your product, the ones where a wr
 Point pickled at your `llms.txt` and write one question it is supposed to answer. Run it once with the file injected and once with the agent reaching the URL through web tools, and see which promise holds.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
-- [Access](https://docs.pickled.dev/pickled-yml#access)
+- [Contexts](https://docs.pickled.dev/pickled-yml#contexts)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

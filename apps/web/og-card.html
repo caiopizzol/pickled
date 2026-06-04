@@ -65,19 +65,22 @@
   <div class="left">
     <div class="wordmark">pickled</div>
     <h1>Test what agents <span class="accent">actually</span> understand.</h1>
-    <div class="install"><span class="prompt">$</span> bun add -g @pickled-dev/cli</div>
+    <div class="install"><span class="prompt">$</span> bunx @pickled-dev/cli init</div>
   </div>
   <div class="term">
     <div class="bar"><i></i><i></i><i></i></div>
     <div><span class="ok">$</span> pickled check</div>
     <div>&nbsp;</div>
     <div class="dim">Task: How do I install pickled?</div>
-    <div class="indent"><span class="ok">✓ Well grounded</span> <span class="muted">(92%)</span> <span class="dim">cited: [readme]</span></div>
+    <div class="indent"><span class="ok">✓ Well grounded</span> <span class="muted">1/1</span></div>
+    <div class="indent dim">fact: install_command</div>
     <div>&nbsp;</div>
     <div class="dim">Task: Config format</div>
-    <div class="indent"><span class="err">✗ Ungrounded</span> <span class="muted">(0%)</span> <span class="dim">missing: "pickled.yml"</span></div>
+    <div class="indent"><span class="err">✗ Ungrounded</span> <span class="muted">0/1</span></div>
+    <div class="indent dim">missed: config_file</div>
     <div class="rule"></div>
-    <div><span class="dim">Overall:</span> <span class="warn">42</span> <span class="muted">/ 100 · threshold 80 · run fails</span></div>
+    <div><span class="dim">Overall:</span> <span class="warn">42</span> <span class="muted">/ 100</span></div>
+    <div class="muted">threshold 80 · run fails</div>
   </div>
 </body>
 </html>

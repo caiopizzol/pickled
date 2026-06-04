@@ -2,10 +2,10 @@
 title: "The same agent gives three different answers about your product"
 description: "How an agent reaches your information - injected context, web search, or an MCP server - changes the answer. Test all three paths, not one."
 date: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-04
 order: 3
 author: Caio Pizzol
-tags: [agent-evals, mcp, access]
+tags: [agent-evals, mcp, contexts]
 ---
 
 Ask an agent the same question about your product three ways and you can get three different answers. Hand it your docs directly and it nails the install command. Tell it to search the web and it never finds your site, so it guesses. Give it an MCP server and it returns a section that is six months stale.
@@ -14,13 +14,13 @@ Same agent, same question, same product. The variable is how the agent reached t
 
 ## Three paths, three different signals
 
-Pickled models the path as `access`, and the run includes one cell per path. Each one tests something different:
+Pickled models the path as a named `context`, and the run includes one cell per context. Each one tests something different:
 
-- **`tools: none`** injects your source straight into the prompt. This is the content test: given the material, is the answer right? It isolates one thing, the quality of what you wrote, by removing retrieval from the equation.
-- **`tools: web`** injects nothing. If the access path names a URL source, Pickled gives the agent that canonical URL as the target and requires a web tool call. This is the discovery test: can the agent reach the content through the web path?
-- **`tools: mcp`** wires up an MCP server and requires the agent to call it. This is the surface test: does the tool you expose actually return the right answer?
+- **`mode: inject`** places your source straight into the prompt. This is the content test: given the material, is the answer right? It isolates one thing, the quality of what you wrote, by removing retrieval from the equation.
+- **`mode: web`** injects nothing. If the context names a URL source, Pickled gives the agent that canonical URL as the target and requires a web tool call. This is the discovery test: can the agent reach the content through the web path?
+- **`mode: mcp`** wires up an MCP server and requires the agent to call it. This is the surface test: does the tool you expose actually return the right answer?
 
-A pass on `none` and a fail on `web` is a specific, useful diagnosis: your content is good, but agents cannot discover it. A pass on `web` and a fail on `mcp` says your published docs work but the MCP path is not returning the same answer. One blended score would have hidden both.
+A pass on `inject` and a fail on `web` is a specific, useful diagnosis: your content is good, but agents cannot discover it. A pass on `web` and a fail on `mcp` says your published docs work but the MCP path is not returning the same answer. One blended score would have hidden both.
 
 ## What it looks like
 
@@ -30,37 +30,42 @@ product:
   description: short one-liner
 
 sources:
-  docs_bundle: https://docs.my-product.dev/llms-full.txt
+  docs_bundle: { url: https://docs.my-product.dev/llms-full.txt }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_docs_bundle: { source: docs_bundle, tools: none }
-  web_docs_bundle: { source: docs_bundle, tools: web }
+contexts:
+  given_docs_bundle: { mode: inject, source: docs_bundle }
+  web_docs_bundle: { mode: web, source: docs_bundle }
   mcp_context7:
-    source: none
-    tools: mcp
+    mode: mcp
     servers:
       context7:
         url: https://mcp.context7.com/mcp
         headers:
           CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 
-tasks:
-  - id: auth-setup
-    prompt: How do I authenticate with my-product?
-    agents: [quick]
-    access: [given_docs_bundle, web_docs_bundle, mcp_context7]
-    checks:
-      mustMention: ["api key"]
+facts:
+  auth_api_key:
+    statement: Authentication uses an API key.
+    match:
+      allOf: ["api key"]
 
-threshold: 80
+questions:
+  - id: auth-setup
+    question: How do I authenticate with my-product?
+    agents: [quick]
+    contexts: [given_docs_bundle, web_docs_bundle, mcp_context7]
+    expects: [auth_api_key]
+
+thresholds:
+  questions: 80
 ```
 
-One question, three cells, scored independently. The same `mustMention` check runs on all three, so the only thing that varies between them is the context path. That is the comparison you want.
+One question, three cells, scored independently. The same fact runs on all three, so the only thing that varies between them is the context path. That is the comparison you want.
 
 ## The label has to be honest
 
@@ -70,11 +75,11 @@ One consequence worth stating: in `web` and `mcp` cells, your sources are not in
 
 ## Legibility is per-surface
 
-There is no single number for "does an agent understand my product," because it depends on how the agent got there. Access paths turn that into something you can act on: a grid showing which retrieval paths you are legible on and which ones you are invisible on. That tells you where to spend, whether that is making your content discoverable, fixing what your MCP server returns, or tightening the docs themselves.
+There is no single number for "does an agent understand my product," because it depends on how the agent got there. Contexts turn that into something you can act on: a grid showing which retrieval paths you are legible on and which ones you are invisible on. That tells you where to spend, whether that is making your content discoverable, fixing what your MCP server returns, or tightening the docs themselves.
 
 ## Try it
 
-Declare an injected (`tools: none`), a `web`, and one `mcp` access path, point a question at all three, and read the row. The gaps are the work.
+Declare an `inject`, a `web`, and one `mcp` context, point a question at all three, and read the row. The gaps are the work.
 
-- [Access](https://docs.pickled.dev/pickled-yml#access)
+- [Contexts](https://docs.pickled.dev/pickled-yml#contexts)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

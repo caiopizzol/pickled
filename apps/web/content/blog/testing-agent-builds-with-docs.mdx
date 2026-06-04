@@ -1,32 +1,35 @@
 ---
 title: "Use build tasks when answers are not enough"
-description: "A build task lets an agent edit a workspace and proves success with your verify command."
+description: "A build task lets an agent edit a workspace and proves success with your verifier commands."
 date: 2026-06-02
-updated: 2026-06-02
+updated: 2026-06-04
 order: 7
 author: Caio Pizzol
 tags: [agent-evals, build-tasks, documentation, ci]
 ---
 
-Answer tasks tell you whether an agent can say the right thing. Build tasks tell you whether it can do the work.
+Questions tell you whether an agent can say the right thing. Builds tell you whether it can do the work.
 
-Use an answer task for product facts: install commands, import paths, auth rules, deprecated APIs. Use a build task when the real question is whether the agent can edit a project and pass your verifier.
+Use a question for product facts: install commands, import paths, auth rules, deprecated APIs. Use a build when the real question is whether the agent can edit a project and pass your verifier.
 
 ```yaml
-tasks:
+builds:
   - id: add-toolbar
-    kind: build
-    prompt: Add a toolbar using my-product.
+    goal: Add a toolbar using my-product.
     agents: [builder]
-    access: [given_docs]
+    contexts: [given_docs]
     trials: 3
     workspace:
       path: ./fixtures/react-app
       setup: [bun install --frozen-lockfile]
-    verify: [bun test]
+    verifier:
+      failToPass:
+        - { name: toolbar behavior, run: bun test tests/toolbar.test.ts }
+      passToPass:
+        - { run: bun run typecheck }
 ```
 
-Each `(agent × access)` cell runs `trials` times in a fresh workspace. The result is a rate: `Built 3/3`, `Partially built 2/3`, or `Did not build 0/3`. No model judges the code. Your verifier does.
+Each `(agent × context)` cell runs `trials` times in a fresh workspace. The result is a rate: `Built 3/3`, `Partially built 2/3`, or `Did not build 0/3`. No model judges the code. Your verifier does.
 
 Keep build fixtures small:
 
@@ -35,7 +38,7 @@ Keep build fixtures small:
 - one fast verifier,
 - enough trials to see variance.
 
-One caveat matters when you compare access paths. In build mode, the workspace may contain files the agent can read. If the task needs a local `llms.txt`, then `memory` means "not injected into the prompt," not "unavailable."
+One caveat matters when you compare contexts. In build mode, the workspace may contain files the agent can read. If the task needs a local `llms.txt`, then `memory` means "not injected into the prompt," not "unavailable."
 
 Run build tasks deliberately. A practical CI shape is: `pickled test` and `pickled check --plan` on every PR, capped `pickled check` on trusted PRs, and capped `pickled build` on a schedule or release branch.
 

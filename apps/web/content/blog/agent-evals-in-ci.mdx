@@ -2,7 +2,7 @@
 title: "Your public product context has no CI gate. Give it one."
 description: "Your code fails the build when it breaks. Your docs, README, llms.txt, and MCP surfaces drift silently. Here is how to gate agent understanding in CI."
 date: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-04
 order: 5
 author: Caio Pizzol
 tags: [ci, agent-evals, github-actions]
@@ -16,7 +16,7 @@ That is a gap you can close with the CI you already run.
 
 ## Make agent understanding a check, not a hope
 
-The move is the same one you made for code: run the check on every change, and fail the build when it regresses. With a deterministic eval (`mustMention`, `mustMentionOneOf`, `mustNotMention`, tool-use provenance, no model judging another), the scoring path is deterministic, so a failure points to a contract that broke, not a judge that reinterpreted the answer. A flaky score makes a useless gate. A contract makes a real one.
+The move is the same one you made for code: run the check on every change, and fail the build when it regresses. With a deterministic eval (`facts`, `misstatements`, tool-use provenance, no model judging another), the scoring path is deterministic, so a failure points to a contract that broke, not a judge that reinterpreted the answer. A flaky score makes a useless gate. A contract makes a real one.
 
 Two tiers keep it fast and cheap:
 
@@ -40,7 +40,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-`pickled test` runs no model calls. It scores your declared example answers and catches brittle checks before you spend a single token. `pickled check --plan` prints the cells that would run. Only then does the capped `check` run your questions against a real agent. Set a `threshold` in `pickled.yml` and the run passes or fails on the overall score.
+`pickled test` runs no model calls. It scores your declared example answers and catches brittle fact or misstatement contracts before you spend a single token. `pickled check --plan` prints the cells that would run. Only then does the capped `check` run your questions against a real agent. Set `thresholds.questions` in `pickled.yml` and the run passes or fails on the overall score.
 
 One caveat if your repo is public: GitHub does not pass secrets to workflows triggered from fork pull requests, so a `check` job that needs `ANTHROPIC_API_KEY` will not run on those. Keep the token-free `test` and `plan` steps on every PR, and run the full `check` on push to branches you control or on trusted internal PRs.
 
@@ -56,7 +56,7 @@ And because examples are free and the check run is bounded by `--max-cells` or `
 
 ## Try it
 
-Add the workflow above, set a `threshold`, and open a PR that intentionally breaks one answer. Watch it go red.
+Add the workflow above, set `thresholds.questions`, and open a PR that intentionally breaks one answer. Watch it go red.
 
 - [Run pickled in GitHub Actions](https://docs.pickled.dev/github-actions)
 - [Getting started](https://docs.pickled.dev/getting-started)

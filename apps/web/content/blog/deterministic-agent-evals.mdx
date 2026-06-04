@@ -2,7 +2,7 @@
 title: "Stop letting one model grade another"
 description: "LLM-as-judge is the default for agent evals. For testing whether an agent understands your product, a deterministic contract is the honest measure. Here is why."
 date: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-04
 order: 4
 author: Caio Pizzol
 tags: [agent-evals, deterministic, llm-as-judge]
@@ -20,9 +20,9 @@ It is also not reproducible. Run the judge twice and the number moves. Change th
 
 ## Legibility is a contract, not a vibe
 
-Whether an agent understands your product is a grounded, factual property. Did it use the context path you asked it to use? Did it avoid a known-wrong answer? Did it say the thing that has to be in a correct answer? These are checkable by code.
+Whether an agent understands your product is a grounded, factual property. Did it use the context mode you asked it to use? Did it avoid a known-wrong answer? Did it say the thing that has to be in a correct answer? These are checkable by code.
 
-That is the whole bet. Three deterministic checks, no model in the scoring path:
+That is the whole bet. Three deterministic signals, no model in the scoring path:
 
 ```yaml
 product:
@@ -37,26 +37,42 @@ agents:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_readme: { source: readme, tools: none }
+contexts:
+  given_readme: { mode: inject, source: readme }
 
-tasks:
+facts:
+  install_command:
+    statement: my-product installs with bunx my-product.
+    match:
+      allOf: ["bunx my-product"]
+
+misstatements:
+  npm_install:
+    statement: The answer recommends the old npm package.
+    match:
+      anyOf: ["npm install my-product-cli"]
+
+questions:
   - id: install
-    prompt: How do I install my-product?
+    question: How do I install my-product?
     agents: [quick]
-    access: [given_readme]
-    checks:
-      mustMention: ["bunx my-product"]
-      mustNotMention: ["npm install my-product-cli"]
+    contexts: [given_readme]
+    expects: [install_command]
+    rejects: [npm_install]
+    examples:
+      pass:
+        - "Install it with `bunx my-product`."
+      fail:
+        - "Run `npm install my-product-cli`."
 ```
 
-`mustMention` checks the answer: a literal substring that must be present. `mustNotMention` checks for known-wrong text that must not appear. Tool-use provenance checks that a `web` or `mcp` access path was actually used. None of these is a model. Given the same response, the score does not move. If a rerun comes back different, it is because the agent changed its answer, not because a judge reinterpreted the same one. The score is the score.
+`facts` check the answer: a declared product truth must be covered. `misstatements` check for known-wrong text that must not appear. Tool-use provenance checks that a `web` or `mcp` context actually invoked its tool. None of these is a model. Given the same response, the score does not move. If a rerun comes back different, it is because the agent changed its answer, not because a judge reinterpreted the same one. The score is the score.
 
 ## What you give up, and why it is fine
 
 A deterministic contract cannot grade open-ended quality. It will not tell you whether an answer was elegant, or well-toned, or pleasantly phrased. That is real, and it is the honest cost.
 
-It is also beside the point here. Testing product legibility is not a writing competition. The question is narrow and checkable: did the agent use the right context path, say the right content, and avoid the known-wrong answer. A contract answers that exactly. A judge answers it approximately, expensively, and differently each time.
+It is also beside the point here. Testing product legibility is not a writing competition. The question is narrow and checkable: did the agent use the right context mode, say the right content, and avoid the known-wrong answer. A contract answers that exactly. A judge answers it approximately, expensively, and differently each time.
 
 There are tasks where a judge model earns its place: summarization quality, creative range, nuanced tone. Product legibility is not one of them. For "does the agent get my product right," you want a receipt, not a second opinion.
 
@@ -66,8 +82,8 @@ A deterministic score is reproducible, so it can gate CI. It avoids an extra jud
 
 ## Try it
 
-Write one question with `mustMention` and `mustNotMention`. Score the same response twice and nothing moves; the only thing that can change a rerun is the agent's answer, not the scoring.
+Write one question with `facts` and `misstatements`. Score the same response twice and nothing moves; the only thing that can change a rerun is the agent's answer, not the scoring.
 
-- [Access](https://docs.pickled.dev/pickled-yml#access)
+- [Contexts](https://docs.pickled.dev/pickled-yml#contexts)
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

@@ -2,7 +2,7 @@
 title: "Does your public product context answer real questions?"
 description: "Docs, README files, llms.txt, and MCP servers are the context agents use before they build with your product. Test the path that gives them the right answer."
 date: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-04
 order: 1
 author: Caio Pizzol
 tags: [product-context, documentation, agent-evals, ci]
@@ -24,7 +24,7 @@ Do not start with every page you published. Start with one product question wher
 - Which API should I use for this workflow?
 - What old API should I avoid?
 
-Then write the answer contract in product terms. The contract is not a vibe. It is a small set of checks that a correct answer must satisfy.
+Then write the answer contract in product terms. The contract is not a vibe. It is a small set of facts a correct answer must cover and misstatements it must reject.
 
 ## Test the paths separately
 
@@ -36,35 +36,51 @@ product:
   description: short one-liner
 
 sources:
-  llms: https://my-product.dev/llms.txt
-  docs: https://docs.my-product.dev/llms-full.txt
+  llms: { url: https://my-product.dev/llms.txt }
+  docs: { url: https://docs.my-product.dev/llms-full.txt }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  memory: { source: none, tools: none }
-  given_llms: { source: llms, tools: none }
-  web_llms: { source: llms, tools: web }
+contexts:
+  memory: { mode: memory }
+  given_llms: { mode: inject, source: llms }
+  web_llms: { mode: web, source: llms }
   mcp_mintlify:
-    source: none
-    tools: mcp
+    mode: mcp
     servers:
       mintlify:
         url: https://docs.my-product.dev/mcp
 
-tasks:
-  - id: install
-    prompt: How do I install my-product?
-    agents: [quick]
-    access: [memory, given_llms, web_llms, mcp_mintlify]
-    checks:
-      mustMention: ["bunx my-product"]
-      mustNotMention: ["npm install my-product-cli"]
+facts:
+  install_command:
+    statement: my-product installs with bunx my-product.
+    match:
+      allOf: ["bunx my-product"]
 
-threshold: 80
+misstatements:
+  npm_install:
+    statement: The answer recommends the old npm package.
+    match:
+      anyOf: ["npm install my-product-cli"]
+
+questions:
+  - id: install
+    question: How do I install my-product?
+    agents: [quick]
+    contexts: [memory, given_llms, web_llms, mcp_mintlify]
+    expects: [install_command]
+    rejects: [npm_install]
+    examples:
+      pass:
+        - "Install it with `bunx my-product`."
+      fail:
+        - "Run `npm install my-product-cli`."
+
+thresholds:
+  questions: 80
 ```
 
 That one question runs four cells. `memory` tells you what the model thinks without context. `given_llms` tests whether the file itself contains the answer. `web_llms` does not inject the file; it gives the agent the canonical URL and requires a real web tool call. `mcp_mintlify` requires a real MCP call.
@@ -72,22 +88,22 @@ That one question runs four cells. `memory` tells you what the model thinks with
 Each cell gets its own verdict, so the diagnosis is specific:
 
 - `memory` fails, `given_llms` passes: your public context carries the answer.
-- `given_llms` passes, `web_llms` fails: the content works, but web access does not.
+- `given_llms` passes, `web_llms` fails: the content works, but the web context does not.
 - `web_llms` passes, `mcp_mintlify` fails: your MCP path is not returning the same answer.
 - Everything fails: the product fact is probably missing or unclear everywhere.
 
 ## Keep the contract small
 
-Good checks name the load-bearing facts: the package name, provider component, import path, command, config key, or known-wrong API. They do not try to grade style.
+Good facts name the load-bearing claims: the package name, provider component, import path, command, config key, or known-wrong API. They do not try to grade style.
 
-Use `mustMention` for the terms a correct answer must include. Use `mustMentionOneOf` when several terms are valid and you need at least one. Use `mustNotMention` for known-wrong terms.
+Use `facts` for the truths a correct answer must include. Use `allOf` when every substring matters, and `anyOf` when several terms are valid. Use `misstatements` for known-wrong claims that should force the cell to `NO`.
 
-That is enough to tell whether an agent reached the product fact you care about. No model grades another model. The receipt shows which agent, which source, which access path, and which checks passed.
+That is enough to tell whether an agent reached the product fact you care about. No model grades another model. The receipt shows which agent, source, context, fact coverage, misstatement result, and tool path produced the verdict.
 
 ## Try it
 
-Pick one question from your docs and run it across `memory`, an injected source, and one discovery path. The first useful result is not a perfect score. It is knowing which path is failing.
+Pick one question from your docs and run it across `memory`, an injected source, and one discovery context. The first useful result is not a perfect score. It is knowing which context is failing.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
-- [Access](https://docs.pickled.dev/pickled-yml#access)
+- [Contexts](https://docs.pickled.dev/pickled-yml#contexts)

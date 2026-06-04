@@ -1,14 +1,14 @@
 ---
 title: "Your AGENTS.md and CLAUDE.md, under the same test"
-description: "Pickled is mostly about public product context. The same source, access, question, and check model also puts your own internal steering files under test."
+description: "Pickled is mostly about public product context. The same source, context, question, and fact model also puts your own internal steering files under test."
 date: 2026-06-01
-updated: 2026-06-01
+updated: 2026-06-04
 order: 6
 author: Caio Pizzol
 tags: [agents-md, claude-md, agent-evals, ci]
 ---
 
-Pickled is primarily about public product context: can an outside agent reach the right answer about your product through your README, docs, llms.txt, or MCP surface? But the same `source / access / question / check` model also works on the files you write to steer your own coding agents, like `AGENTS.md` and `CLAUDE.md`. This is the secondary case: the same machinery pointed inward.
+Pickled is primarily about public product context: can an outside agent reach the right answer about your product through your README, docs, llms.txt, or MCP surface? But the same `source / context / question / fact` model also works on the files you write to steer your own coding agents, like `AGENTS.md` and `CLAUDE.md`. This is the secondary case: the same machinery pointed inward.
 
 ## Steering files are untested prompt surface
 
@@ -18,7 +18,7 @@ A stale instruction is worse than a missing one. A missing one leaves the agent 
 
 ## Put it under test
 
-Register the file as a source, ask the question it is supposed to answer, and pin the contract. No model grades another model: the answer is checked deterministically against the terms it must mention and the stale terms it must not.
+Register the file as a source, ask the question it is supposed to answer, and pin the contract. No model grades another model: the answer is checked deterministically against the facts it must cover and the stale claims it must reject.
 
 ```yaml
 product:
@@ -33,26 +33,43 @@ agents:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  given_agents_md: { source: agents_md, tools: none }
+contexts:
+  given_agents_md: { mode: inject, source: agents_md }
 
-tasks:
+facts:
+  bun_install:
+    statement: The repo installs dependencies with bun install.
+    match:
+      allOf: ["bun install"]
+
+misstatements:
+  npm_or_yarn:
+    statement: The answer recommends npm or yarn for dependency installation.
+    match:
+      anyOf: ["npm install", "yarn add"]
+
+questions:
   - id: package-manager
-    prompt: What package manager does this repo use, and what installs dependencies?
+    question: What package manager does this repo use, and what installs dependencies?
     agents: [local]
-    access: [given_agents_md]
-    checks:
-      mustMention: ["bun install"]
-      mustNotMention: ["npm install", "yarn add"]
+    contexts: [given_agents_md]
+    expects: [bun_install]
+    rejects: [npm_or_yarn]
+    examples:
+      pass:
+        - "Use Bun. Run `bun install` to install dependencies."
+      fail:
+        - "Run `npm install` or `yarn add`."
 
-threshold: 100
+thresholds:
+  questions: 100
 ```
 
-With `tools: none`, `AGENTS.md` is the only content injected. `mustMention` asserts the answer you want; `mustNotMention` catches the stale-but-plausible `npm` or `yarn` a thin instruction file lets through. Wire it into CI and a drifting `AGENTS.md` fails the build before it ships, instead of surfacing as a confused agent three weeks later.
+With `mode: inject`, `AGENTS.md` is the only content injected. The `bun_install` fact asserts the answer you want; the `npm_or_yarn` misstatement catches the stale-but-plausible `npm` or `yarn` a thin instruction file lets through. Wire it into CI and a drifting `AGENTS.md` fails the build before it ships, instead of surfacing as a confused agent three weeks later.
 
 ## Same machinery, two directions
 
-Whether you are testing how the outside world's agents read your published product, or whether your own steering files still steer your own agents, it is one model: register the source, ask the question, check the answer by contract. Public context is the main event. Internal steering is the same test, pointed at your own repo.
+Whether you are testing how the outside world's agents read your published product, or whether your own steering files still steer your own agents, it is one model: register the source, name the context, ask the question, check the answer by contract. Public context is the main event. Internal steering is the same test, pointed at your own repo.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
