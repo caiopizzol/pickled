@@ -67,6 +67,13 @@ agents:
 
 Providers: `claude-code` and `codex-cli` (CLI agents), `anthropic` and `openai` (API agents). Pin the `model` explicitly; aliases can resolve to different versions across SDK upgrades and break reproducibility. API agents accept `temperature` and `maxTokens`; CLI agents accept `maxTurns`. Mixing the two is rejected at load.
 
+Provider support for context modes:
+
+- `claude-code` supports `memory`, `inject`, `web`, and `mcp`.
+- `codex-cli` supports `memory` and `inject`.
+- `anthropic` supports `memory`, `inject`, and `web`.
+- `openai` supports `memory`, `inject`, `web`, and `mcp`.
+
 ## `contexts`
 
 A context is how a source reaches the agent, and the unit you compare across runs. The same source reached two ways is two different tests. A task forms one cell per `(agent × context)` pair, shown in the report as `agent · context`.

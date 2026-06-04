@@ -110,6 +110,13 @@ const STALE_SURFACE_PATTERNS = [
   /Set a `threshold` in `pickled\.yml`/,
 ] as const;
 
+const PROVIDER_CONTEXT_MODE_LINES = [
+  "`claude-code` supports `memory`, `inject`, `web`, and `mcp`.",
+  "`codex-cli` supports `memory` and `inject`.",
+  "`anthropic` supports `memory`, `inject`, and `web`.",
+  "`openai` supports `memory`, `inject`, `web`, and `mcp`.",
+] as const;
+
 describe("pickled.yml docs coverage", () => {
   test("the field walk finds the public fields", () => {
     expect(fieldNames.size).toBeGreaterThan(15);
@@ -140,6 +147,13 @@ describe("pickled.yml docs coverage", () => {
   test("the page does not drift back to v1 vocabulary", () => {
     const present = V1_TERMS.filter((term) => docs.includes(term));
     expect(present).toEqual([]);
+  });
+
+  test("the docs page names provider support for context modes", () => {
+    const missing = PROVIDER_CONTEXT_MODE_LINES.filter(
+      (line) => !docs.includes(line),
+    );
+    expect(missing).toEqual([]);
   });
 
   test("public and agent-facing surfaces do not drift back to v1 vocabulary", () => {
