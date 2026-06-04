@@ -27,17 +27,18 @@ Weak:
 Strong:
 
 ```ts
-// AIDEV-NOTE: A non-none cell that invokes none of its configured tools is
-// vetoed to NO with confidence 0 (provenance failure). See check.ts near
-// provenanceFailed. Model memory cannot testify to the tool path.
+// AIDEV-NOTE: A web/mcp question cell that invokes none of its configured
+// tools is vetoed to NO. See packages/core/src/cell-runtime.ts and
+// packages/core/src/scorers/index.ts. Model memory cannot testify to the
+// tool path.
 ```
 
 Strong for non-local rules:
 
 ```ts
-// AIDEV-NOTE: Scenario verdict determines the label family. Confidence only
-// refines YES into Well grounded vs Grounded. Never upgrade PARTIAL, NO, or
-// Error. The single source of truth is getScenarioStatus in
+// AIDEV-NOTE: Cell verdict determines the label family. Fact coverage and the
+// fully grounded rate are details. Never upgrade PARTIAL, NO, or Error. The
+// single source of truth is questionCellStatus/buildCellStatus in
 // packages/core/src/report-status.ts.
 ```
 

@@ -62,7 +62,7 @@ Pickled has two orthogonal verdicts. Renderers must not conflate them.
 - **Cell verdict** answers whether one `(agent × context)` cell satisfied its contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Question cells render as `Well grounded`, `Partially grounded`, `Ungrounded`, or `Error`; builds as `Built`, `Partially built`, `Did not build`, or `Error`.
 - **Run verdict** answers whether the run met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop. A thresholded run with any errored cell fails.
 
-The cell verdict determines the label family. A question cell is `YES` only when every scored trial fully satisfied the contract; the trial pass-rate (k of n) and fact coverage are detail, never an upgrade of `PARTIAL`, `NO`, or `Error`. The categorical signal wins.
+The cell verdict determines the label family. A question cell is `YES` only when the scored response fully satisfied the contract; the single-response result and fact coverage are detail, never an upgrade of `PARTIAL`, `NO`, or `Error`. The categorical signal wins.
 
 ## Source contract
 

@@ -14,12 +14,33 @@ const DOCS_PATH = join(
   "../../../apps/docs/content/docs/pickled-yml.mdx",
 );
 const SCHEMA_URL = "https://pickled.dev/schema/pickled.schema.json";
+const SURFACE_PATHS = [
+  "../../../README.md",
+  "../../../apps/cli/README.md",
+  "../../../apps/docs/content/docs/index.mdx",
+  "../../../apps/docs/content/docs/getting-started.mdx",
+  "../../../apps/docs/content/docs/github-actions.mdx",
+  "../../../apps/docs/content/docs/pickled-yml.mdx",
+  "../../../apps/web/src/components/Hero.tsx",
+  "../../../apps/web/src/components/Example.tsx",
+  "../../../llms.txt",
+  "../../../apps/web/public/llms.txt",
+  "../../../pickled.yml",
+  "../../../AGENTS.md",
+  "../../../brand.md",
+  "../../../comment-policy.md",
+  "../../../.github/workflows/agent-dogfood.yml",
+] as const;
 
 const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8")) as Record<
   string,
   unknown
 >;
 const docs = readFileSync(DOCS_PATH, "utf8");
+const surfaces = SURFACE_PATHS.map((relativePath) => ({
+  relativePath,
+  content: readFileSync(join(import.meta.dir, relativePath), "utf8"),
+}));
 
 // A user-written field is a key under any `properties` object. Map-valued
 // sections (sources/agents/contexts/facts/...) carry their field names inside
@@ -57,6 +78,30 @@ const V1_TERMS = [
   "tools:",
 ];
 
+const STALE_SURFACE_PATTERNS = [
+  /mustMention/,
+  /mustNotMention/,
+  /mustMentionOneOf/,
+  /answerable/,
+  /## Sources/,
+  /access paths?/,
+  /toolset/,
+  /confidence/,
+  /\bGrounded\b/,
+  /Scenario verdict/,
+  /getScenarioStatus/,
+  /provenanceFailed/,
+  /cited:/,
+  /\([0-9]+%\)/,
+  /missing: \[/,
+  /mode none/,
+  /questions score fact coverage and misstatement rejection across trials/,
+  /question trials/,
+  /question cell is `YES` only when every scored trial/,
+  /Use `k\/n` for both question/,
+  /Set a `threshold` in `pickled\.yml`/,
+] as const;
+
 describe("pickled.yml docs coverage", () => {
   test("the field walk finds the public fields", () => {
     expect(fieldNames.size).toBeGreaterThan(15);
@@ -87,5 +132,14 @@ describe("pickled.yml docs coverage", () => {
   test("the page does not drift back to v1 vocabulary", () => {
     const present = V1_TERMS.filter((term) => docs.includes(term));
     expect(present).toEqual([]);
+  });
+
+  test("public and agent-facing surfaces do not drift back to v1 vocabulary", () => {
+    const failures = surfaces.flatMap(({ relativePath, content }) =>
+      STALE_SURFACE_PATTERNS.filter((pattern) => pattern.test(content)).map(
+        (pattern) => `${relativePath}: ${pattern.source}`,
+      ),
+    );
+    expect(failures).toEqual([]);
   });
 });

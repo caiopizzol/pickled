@@ -48,24 +48,30 @@ export function Hero() {
               <T.Dim>Task: How do I install pickled?</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              &nbsp;&nbsp;<T.Success>✓ Well grounded</T.Success>{" "}
-              <T.Muted>(92%)</T.Muted> <T.Dim>cited: [readme]</T.Dim>
+              &nbsp;&nbsp;<T.Muted>[quick · given_docs]</T.Muted>{" "}
+              <T.Success>✓ Well grounded 1/1</T.Success>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
               <T.Dim>Task: Basic usage</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              &nbsp;&nbsp;<T.Warning>⚠ Partially grounded</T.Warning>{" "}
-              <T.Muted>(65%)</T.Muted> <T.Dim>missing: [llms.txt]</T.Dim>
+              &nbsp;&nbsp;<T.Muted>[quick · memory]</T.Muted>{" "}
+              <T.Warning>⚠ Partially grounded 0/1 (50% facts)</T.Warning>
+            </TerminalLine>
+            <TerminalLine>
+              <T.Dim>{"    reason: missing facts: run_command"}</T.Dim>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>
               <T.Dim>Task: Config format</T.Dim>
             </TerminalLine>
             <TerminalLine>
-              &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}
-              <T.Muted>(0%)</T.Muted> <T.Dim>missing: "pickled.yml"</T.Dim>
+              &nbsp;&nbsp;<T.Muted>[quick · web_open]</T.Muted>{" "}
+              <T.Error>✗ Ungrounded 0/1</T.Error>
+            </TerminalLine>
+            <TerminalLine>
+              <T.Dim>{"    reason: tool path not used (provenance)"}</T.Dim>
             </TerminalLine>
             <TerminalLine>&nbsp;</TerminalLine>
             <TerminalLine>

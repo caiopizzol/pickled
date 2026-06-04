@@ -21,7 +21,7 @@ Pickled started as a freshness checker for developer tool docs. It got rewritten
 
 The same product can be legible in one agent surface and illegible in another, because each one gets a different slice. Pickled measures that per surface.
 
-**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, contexts, and tasks (questions and builds). The framework runs each task per `(agent x context)` cell: questions score fact coverage and misstatement rejection across trials, builds score a pass rate across trials. Receipts per cell.
+**What it really does.** Pickled turns "does AI get my product right?" into a testable contract. You declare sources, agents, contexts, and tasks (questions and builds). The framework runs each task per `(agent x context)` cell: questions score fact coverage and misstatement rejection, builds score a pass rate across trials. Receipts per cell.
 
 **The problem.** Every API-backed product now has multiple readers. Some are people. Some are agents. The agents get different context bundles depending on which surface they live in, and each one fails in characteristic ways:
 
@@ -290,8 +290,9 @@ Every interface should use the same feedback grammar: CLI, CI logs, web demos, a
 5. Overall score and threshold result.
 6. One next-action sentence.
 
-**Task result grammar.** One line per `(agent · context)` cell. `k/n` is the
-trial rate; partial questions append fact coverage.
+**Task result grammar.** One line per `(agent · context)` cell. Question cells
+render the fully grounded result as `1/1` or `0/1` today; partial questions
+append fact coverage. Build cells render the trial rate as `k/n`.
 
 Question:
 
@@ -334,7 +335,7 @@ Pickled has two verdicts. They are orthogonal. Renderers must not conflate them.
 - **Cell verdict** answers whether one `(agent × context)` cell satisfied its contract. Values: `YES`, `PARTIAL`, `NO`, `Error`. Question cells render as `Well grounded`, `Partially grounded`, `Ungrounded`, or `Error`. Build cells render as `Built`, `Partially built`, `Did not build`, or `Error`.
 - **Run verdict** answers whether the run met the configured threshold. Values: `run passes`, `run fails`. Renders only when a threshold is configured. Without a threshold, show `Overall: X / 100` and stop. A thresholded run with any errored cell fails: the score excludes error cells, so an unmeasured cell must never pass CI.
 
-The cell verdict determines the label family. A question cell is `YES` only when every scored trial fully satisfied the contract (all expected facts covered, no rejected misstatement, the tool path used); the trial pass-rate and fact coverage are rendered as detail (`k/n`, `% facts`) but never upgrade `PARTIAL`, `NO`, or `Error`. Build cells use the build label family and render the pass rate as `k/n`; they never use the grounded scale. The categorical signal wins.
+The cell verdict determines the label family. A question cell is `YES` only when the scored response fully satisfied the contract (all expected facts covered, no rejected misstatement, the tool path used); the fully grounded result and fact coverage are rendered as detail (`1/1` or `0/1`, `% facts`) but never upgrade `PARTIAL`, `NO`, or `Error`. Build cells use the build label family and render the pass rate as `k/n`; they never use the grounded scale. The categorical signal wins.
 
 Implementation rule: one shared helper (`report-status.ts`) returns the label, icon, tone, score, and run verdict. Every renderer (terminal, JSON, web) consumes it. None computes the label, the score, or the pass/fail itself.
 
@@ -392,7 +393,7 @@ A one-off hand-edit via `gh release edit` on a high-stakes release is fine; just
 
 **Bullet shape.** One sentence per change. Lead with what changed for the user, not the implementation. Bold the feature name. Use a hyphen, never an em dash, to join the name and the description.
 
-**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `cell verdict` and `run verdict` (not generic `pass rate`), `registered source` (not `source file`), `fact` and `misstatement` (the question contract: `expects` facts, `rejects` misstatements; not `assertion`, `check`, or `regression check`), `context` (a `(source, mode)` delivery path; not `access path`). Use `k/n` for both question trials and build attempts.
+**Nouns.** Use the repo's actual terms: `JSON contract` (not `JSON schema`), `run passes` / `run fails` (not `build passes`), `cell verdict` and `run verdict` (not generic `pass rate`), `registered source` (not `source file`), `fact` and `misstatement` (the question contract: `expects` facts, `rejects` misstatements; not `assertion`, `check`, or `regression check`), `context` (a `(source, mode)` delivery path; not the old access wording). Question cells render `1/1` or `0/1` today; build attempts render `k/n`.
 
 **Honesty constraints.** No absolutes. A smoke test `catches regressions in the example contract`; it does not `disprove any regression`. A guard `prevents drift between A and B`; it does not `guarantee parity`. If a change is doc-only, say so. If a dependency upgrade required no code changes, say so plainly without dressing it up.
 

@@ -36,7 +36,7 @@ What each step does:
 - `pickled check --plan` prints the answer cells that would run. No model calls.
 - `pickled check --max-cells 20` refuses to run if the selected answer executions exceed the cap.
 
-Set a `threshold` in `pickled.yml` when you want CI to fail on a low score.
+Set `thresholds.questions` or `thresholds.builds` in `pickled.yml` when you want CI to fail on a low score.
 
 ## Build tasks in CI
 

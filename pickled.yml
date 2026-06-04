@@ -68,9 +68,9 @@ facts:
     match:
       allOf: ["check ."]
   tool_modes_all:
-    statement: Names all three context tool modes.
+    statement: Names all four context modes.
     match:
-      allOf: ["none", "web", "mcp"]
+      allOf: ["memory", "inject", "web", "mcp"]
   names_claude_code:
     statement: Names Claude Code as a provider.
     match:
@@ -125,17 +125,17 @@ questions:
       fail:
         - "Install with `npm install @pickled-dev/cli`, add a pickled.yml, then run check ."
 
-  # Coverage of the tool modes pickled ships today. Firecrawl is proposed but
+  # Coverage of the context modes pickled ships today. Firecrawl is proposed but
   # not shipped; an agent that claims it is the exact false-support answer.
   - id: tool_modes
-    question: Which context tool modes can a pickled agent use today, and which agent or provider does each need?
+    question: Which context modes can a pickled agent use today, and which agent or provider does each need?
     agents: [quick]
     contexts: [given_docs, given_llms]
     expects: [tool_modes_all, names_claude_code]
     rejects: [magic_dashboard, firecrawl_mode]
     examples:
       pass:
-        - "A pickled context uses mode none (memory), inject, web, or mcp. inject/web/mcp run on Claude Code; web also runs on the Anthropic and OpenAI APIs."
+        - "A pickled context can use memory, inject, web, or mcp. Claude Code supports all four; Codex CLI supports memory and inject; Anthropic supports memory, inject, and web; OpenAI supports all four."
       fail:
         - "Today a pickled agent supports web, mcp, and Firecrawl modes on Claude Code."
 

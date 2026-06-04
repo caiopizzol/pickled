@@ -18,7 +18,7 @@ An open-source CLI that tests whether AI agents can answer and build with a prod
 These are the rules new edits most often break. Each lives in a single source of truth; do not paraphrase them here.
 
 1. **Cell verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
-2. **Cell verdict determines the label family.** Each `(agent × context)` cell scores on its own; a task has no single verdict. A question cell is `YES` only when every scored trial fully satisfied the contract; the trial pass-rate (k-of-n) and fact coverage are detail, never an upgrade of PARTIAL/NO/Error. See `packages/core/src/report-status.ts`.
+2. **Cell verdict determines the label family.** Each `(agent × context)` cell scores on its own; a task has no single verdict. A question cell is `YES` only when the scored response fully satisfied the contract; the fully grounded result and fact coverage are detail, never an upgrade of PARTIAL/NO/Error. See `packages/core/src/report-status.ts`.
 3. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. A thresholded run with any errored cell fails. See `report-status.ts` near `runPasses`.
 4. **JSON output stays raw.** It carries machine fields (`verdict`, `passRate`, `meanCoverage`, `verifierProof`), not derived human labels. Human labels are derived by the shared `report-status` helpers each renderer consumes.
 5. **Registered source contract.** Only sources declared in `pickled.yml`'s `sources` count. Facts are matched against the agent's answer; the contract is the strength, not the limitation.
