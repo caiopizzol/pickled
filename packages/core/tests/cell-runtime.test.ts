@@ -54,7 +54,9 @@ describe("resolveCellRuntime", () => {
     });
     expect(rt.promptContext).toEqual({ kind: "question", mode: "memory" });
     expect(rt.provenance.hasMatchers).toBe(false);
-    expect(rt.runOptions.restrictBuiltinTools).toBeUndefined();
+    // Question memory/inject cells are scoped to NO tools so Claude Code cannot
+    // silently web-search and defeat what the cell measures.
+    expect(rt.runOptions.restrictBuiltinTools).toEqual([]);
     expect(rt.sourceId).toBeNull();
   });
 
@@ -70,7 +72,24 @@ describe("resolveCellRuntime", () => {
       expect(rt.promptContext.docs.map((d) => d.id)).toEqual(["llms"]);
     }
     expect(rt.provenance.hasMatchers).toBe(false);
+    expect(rt.runOptions.restrictBuiltinTools).toEqual([]); // no tools in inject
     expect(rt.sourceId).toBe("llms");
+  });
+
+  test("build memory/inject cells are NOT tool-stripped (they keep the edit profile)", () => {
+    for (const context of [
+      { mode: "memory" } as const,
+      { mode: "inject", source: "llms" } as const,
+    ]) {
+      const rt = resolveCellRuntime({
+        agent: "agent",
+        context,
+        config: config("claude-code", "cli"),
+        sources: SOURCES,
+        kind: "build",
+      });
+      expect(rt.runOptions.restrictBuiltinTools).toBeUndefined();
+    }
   });
 
   test("web (claude-code): scopes built-ins, names the discovery hint, sets provenance", () => {

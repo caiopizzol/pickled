@@ -48,6 +48,17 @@ describe("buildAgentOptions", () => {
     expect(o.tools).toEqual(["WebSearch", "WebFetch"]);
   });
 
+  test("an empty restrictBuiltinTools disables all built-ins (question memory/inject)", () => {
+    // cell-runtime sets restrictBuiltinTools: [] for question memory/inject
+    // cells; the adapter must map that to SDK tools: [] (no built-ins), not
+    // fall through to defaults, or those cells could silently web-search.
+    const o = buildAgentOptions(config, {
+      ...baseOptions,
+      restrictBuiltinTools: [],
+    });
+    expect(o.tools).toEqual([]);
+  });
+
   test("build mode hard-scopes SDK tools to the workspace edit set", () => {
     const o = buildAgentOptions(config, buildOptions);
     expect([...(o.tools ?? [])].sort()).toEqual([...EDIT_ALLOWED_TOOLS].sort());

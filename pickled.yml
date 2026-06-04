@@ -47,14 +47,17 @@ contexts:
 
 # Reusable product truths a correct answer must cover.
 facts:
-  names_agent:
-    statement: Names the agent as the actor being tested.
+  # positioning facts must prove understanding the product *description* alone
+  # cannot satisfy ("Agent legibility checker for developer tools" already
+  # contains "agent" and "legibility", so the old facts passed from memory).
+  tests_build:
+    statement: Says pickled tests that agents can build with the product, not just answer.
     match:
-      allOf: ["agent"]
-  names_capability:
-    statement: Names what pickled measures (legibility / understanding / context).
+      allOf: ["build"]
+  deterministic_scoring:
+    statement: Says scoring is deterministic / not decided by an LLM judge.
     match:
-      anyOf: ["legible", "legibility", "understand", "comprehend", "context"]
+      anyOf: ["deterministic", "no LLM", "without an LLM", "not judged", "not graded"]
   install_command:
     statement: Gives the bunx install/init command.
     match:
@@ -102,11 +105,11 @@ questions:
     question: In one or two sentences, what does pickled do?
     agents: [quick, anthropic_api, openai_api]
     contexts: [memory, given_docs, web_open, web_docs]
-    expects: [names_agent, names_capability]
+    expects: [tests_build, deterministic_scoring]
     rejects: [magic_dashboard, brand_tracker]
     examples:
       pass:
-        - "Pickled tests whether an agent can understand and build with your product's published context, scored deterministically."
+        - "Pickled tests whether an agent can answer and build with your product's published context, scored deterministically. No LLM grades another LLM."
       fail:
         - "Pickled is a magic dashboard that tracks how your brand appears in AI answers."
 
@@ -162,6 +165,17 @@ builds:
     verifier:
       failToPass:
         - { name: authored config, run: ./tests/verify-pickled-config.sh }
+      passToPass:
+        # Regression guard: the authored config must register the local
+        # llms.txt, so the agent must not delete it. Green on the untouched
+        # fixture (llms.txt ships with it) and must stay green after.
+        - { name: keeps llms source, run: test -f llms.txt }
+    # Positive control: the golden config, applied to the baseline, must pass
+    # the verifier. Proves the bar is reachable (verifierProof: passed) rather
+    # than leaving it unproven. Lives outside the fixture so the agent never
+    # sees it.
+    referenceSolution:
+      patch: ./fixtures/pickled-config-authoring.solution.patch
 
 thresholds:
   questions: 60
