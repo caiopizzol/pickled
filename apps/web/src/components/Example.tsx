@@ -3,41 +3,60 @@ import { T, Terminal, TerminalLine } from "./Terminal";
 import "./Example.css";
 
 const configSnippet = `# pickled.yml
+schemaVersion: 2
+
 product:
   name: zod
   description: TypeScript-first schema validation
 
 sources:
-  readme: ./README.md
-  llms: https://zod.dev/llms.txt
+  llms: { url: https://zod.dev/llms.txt }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  injected: { source: llms, tools: none }
+contexts:
+  injected: { mode: inject, source: llms }
 
-tasks:
+facts:
+  error_api:
+    statement: Errors are read with z.treeifyError.
+    match:
+      allOf: ["z.treeifyError"]
+
+misstatements:
+  deprecated_format:
+    statement: Recommends the removed ZodError.format().
+    match:
+      anyOf: ["ZodError.format()"]
+
+questions:
   - id: error-handling
-    prompt: How do I get error messages from failed validation?
+    question: How do I get error messages from failed validation?
     agents: [quick]
-    access: [injected]
-    checks:
-      mustMention: ["z.treeifyError"]
-      mustNotMention: ["ZodError.format()"]
+    contexts: [injected]
+    expects: [error_api]
+    rejects: [deprecated_format]
+    examples:
+      pass: ["Read issues with z.treeifyError(err)."]
+      fail: ["Call ZodError.format() on the error."]
 
+builds:
   - id: add-validation
-    kind: build
-    prompt: Add Zod validation to the signup form.
+    goal: Add Zod validation to the signup form.
     agents: [quick]
-    access: [injected]
+    contexts: [injected]
     trials: 3
     workspace: { path: ./fixtures/app }
-    verify: [bun test]
+    verifier:
+      failToPass:
+        - { run: bun test }
 
-threshold: 80`;
+thresholds:
+  questions: 80
+  builds: 80`;
 
 export function Example() {
   return (
@@ -76,16 +95,15 @@ export function Example() {
                 <T.Dim>Task: error-handling</T.Dim>
               </TerminalLine>
               <TerminalLine>
-                &nbsp;&nbsp;<T.Error>✗ Ungrounded</T.Error>{" "}
-                <T.Muted>(0%)</T.Muted>
+                &nbsp;&nbsp;<T.Muted>[quick · injected]</T.Muted>{" "}
+                <T.Error>✗ Ungrounded 0/1</T.Error>
               </TerminalLine>
               <TerminalLine>
                 <T.Dim>
-                  {'    reason: missing includes: "z.treeifyError"'}
+                  {
+                    "    reason: misstatement: deprecated_format; missing facts: error_api"
+                  }
                 </T.Dim>
-              </TerminalLine>
-              <TerminalLine>
-                <T.Dim>{'    hit excludes: "ZodError.format()"'}</T.Dim>
               </TerminalLine>
               <TerminalLine>
                 <T.Dim>Overall:</T.Dim> <T.Error>0</T.Error>{" "}
@@ -102,14 +120,11 @@ export function Example() {
                 <T.Dim>Task: add-validation</T.Dim>
               </TerminalLine>
               <TerminalLine>
-                &nbsp;&nbsp;<T.Warning>⚠ Partially built</T.Warning>{" "}
-                <T.Muted>2/3</T.Muted>
+                &nbsp;&nbsp;<T.Muted>[quick · injected]</T.Muted>{" "}
+                <T.Warning>⚠ Partially built 2/3</T.Warning>
               </TerminalLine>
               <TerminalLine>
-                <T.Dim>{"    changed: src/signup.tsx"}</T.Dim>
-              </TerminalLine>
-              <TerminalLine>
-                <T.Dim>{"    command: bun test -> exit 1"}</T.Dim>
+                <T.Dim>{"    failed: bun test (failToPass)"}</T.Dim>
               </TerminalLine>
               <TerminalLine>
                 <T.Dim>Overall:</T.Dim> <T.Warning>67</T.Warning>{" "}

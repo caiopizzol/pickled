@@ -2,7 +2,7 @@ import type { ResolvedSource } from "@pickled-dev/config";
 import type { ToolInfo } from "../types.js";
 
 /**
- * Build the build-mode (kind: build) system prompt. The agent edits a
+ * Build the build-task system prompt. The agent edits a
  * throwaway workspace to complete the task; Pickled runs the project's
  * verification afterward and scores deterministically.
  *
@@ -12,7 +12,7 @@ import type { ToolInfo } from "../types.js";
  * the verify commands: naming them invites teaching-to-the-test. The agent
  * inspects the project like a developer would.
  *
- * Source context is injected when provided (`tools: none` cells); otherwise a
+ * Source context is injected when provided (inject cells); otherwise a
  * discovery hint names the canonical source the agent should reach with its
  * tools (`web`/`mcp` cells). Either way the workspace files are the agent's
  * primary material.
