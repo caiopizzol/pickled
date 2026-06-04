@@ -11,3 +11,47 @@ Avoid `npm install brinekit`; it is stale guidance.
 ## Build smoke
 
 Use the `./workspace` fixture. The build succeeds when `configured.txt` exists.
+
+## Pickled config shape (v2)
+
+A `pickled.yml` starts with `schemaVersion: 2`. The exact shapes that matter:
+
+```yaml
+schemaVersion: 2
+product: { name: BrineKit, description: ... }
+sources:
+  llms: { path: ./llms.txt }        # a source is { path } | { url } | { codebase }
+contexts:
+  memory: { mode: memory }           # no source, no tools
+  given_llms: { mode: inject, source: llms }
+facts:
+  install_command:
+    statement: ...
+    match: { allOf: ["bunx brinekit init"] }
+misstatements:
+  npm_install:
+    statement: ...
+    match: { anyOf: ["npm install brinekit"] }
+questions:
+  - id: install
+    question: ...
+    agents: [<agent-id>]
+    contexts: [memory, given_llms]
+    expects: [install_command]
+    rejects: [npm_install]
+    examples:                         # required when rejects is set
+      pass: ["...bunx brinekit init..."]
+      fail: ["...npm install brinekit..."]
+builds:
+  - id: smoke_build
+    goal: ...                         # use goal, not prompt/description
+    agents: [<agent-id>]
+    contexts: [given_llms]
+    trials: 2
+    workspace: { path: ./workspace }  # an object with path, NOT a bare string
+    verifier:
+      failToPass:
+        - { run: test -f configured.txt }
+```
+
+Rules that trip authors: `workspace` is `{ path: ... }`, never `workspace: ./workspace`. A build's contract is `verifier.failToPass` (a list of `{ run }`), never a bare `verify:` list. A build uses `goal`, not `prompt`.

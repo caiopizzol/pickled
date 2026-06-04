@@ -34,8 +34,14 @@ describe("dogfood pickled.yml (in-repo acceptance fixture)", () => {
     expect(build?.verifier.failToPass[0]?.run).toBe(
       "./tests/verify-pickled-config.sh",
     );
+    // SWE-bench bracket is complete: a regression guard plus a positive control.
+    expect(build?.verifier.passToPass.length).toBeGreaterThan(0);
+    expect(build?.referenceSolution?.patch).toBe(
+      "./fixtures/pickled-config-authoring.solution.patch",
+    );
 
-    // Contexts cover all four modes.
+    // The dogfood contexts span memory, inject, and web (it declares no mcp
+    // context, so mcp is intentionally absent here).
     const modes = new Set(Object.values(config.contexts).map((c) => c.mode));
     expect(modes).toEqual(new Set(["memory", "inject", "web"]));
 

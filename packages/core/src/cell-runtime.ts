@@ -126,6 +126,14 @@ export function resolveCellRuntime(args: {
         maxTurns: Math.max(base.maxTurns ?? 0, 15),
       };
     }
+  } else if (kind === "question") {
+    // memory / inject question cells get no tools. Claude Code otherwise
+    // inherits the Agent SDK's default built-ins (WebSearch/WebFetch/Bash),
+    // which would let a cell meant to answer from memory or the injected
+    // source silently reach the web and defeat what the cell measures. API
+    // targets ignore this field (they wire tools only for web/mcp modes);
+    // build cells keep their edit profile, so this is question-only.
+    restrictBuiltinTools = [];
   }
 
   return {
