@@ -5,9 +5,9 @@ import { join } from "node:path";
 // Guards a cross-file invariant the code cannot enforce structurally: every
 // field in the published JSON Schema (packages/config/schema/pickled.schema.json)
 // must stay documented in the hand-written reference (apps/docs/content/docs/
-// pickled-yml.mdx). Adding a schema field without documenting it fails here.
-// The schema owns shape; the page owns explanation. We do not generate the
-// page from the schema, so this is the drift guard between them.
+// pickled-yml.mdx), and the page must not drift back to v1 vocabulary. The
+// schema owns shape; the page owns explanation; we do not generate one from the
+// other, so this is the drift guard between them.
 const SCHEMA_PATH = join(import.meta.dir, "../schema/pickled.schema.json");
 const DOCS_PATH = join(
   import.meta.dir,
@@ -22,8 +22,8 @@ const schema = JSON.parse(readFileSync(SCHEMA_PATH, "utf8")) as Record<
 const docs = readFileSync(DOCS_PATH, "utf8");
 
 // A user-written field is a key under any `properties` object. Map-valued
-// sections (sources/agents/access) carry their field names inside the $def
-// they reference, so a full recursive walk is what reaches them.
+// sections (sources/agents/contexts/facts/...) carry their field names inside
+// the $def they reference, so a full recursive walk is what reaches them.
 function collectFieldNames(node: unknown, out: Set<string>): void {
   if (Array.isArray(node)) {
     for (const item of node) collectFieldNames(item, out);
@@ -44,17 +44,22 @@ collectFieldNames(schema, fieldNames);
 const topLevelKeys = Object.keys(
   (schema.properties ?? {}) as Record<string, unknown>,
 );
-const checkKeys = Object.keys(
-  (schema.$defs as Record<string, { properties?: Record<string, unknown> }>)
-    .checks.properties ?? {},
-);
+
+// v1 vocabulary that must never reappear in the v2 reference. Each is a term
+// the v2 schema replaced; their presence means the page drifted back.
+const V1_TERMS = [
+  "mustMention",
+  "mustNotMention",
+  "mustMentionOneOf",
+  "answerable",
+  "## Sources",
+  "access path",
+  "tools:",
+];
 
 describe("pickled.yml docs coverage", () => {
-  // Without this, a walk that silently collects nothing would pass every
-  // assertion below by checking an empty set.
   test("the field walk finds the public fields", () => {
     expect(fieldNames.size).toBeGreaterThan(15);
-    expect(checkKeys.length).toBeGreaterThan(0);
   });
 
   test("the docs page links the published schema", () => {
@@ -68,11 +73,6 @@ describe("pickled.yml docs coverage", () => {
     expect(missing).toEqual([]);
   });
 
-  test("every check key appears as inline code", () => {
-    const missing = checkKeys.filter((key) => !docs.includes(`\`${key}\``));
-    expect(missing).toEqual([]);
-  });
-
   // Plain substring matching would let generic names (id, name, source, pass,
   // fail) pass via an unrelated word, so require each field to appear where it
   // documents a field: inline code `field` or a YAML key `field:`.
@@ -82,5 +82,10 @@ describe("pickled.yml docs coverage", () => {
       new RegExp(`(^|[^\\w])${field}:`, "m").test(docs);
     const missing = [...fieldNames].filter((field) => !documented(field));
     expect(missing).toEqual([]);
+  });
+
+  test("the page does not drift back to v1 vocabulary", () => {
+    const present = V1_TERMS.filter((term) => docs.includes(term));
+    expect(present).toEqual([]);
   });
 });

@@ -178,8 +178,10 @@ export function validatePublicConfig(
       if (k !== "questions" && k !== "builds") {
         fail(`thresholds has unknown key "${k}" (allowed: questions, builds)`);
       }
-      if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 100) {
-        fail(`thresholds.${k} must be an integer between 0 and 100`);
+      if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 100) {
+        fail(
+          `thresholds.${k} must be an integer between 1 and 100 (omit the key for no gate)`,
+        );
       }
     }
   }

@@ -18,7 +18,7 @@ function project(yml: string): string {
   return dir;
 }
 
-// Capture stdout (--json plan) + console.log (nothing-to-run) for one call.
+/** Capture stdout (--json) + console.log (human output) for one call. */
 async function capture(fn: () => Promise<void>): Promise<string> {
   const chunks: string[] = [];
   const origWrite = process.stdout.write.bind(process.stdout);
@@ -26,7 +26,6 @@ async function capture(fn: () => Promise<void>): Promise<string> {
   // biome-ignore lint/suspicious/noExplicitAny: test spy
   process.stdout.write = ((s: any, enc?: any, cb?: any) => {
     chunks.push(String(s));
-    // writeStdout awaits the write callback; invoke it so it resolves.
     const done = typeof enc === "function" ? enc : cb;
     if (typeof done === "function") done();
     return true;
@@ -44,43 +43,63 @@ async function capture(fn: () => Promise<void>): Promise<string> {
 }
 
 const MIXED = `
+schemaVersion: 2
 product: { name: my-product, description: a tool }
 agents:
   builder: { provider: claude-code, model: m }
-access:
-  memory: { source: none, tools: none }
-tasks:
+contexts:
+  mem: { mode: memory }
+facts:
+  inst: { statement: install, match: { allOf: ["bunx"] } }
+questions:
   - id: install
-    prompt: How do I install?
+    question: How do I install?
     agents: [builder]
-    access: [memory]
-    checks: { mustMention: ["bunx"] }
+    contexts: [mem]
+    expects: [inst]
+builds:
   - id: toolbar
-    kind: build
-    prompt: Add a toolbar.
+    goal: Add a toolbar.
     agents: [builder]
-    access: [memory]
+    contexts: [mem]
     trials: 3
     workspace: { path: ./fixtures/app }
-    verify: [bun test]
+    verifier:
+      failToPass: [{ run: bun test }]
+`;
+
+const QUESTIONS_ONLY = `
+schemaVersion: 2
+product: { name: p, description: d }
+agents: { builder: { provider: claude-code, model: m } }
+contexts: { mem: { mode: memory } }
+facts: { inst: { statement: install, match: { allOf: ["bunx"] } } }
+questions:
+  - id: install
+    question: How?
+    agents: [builder]
+    contexts: [mem]
+    expects: [inst]
 `;
 
 describe("pickled check / build task routing", () => {
-  test("check --plan includes only answer tasks", async () => {
+  test("check --plan includes only questions", async () => {
     const dir = project(MIXED);
     const out = await capture(() => check(dir, { plan: true, json: true }));
-    const plan = JSON.parse(out).plan;
-    const names = plan.cells.map((c: { scenario: string }) => c.scenario);
+    const names = JSON.parse(out).plan.cells.map(
+      (c: { task: string }) => c.task,
+    );
     expect(names).toContain("install");
     expect(names).not.toContain("toolbar");
   });
 
-  test("build --plan includes only build tasks, with trial-expanded executions", async () => {
+  test("build --plan includes only builds, with trial-expanded executions", async () => {
     const dir = project(MIXED);
     const out = await capture(() => build(dir, { plan: true, json: true }));
     const plan = JSON.parse(out).plan;
-    const names = plan.cells.map((c: { scenario: string }) => c.scenario);
-    expect(names).toEqual(["toolbar"]);
+    expect(plan.cells.map((c: { task: string }) => c.task)).toEqual([
+      "toolbar",
+    ]);
     expect(plan.selectedCells).toBe(1);
     expect(plan.selectedExecutions).toBe(3); // 1 cell x trials 3
   });
@@ -92,10 +111,8 @@ describe("pickled check / build task routing", () => {
       s.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"), "");
     const clean = stripAnsi(out);
     expect(clean).toContain("pickled build");
-    expect(clean).toContain("Tasks:");
-    expect(clean).toContain("Executions: 3"); // 1 cell x trials 3
+    expect(clean).toContain("Executions: 3");
     expect(clean).not.toContain("pickled check");
-    expect(clean).not.toContain("Questions:");
   });
 
   test("--task narrows to the named task", async () => {
@@ -104,26 +121,24 @@ describe("pickled check / build task routing", () => {
       check(dir, { plan: true, json: true, task: "install" }),
     );
     const names = JSON.parse(out).plan.cells.map(
-      (c: { scenario: string }) => c.scenario,
+      (c: { task: string }) => c.task,
     );
     expect(names).toEqual(["install"]);
   });
 
-  test("build on an answer-only config says nothing to run (no throw)", async () => {
-    const answerOnly = `
-product: { name: p, description: d }
-agents: { builder: { provider: claude-code, model: m } }
-access: { memory: { source: none, tools: none } }
-tasks:
-  - id: install
-    prompt: How?
-    agents: [builder]
-    access: [memory]
-    checks: { mustMention: ["bunx"] }
-`;
-    const dir = project(answerOnly);
+  test("build on a questions-only config says nothing to run (human)", async () => {
+    const dir = project(QUESTIONS_ONLY);
     const out = await capture(() => build(dir, {}));
-    expect(out).toContain("No build tasks");
+    expect(out).toContain("No builds");
     expect(out).toContain("pickled check");
+  });
+
+  test("build --json on a questions-only config emits a valid empty builds report", async () => {
+    const dir = project(QUESTIONS_ONLY);
+    const out = await capture(() => build(dir, { json: true }));
+    const report = JSON.parse(out);
+    expect(report.kind).toBe("builds");
+    expect(report.builds).toEqual([]);
+    expect(report.summary).toMatchObject({ total: 0, yes: 0, errors: 0 });
   });
 });

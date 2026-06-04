@@ -4,27 +4,27 @@
 
 ## Why
 
-Docs can be correct and agents can still answer wrong. Examples can be correct and agents can still build the wrong thing. Pickled gives you receipts: per-cell verdicts showing which agent, which source, and which access path produced which answer or build result. No LLM grades another LLM.
+Docs can be correct and agents can still answer wrong. Examples can be correct and agents can still build the wrong thing. Pickled gives you receipts: per-cell verdicts showing which agent, which source, and which context path produced which answer or build result. No LLM grades another LLM.
 
 ## How it works
 
-Four terms:
+Five terms:
 
 - **Agent** is who answers: Claude Code, Codex CLI, Anthropic API, OpenAI API.
-- **Source** is the public context Pickled may score against: a local file or a URL. Anything not registered does not count.
-- **Access** is a named context path: a `(source, tools)` pair. `tools` is `none` (the source is injected), `web`, or `mcp`.
-- **Task** is the unit of work. An answer task asks a question and scores the answer with checks; a build task has the agent edit a workspace and passes when your `verify` commands do.
+- **Source** is the public context Pickled may score against: a local file, a URL, or a codebase glob. Anything not registered does not count.
+- **Context** is a named delivery path: a `mode` (`memory`, `inject`, `web`, or `mcp`) plus an optional source.
+- **Question** asks something and scores the answer on declared facts (and rejected misstatements). **Build** has the agent edit a workspace and passes when the `verifier` does.
+- **Fact / misstatement** are the reusable, deterministic match contracts a question scores against.
 
-A task runs as one cell per `(agent × access)` pair, and each cell is graded on its own.
+A task runs as one cell per `(agent × context)` pair, and each cell is graded on its own.
 
 ## What it checks
 
-- **mustMention.** Substrings the answer must contain.
-- **mustMentionOneOf.** Groups where the answer must contain at least one value from each group.
-- **mustNotMention.** Substrings the answer must not contain.
-- **Tool paths are real.** A `web` or `mcp` access path that answers without invoking any of its tools is vetoed to `NO`. Model memory does not count as evidence for a tool path.
-- **Builds prove themselves.** Build tasks pass or fail on your `verify` commands.
-- **No LLM grades another LLM.** Every signal is a substring check, a recorded tool invocation, or a command result.
+- **Facts.** Reusable product truths a question's answer must cover (`allOf` / `anyOf` substring matches, normalized).
+- **Misstatements.** Reusable wrong claims the answer must not make. A match is a hard veto to `NO`.
+- **Tool paths are real.** A `web` or `mcp` context that answers without invoking any of its tools is vetoed to `NO`. Model memory does not count as evidence for a tool path.
+- **Builds prove themselves.** Builds pass or fail on a SWE-bench-style `verifier` (`failToPass` + `passToPass`).
+- **No LLM grades another LLM.** Every signal is a substring match, a recorded tool invocation, or a command result.
 
 ## Quick start
 
@@ -36,56 +36,64 @@ bunx @pickled-dev/cli check .
 ## Tiny config
 
 ```yaml
+schemaVersion: 2
+
 product:
   name: my-product
   description: short one-liner
 
 sources:
-  readme: ./README.md
-  docs: https://docs.my-product.dev/llms-full.txt
+  docs: { url: https://docs.my-product.dev/llms-full.txt }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  memory: { source: none, tools: none } # no context, model memory only
-  given_docs: { source: docs, tools: none } # docs content injected
-  web_open: { source: none, tools: web } # open web discovery
+contexts:
+  memory: { mode: memory } # no context, model memory only
+  given_docs: { mode: inject, source: docs } # docs content injected
+  web_open: { mode: web } # open web discovery
 
-tasks:
+facts:
+  install_command:
+    statement: my-product installs with bunx my-product.
+    match:
+      allOf: ["bunx my-product"]
+
+questions:
   - id: install
-    prompt: How do I install my-product?
+    question: How do I install my-product?
     agents: [quick]
-    access: [memory, given_docs, web_open]
-    checks:
-      mustMention: ["bunx my-product"]
+    contexts: [memory, given_docs, web_open]
+    expects: [install_command]
 
-threshold: 60
+thresholds:
+  questions: 60
 ```
 
-That task runs three cells, one per access path, and grades each on its own. `memory` answers from model memory; `given_docs` reads the docs you registered; `web_open` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell checks `mustMention`. Compare the verdicts to see which context path the agent actually needed to get it right.
+That question runs three cells, one per context, and grades each on its own. `memory` answers from model memory; `given_docs` reads the docs you registered; `web_open` makes the agent reach the live site through web tools (a cell that answers without invoking a tool is vetoed). Every cell scores the same fact. Compare the verdicts to see which context the agent actually needed to get it right.
 
-## Build task
+## Builds
 
-Answer tasks check what the agent says. Build tasks check what the agent can do:
+Questions check what the agent says. Builds check what the agent can do:
 
 ```yaml
-tasks:
+builds:
   - id: add-toolbar
-    kind: build
-    prompt: Add a toolbar using my-product.
+    goal: Add a toolbar using my-product.
     agents: [quick]
-    access: [given_docs]
+    contexts: [given_docs]
     trials: 3
     workspace:
       path: ./fixtures/app
       setup: [bun install]
-    verify: [bun test]
+    verifier:
+      failToPass:
+        - { run: bun test }
 ```
 
-Run build tasks with `pickled build .`. Each `(agent × access)` cell runs in a fresh workspace for each trial and reports `Built k/n`, `Partially built k/n`, or `Did not build k/n`.
+Run builds with `pickled build .`. Each `(agent × context)` cell runs in a fresh workspace for each trial and reports `Built k/n`, `Partially built k/n`, or `Did not build k/n`.
 
 ## Read more
 

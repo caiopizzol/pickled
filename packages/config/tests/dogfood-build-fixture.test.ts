@@ -58,45 +58,62 @@ describe("build dogfood fixture", () => {
     expect(result.status).toBe(0);
   });
 
-  test("semantic access paths pass even when names differ", () => {
+  test("semantic context paths pass even when names differ", () => {
     const dir = copyFixture();
     writeFileSync(
       join(dir, "pickled.yml"),
-      `product:
+      `schemaVersion: 2
+
+product:
   name: BrineKit
   description: CLI fixture for Pickled config authoring
 
 sources:
-  llms: ./llms.txt
+  llms: { path: ./llms.txt }
 
 agents:
   quick:
     provider: claude-code
     model: claude-haiku-4-5
 
-access:
-  memory_only: { source: none, tools: none }
-  with_llms_context: { source: llms, tools: none }
+contexts:
+  memory_only: { mode: memory }
+  with_llms_context: { mode: inject, source: llms }
 
-tasks:
+facts:
+  install_command:
+    statement: BrineKit installs with bunx brinekit init.
+    match:
+      allOf: ["bunx brinekit init"]
+
+misstatements:
+  npm_install:
+    statement: Recommends npm install for BrineKit.
+    match:
+      anyOf: ["npm install brinekit"]
+
+questions:
   - id: install
-    prompt: How do I install BrineKit?
+    question: How do I install BrineKit?
     agents: [quick]
-    access: [memory_only, with_llms_context]
-    checks:
-      mustMention: ["bunx brinekit init"]
-      mustNotMention: ["npm install brinekit"]
+    contexts: [memory_only, with_llms_context]
+    expects: [install_command]
+    rejects: [npm_install]
+    examples:
+      pass: ["Install with bunx brinekit init."]
+      fail: ["Install with npm install brinekit."]
 
+builds:
   - id: smoke_build
-    kind: build
-    prompt: Create configured.txt in the BrineKit workspace.
+    goal: Create configured.txt in the BrineKit workspace.
     agents: [quick]
-    access: [with_llms_context]
+    contexts: [with_llms_context]
     trials: 2
     workspace:
       path: ./workspace
-    verify:
-      - test -f configured.txt
+    verifier:
+      failToPass:
+        - { run: test -f configured.txt }
 `,
     );
     const result = runVerifier(dir);

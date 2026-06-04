@@ -1,17 +1,33 @@
-import type { CheckConfig, ResolvedDocSource } from "@pickled-dev/config";
+import { isAbsolute, resolve } from "node:path";
+import type {
+  Build,
+  Config,
+  ResolvedSource,
+  Target,
+} from "@pickled-dev/config";
 import { Glob } from "bun";
 import { resolveCellRuntime } from "../cell-runtime.js";
 import { assertEditCapable, createTarget } from "../targets/index.js";
-import type { ResolvedContext, TargetRunner } from "../targets/types.js";
-import type { BuildAttempt, CellResult, ToolInfo } from "../types.js";
+import type { TargetRunner } from "../targets/types.js";
+import type {
+  BuildAttempt,
+  BuildCell,
+  CellCoord,
+  CommandReceipt,
+  ToolInfo,
+  VerifierGroup,
+  VerifierProof,
+} from "../types.js";
 import { type CommandSpec, runCommands } from "./verifiers.js";
 import {
   baselineWorkspace,
   captureDiff,
   cleanupWorkspace,
   createWorkspace,
+  runProcess,
   runSetup,
   SetupError,
+  type Workspace,
 } from "./workspace.js";
 
 /** Internal timeouts so a hung agent or verify command cannot stall CI. */
@@ -22,135 +38,156 @@ const SETUP_TIMEOUT_MS = 600_000;
 /** Baseline files the agent must not weaken to pass. Test files only in v1. */
 const HARNESS_GLOBS = ["**/*.test.*", "**/*.spec.*", "tests/**", "test/**"];
 
-export interface BuildTask {
-  name: string;
-  prompt: string;
+interface BuildTask {
+  goal: string;
   workspacePath: string;
   setup: string[];
-  verify: CommandSpec[];
+  failToPass: CommandSpec[];
+  passToPass: CommandSpec[];
   trials: number;
+  referenceSolutionPatch?: string;
 }
 
-export interface BuildCellInput {
-  task: BuildTask;
-  interfaceName: string;
-  accessPair: { access?: string; source: string | null; toolset: string };
-  config: CheckConfig;
-  docs: ResolvedDocSource[];
+export interface BuildRunOptions {
   tool: ToolInfo;
-  contextConfig: ResolvedContext;
-  /** Test seam: build a target from the per-cell config (defaults to createTarget). */
-  targetFactory?: (name: string, config: unknown) => TargetRunner;
+  targetFactory?: (name: string, config: Target) => TargetRunner;
   keepOnFailure?: boolean;
-  /** Wall-clock budget for one agent run. Defaults to AGENT_TIMEOUT_MS; tests
-   *  pass a small value to exercise the timeout/cancellation path. */
   agentTimeoutMs?: number;
   onProgress?: (msg: string) => void;
 }
 
+function contextSource(
+  context: { mode: string; source?: string } | undefined,
+): string | null {
+  if (!context || context.mode === "memory") return null;
+  return context.source ?? null;
+}
+
 /**
- * Run one build cell (agent × access): a vacuous-fixture preflight, then
- * `task.trials` independent trials, each in a fresh workspace. Returns a
- * CellResult carrying the `build` block (strict k/n), or an Error cell (no
- * `build` block) for a setup failure or an already-green fixture.
- *
- * Trial independence is load-bearing: captureDiff stages against the per-trial
- * baseline, so trial 2 must NOT inherit trial 1's edits. Each trial therefore
- * gets its own workspace (setup repeats; correctness over cost in v1).
+ * Run one build cell (agent x context): a SWE-bench-style preflight (the
+ * untouched fixture must FAIL every failToPass and PASS every passToPass), an
+ * optional reference-solution control, then `trials` independent trials in
+ * fresh workspaces. Returns a BuildCell with the strict k/n verdict, or an
+ * error cell (setup failure, vacuous/broken fixture, all trials errored).
  */
-export async function runBuildCell(input: BuildCellInput): Promise<CellResult> {
-  const { task, interfaceName, accessPair, config, docs } = input;
-  const cellMeta = {
-    interface: interfaceName,
-    access: accessPair.access,
-    source: accessPair.source,
-    toolset: accessPair.toolset,
+export async function runBuildCell(args: {
+  build: Build;
+  agent: string;
+  contextName: string;
+  config: Config;
+  sources: ResolvedSource[];
+  options: BuildRunOptions;
+}): Promise<BuildCell> {
+  const { build, agent, contextName, config, sources, options } = args;
+  const coord: CellCoord = { agent, context: contextName };
+  const context = config.contexts[contextName];
+  const mode = (context?.mode ?? "memory") as BuildCell["mode"];
+  const source = contextSource(context);
+
+  if (!context) {
+    return errorCell(coord, mode, source, `unknown context "${contextName}"`);
+  }
+
+  let rt: ReturnType<typeof resolveCellRuntime>;
+  try {
+    rt = resolveCellRuntime({ agent, context, config, sources, kind: "build" });
+    assertEditCapable(agent, rt.target);
+  } catch (e) {
+    return errorCell(coord, mode, source, errMsg(e));
+  }
+
+  const task: BuildTask = {
+    goal: build.goal,
+    workspacePath: build.workspace.path,
+    setup: build.workspace.setup,
+    failToPass: build.verifier.failToPass.map((c) => ({
+      name: c.name,
+      run: c.run,
+    })),
+    passToPass: build.verifier.passToPass.map((c) => ({
+      name: c.name,
+      run: c.run,
+    })),
+    trials: build.trials,
+    referenceSolutionPatch: build.referenceSolution?.patch,
   };
 
-  // Access composition (target config, source injection, tool scoping) is
-  // shared with the answer runner. Outside any try so config errors bubble.
-  const rt = resolveCellRuntime({
-    interfaceName,
-    sourceName: accessPair.source,
-    toolsetName: accessPair.toolset,
-    config,
-    docs,
-    requiredSources: [],
-    contextConfig: input.contextConfig,
-  });
-
-  // Hard gate: a build task only runs on an edit-capable agent. Fail before any
-  // workspace, preflight, or paid model call. Throws (config error) the same
-  // way resolveCellRuntime's provider gates do.
-  assertEditCapable(interfaceName, rt.baseTargetConfig);
-
-  // Preflight: the untouched fixture must FAIL verification. A green baseline
-  // means the task measures nothing - that is a bad fixture, an Error cell
-  // excluded from scoring, never scored as the agent failing.
-  const preflight = await runBaselineVerify(task);
+  const preflight = await runPreflight(task);
   if (preflight.kind === "setup-error") {
-    return errorCell(cellMeta, `setup failed: ${preflight.message}`);
+    return errorCell(coord, mode, source, `setup failed: ${preflight.message}`);
   }
-  if (preflight.kind === "already-green") {
+  if (preflight.kind === "invalid-fixture") {
+    return errorCell(coord, mode, source, preflight.message);
+  }
+
+  const verifierProof = await runReferenceControl(task, options.tool.path);
+  if (verifierProof === "failed") {
     return errorCell(
-      cellMeta,
-      "invalid fixture: verification already passes on the untouched workspace, so the task measures nothing",
+      coord,
+      mode,
+      source,
+      "reference solution did not pass the verifier: the bar is unreachable or the verifier is broken; not scoring the agent",
+      "failed",
     );
   }
 
   const attempts: BuildAttempt[] = [];
   for (let i = 0; i < task.trials; i++) {
-    input.onProgress?.(`    trial ${i + 1}/${task.trials}`);
-    attempts.push(await runTrial(input, rt));
+    options.onProgress?.(`    trial ${i + 1}/${task.trials}`);
+    attempts.push(await runTrial(task, rt, agent, options));
   }
-  // Errored trials (trial-local setup failure, agent crash) are environment,
-  // not agent work: keep them in attempts[] as receipts but exclude them from
-  // the k/n denominator so a flaky install or infra blip cannot tank the rate.
+
   const scored = attempts.filter((a) => a.status !== "error");
   const passedAttempts = scored.filter((a) => a.status === "passed").length;
   const totalAttempts = scored.length;
 
-  // Every trial errored: no scored measurement, so this is an Error cell, not a
-  // 0/0 build.
   if (totalAttempts === 0) {
     const reasons = attempts
       .map((a) => a.reason)
       .filter(Boolean)
       .join("; ");
     return errorCell(
-      cellMeta,
+      coord,
+      mode,
+      source,
       `could not measure: all ${attempts.length} trial(s) errored${reasons ? ` (${reasons})` : ""}`,
+      verifierProof,
     );
   }
 
-  // Strict verdict: YES only if every scored trial built. confidence = rate.
-  const answerable =
+  const verdict =
     passedAttempts === totalAttempts
       ? "YES"
       : passedAttempts === 0
         ? "NO"
         : "PARTIAL";
-  const confidence = Math.round((passedAttempts / totalAttempts) * 100);
+  const passRate = Math.round((passedAttempts / totalAttempts) * 100);
 
   return {
-    cell: cellMeta,
-    taskKind: "build",
-    answerable,
-    confidence,
-    response: "",
+    coord,
+    mode,
+    source,
+    verdict,
+    passedAttempts,
+    totalAttempts,
+    passRate,
+    attempts,
     reason: `Built ${passedAttempts}/${totalAttempts}`,
-    citations: null,
-    build: { attempts, passedAttempts, totalAttempts },
+    verifierProof,
   };
 }
 
 type PreflightResult =
   | { kind: "setup-error"; message: string }
-  | { kind: "already-green" }
+  | { kind: "invalid-fixture"; message: string }
   | { kind: "ok" };
 
-/** Create a throwaway workspace, run setup, run verify on it untouched. */
-async function runBaselineVerify(task: BuildTask): Promise<PreflightResult> {
+/**
+ * The untouched fixture must FAIL every failToPass (the task is real) and PASS
+ * every passToPass (no pre-existing breakage). Either violation is a fixture
+ * error, never scored as the agent failing.
+ */
+async function runPreflight(task: BuildTask): Promise<PreflightResult> {
   const ws = await createWorkspace(task.workspacePath);
   try {
     try {
@@ -161,21 +198,73 @@ async function runBaselineVerify(task: BuildTask): Promise<PreflightResult> {
       }
       throw e;
     }
-    const results = await runCommands(ws, task.verify, {
+    const fail = await runCommands(ws, task.failToPass, {
       timeoutMs: VERIFY_TIMEOUT_MS,
     });
-    const allPass = results.every((r) => r.passed);
-    return allPass ? { kind: "already-green" } : { kind: "ok" };
+    const unexpectedlyPass = fail.filter((r) => r.passed).map((r) => r.name);
+    if (unexpectedlyPass.length > 0) {
+      return {
+        kind: "invalid-fixture",
+        message: `invalid fixture: failToPass already passes on the untouched workspace (${unexpectedlyPass.join(", ")}), so the task measures nothing`,
+      };
+    }
+    const pass = await runCommands(ws, task.passToPass, {
+      timeoutMs: VERIFY_TIMEOUT_MS,
+    });
+    const brokenBaseline = pass.filter((r) => !r.passed).map((r) => r.name);
+    if (brokenBaseline.length > 0) {
+      return {
+        kind: "invalid-fixture",
+        message: `invalid fixture: passToPass fails on the untouched workspace (${brokenBaseline.join(", ")}); the regression guard must be green before the agent`,
+      };
+    }
+    return { kind: "ok" };
+  } finally {
+    await cleanupWorkspace(ws);
+  }
+}
+
+/**
+ * Optional positive control. Apply the reference patch to a fresh baseline and
+ * run the full verifier: all failToPass + passToPass must pass, proving the bar
+ * is reachable. Returns "passed" / "failed" / "not_declared".
+ */
+async function runReferenceControl(
+  task: BuildTask,
+  projectPath: string,
+): Promise<VerifierProof> {
+  if (!task.referenceSolutionPatch) return "not_declared";
+  const patchAbs = isAbsolute(task.referenceSolutionPatch)
+    ? task.referenceSolutionPatch
+    : resolve(projectPath, task.referenceSolutionPatch);
+  const ws = await createWorkspace(task.workspacePath);
+  try {
+    try {
+      await runSetup(ws, task.setup, { timeoutMs: SETUP_TIMEOUT_MS });
+    } catch {
+      return "failed";
+    }
+    await baselineWorkspace(ws);
+    const applied = await runProcess(["git", "apply", patchAbs], {
+      cwd: ws.dir,
+    });
+    if (applied.exitCode !== 0) return "failed";
+    const all = [...task.failToPass, ...task.passToPass];
+    const results = await runCommands(ws, all, {
+      timeoutMs: VERIFY_TIMEOUT_MS,
+    });
+    return results.every((r) => r.passed) ? "passed" : "failed";
   } finally {
     await cleanupWorkspace(ws);
   }
 }
 
 async function runTrial(
-  input: BuildCellInput,
+  task: BuildTask,
   rt: ReturnType<typeof resolveCellRuntime>,
+  agent: string,
+  options: BuildRunOptions,
 ): Promise<BuildAttempt> {
-  const { task, interfaceName, tool } = input;
   const ws = await createWorkspace(task.workspacePath);
   let failed = true;
   try {
@@ -189,56 +278,37 @@ async function runTrial(
     }
     await baselineWorkspace(ws);
 
-    const target = input.targetFactory
-      ? input.targetFactory(interfaceName, rt.targetConfig)
-      : createTarget(interfaceName, rt.targetConfig);
+    const target = options.targetFactory
+      ? options.targetFactory(agent, rt.target)
+      : createTarget(agent, rt.target);
 
-    // Wall-clock bound on the agent run so a hung agent cannot stall CI. The
-    // SDK's maxTurns bounds turns, not time; this is the time backstop. On
-    // timeout the runner aborts the controller, which the adapters wire to a
-    // real teardown (claude-code abortController, codex proc.kill), so the
-    // agent process is cancelled, not just abandoned. A timeout is a
-    // non-success trial (the agent did not finish in budget), counted against
-    // the rate.
     const controller = new AbortController();
-    const budgetMs = input.agentTimeoutMs ?? AGENT_TIMEOUT_MS;
+    const budgetMs = options.agentTimeoutMs ?? AGENT_TIMEOUT_MS;
     let timedOut: boolean;
     try {
       timedOut = await raceTimeout(
-        target.run(task.prompt, {
-          tool,
+        target.run(task.goal, {
+          tool: options.tool,
           cwd: ws.dir,
-          docs: [],
-          requiredSources: [],
-          editMode: true,
-          buildContext: {
-            docs: rt.cellDocs,
-            sourceHint: rt.discoveryHint?.sourceHint ?? null,
-          },
+          promptContext: rt.promptContext,
           restrictBuiltinTools: rt.runOptions.restrictBuiltinTools,
           webTools: rt.runOptions.webTools,
           mcpTools: rt.runOptions.mcpTools,
           signal: controller.signal,
-          onProgress: input.onProgress,
+          onProgress: options.onProgress,
         }),
         budgetMs,
         () => controller.abort(),
       );
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (isAgentTurnBudgetExhausted(message)) {
+      const message = errMsg(e);
+      if (/reached maximum number of turns/i.test(message)) {
         return {
           status: "failed",
           reason: `agent run reached the turn budget: ${message}`,
         };
       }
-      // The agent run threw (e.g. codex exited non-zero). We cannot tell an
-      // agent failure from an infra failure here, so quarantine it as an error
-      // trial (excluded from the rate) rather than crash the whole cell.
-      return {
-        status: "error",
-        reason: `agent run failed: ${message}`,
-      };
+      return { status: "error", reason: `agent run failed: ${message}` };
     }
     if (timedOut) {
       return {
@@ -248,8 +318,6 @@ async function runTrial(
     }
 
     const diff = await captureDiff(ws);
-
-    // Empty-diff veto: no work happened.
     if (diff.changedFiles.length === 0) {
       return {
         status: "failed",
@@ -259,16 +327,12 @@ async function runTrial(
       };
     }
 
-    // Harness veto: the agent must not weaken baseline test files. A modify (M)
-    // or delete (D) of a baseline test fails; a rename (R) AWAY from a test path
-    // (oldPath was a test) also fails - that is a disguised delete. Adding (A) a
-    // new test is fine.
     const isHarness = (p: string | undefined): boolean =>
       p !== undefined && HARNESS_GLOBS.some((g) => new Glob(g).match(p));
     const weakened = diff.changedFiles.filter((f) => {
       if (f.status === "R") return isHarness(f.oldPath);
       if (f.status === "M" || f.status === "D") return isHarness(f.path);
-      return false; // A (add) / C (copy) leave the baseline test intact
+      return false;
     });
     if (weakened.length > 0) {
       return {
@@ -279,9 +343,7 @@ async function runTrial(
       };
     }
 
-    const commands = await runCommands(ws, task.verify, {
-      timeoutMs: VERIFY_TIMEOUT_MS,
-    });
+    const commands = await runVerifier(ws, task);
     const allPass = commands.every((c) => c.passed);
     failed = !allPass;
     return {
@@ -297,40 +359,52 @@ async function runTrial(
       commands,
     };
   } finally {
-    const res = await cleanupWorkspace(ws, {
-      keepOnFailure: input.keepOnFailure,
+    await cleanupWorkspace(ws, {
+      keepOnFailure: options.keepOnFailure,
       failed,
     });
-    void res;
   }
 }
 
-function isAgentTurnBudgetExhausted(message: string): boolean {
-  // Claude Agent SDK currently reports max-turn exhaustion as a string error,
-  // not a structured stop reason. Keep this classifier in sync if the SDK
-  // exposes a typed reason or changes the wording.
-  return /reached maximum number of turns/i.test(message);
+/** Run failToPass + passToPass, tagging each receipt with its group. */
+async function runVerifier(
+  ws: Workspace,
+  task: BuildTask,
+): Promise<CommandReceipt[]> {
+  const out: CommandReceipt[] = [];
+  const groups: Array<[VerifierGroup, CommandSpec[]]> = [
+    ["failToPass", task.failToPass],
+    ["passToPass", task.passToPass],
+  ];
+  for (const [group, cmds] of groups) {
+    const results = await runCommands(ws, cmds, {
+      timeoutMs: VERIFY_TIMEOUT_MS,
+    });
+    for (const r of results) {
+      out.push({
+        group,
+        name: r.name,
+        run: r.run,
+        exitCode: r.exitCode,
+        passed: r.passed,
+        stdout: r.stdout,
+        stderr: r.stderr,
+        timedOut: r.timedOut,
+      });
+    }
+  }
+  return out;
 }
 
-/**
- * Resolve to false when `promise` settles first, true if `ms` elapses first.
- * On timeout, `onTimeout` runs (the runner aborts the controller, which the
- * adapters wire to a real process teardown). The orphaned promise is left to
- * settle on its own; we do not await it.
- */
 async function raceTimeout(
   promise: Promise<unknown>,
   ms: number,
   onTimeout: () => void,
 ): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), ms);
+  const timeout = new Promise<"timeout">((res) => {
+    timer = setTimeout(() => res("timeout"), ms);
   });
-  // `settled` never rejects: it captures success vs failure as a value, so a
-  // late rejection from a post-timeout abandoned run cannot become an unhandled
-  // rejection. A rejection that arrives BEFORE the timeout is rethrown below so
-  // the caller records an error attempt.
   const settled = promise.then(
     () => ({ ok: true }) as const,
     (e) => ({ ok: false, error: e }) as const,
@@ -345,17 +419,30 @@ async function raceTimeout(
   return false;
 }
 
-function errorCell(cellMeta: CellResult["cell"], message: string): CellResult {
+function errorCell(
+  coord: CellCoord,
+  mode: BuildCell["mode"],
+  source: string | null,
+  message: string,
+  verifierProof: VerifierProof = "not_declared",
+): BuildCell {
   return {
-    cell: cellMeta,
-    taskKind: "build",
-    answerable: "NO",
-    confidence: 0,
-    response: "",
+    coord,
+    mode,
+    source,
+    verdict: "NO",
+    passedAttempts: 0,
+    totalAttempts: 0,
+    passRate: 0,
+    attempts: [],
     reason: message,
-    citations: null,
+    verifierProof,
     error: message,
   };
+}
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 export { AGENT_TIMEOUT_MS, VERIFY_TIMEOUT_MS, HARNESS_GLOBS };

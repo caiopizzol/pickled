@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveContext, resolveTarget } from "../../src/targets/index.js";
+import { resolveTarget } from "../../src/targets/index.js";
 
 describe("resolveTarget", () => {
   test('treats "default" as sentinel - no throw', () => {
@@ -21,28 +21,5 @@ describe("resolveTarget", () => {
       quick: { category: "cli", provider: "claude-code" },
     });
     expect(name).toBe("quick");
-  });
-});
-
-describe("resolveContext", () => {
-  test('treats "default" as sentinel - no throw', () => {
-    expect(() => resolveContext("default", undefined)).not.toThrow();
-  });
-
-  test("treats undefined as sentinel - no throw", () => {
-    expect(() => resolveContext(undefined, undefined)).not.toThrow();
-  });
-
-  test("throws when named ref is unknown", () => {
-    expect(() => resolveContext("nonexistent", undefined)).toThrow(
-      /Unknown context "nonexistent"/,
-    );
-  });
-
-  test("returns the named context when declared", () => {
-    const { name } = resolveContext("ide", {
-      ide: { allowedTools: ["Read"] },
-    });
-    expect(name).toBe("ide");
   });
 });

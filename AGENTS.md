@@ -4,7 +4,7 @@ Router for agents working on `pickled`. Keep this file short. Real specs live in
 
 ## What pickled is
 
-An open-source CLI that tests whether AI agents can answer and build with a product. It runs tasks against real agent targets down declared context paths: answer tasks check the response against a deterministic contract (must-mention, one-of mention, must-not-mention, tool-use provenance), and build tasks have the agent edit a workspace and pass the declared verify commands. No LLM grades another LLM.
+An open-source CLI that tests whether AI agents can answer and build with a product. It runs tasks against real agent targets down declared context paths: questions check the answer against a deterministic contract (fact coverage, misstatement rejection, and a tool-use provenance veto on web/mcp contexts), and builds have the agent edit a workspace and pass the declared verify commands. No LLM grades another LLM.
 
 ## Where the rules live
 
@@ -18,11 +18,11 @@ An open-source CLI that tests whether AI agents can answer and build with a prod
 These are the rules new edits most often break. Each lives in a single source of truth; do not paraphrase them here.
 
 1. **Cell verdict vs run verdict.** Two orthogonal axes. Renderers must not conflate them. See `brand.md` §Interface Feedback → Verdict layers.
-2. **Cell verdict determines the label family.** Each `(agent × access)` cell scores on its own; a task has no single verdict. Confidence only refines `YES` into `Well grounded` (≥ 90) or `Grounded` (< 90). Never upgrade PARTIAL, NO, or Error. See `packages/core/src/report-status.ts`.
-3. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. See `reporter.ts` near `formatOverall`.
-4. **JSON output stays raw.** It carries machine fields (`answerable`, `confidence`, `citations`), not derived human labels. Human labels are derived in each renderer.
-5. **Registered source contract.** Only sources declared in `pickled.yml`'s `sources` count for scoring. The contract is the strength, not the limitation.
-6. **A non-none access path skips citation scoring.** When an answer task reaches a source through `web`/`mcp` tools (not injection), the verdict rests on the `checks` plus a tool-use provenance veto, not on `## Sources` citations. See `check.ts` near `provenanceFailed`.
+2. **Cell verdict determines the label family.** Each `(agent × context)` cell scores on its own; a task has no single verdict. A question cell is `YES` only when every scored trial fully satisfied the contract; the trial pass-rate (k-of-n) and fact coverage are detail, never an upgrade of PARTIAL/NO/Error. See `packages/core/src/report-status.ts`.
+3. **Run-pass/fail language renders only when a threshold is configured.** Without one, show `Overall: X / 100` and stop. A thresholded run with any errored cell fails. See `report-status.ts` near `runPasses`.
+4. **JSON output stays raw.** It carries machine fields (`verdict`, `passRate`, `meanCoverage`, `verifierProof`), not derived human labels. Human labels are derived by the shared `report-status` helpers each renderer consumes.
+5. **Registered source contract.** Only sources declared in `pickled.yml`'s `sources` count. Facts are matched against the agent's answer; the contract is the strength, not the limitation.
+6. **A web/mcp context proves the tool path.** When a question reaches a source through `web`/`mcp` tools (not injection), the verdict rests on fact coverage + misstatement rejection plus a tool-use provenance veto: a cell that answered without invoking the configured tool is forced to NO. See `packages/core/src/cell-runtime.ts` (provenance) and `packages/core/src/scorers/index.ts`.
 
 ## Runtime and toolchain
 
@@ -49,8 +49,8 @@ A `feat:` or `fix:` commit on `main` whose paths match `apps/cli/**`, `packages/
 
 API targets call the model directly via the provider SDK. No workspace, no Agent SDK orchestration.
 
-- `anthropic`: supports the `none` toolset and the `web` toolset. `web` wires the server-side `web_search` tool (`web_search_20250305`) on `messages.create`; `webFetch` has no Anthropic API equivalent and is a no-op on this provider. Requires `ANTHROPIC_API_KEY`.
-- `openai`: supports the `none` toolset, the `web` toolset, and the `mcp` toolset. `web` wires the server-side `web_search` tool on `responses.create`; provenance reads `web_search_call` output items and normalizes them to the provider-agnostic `web_search` name. `webFetch` is a no-op on this provider (single server-side web tool). `mcp` wires one hosted-MCP tool entry per declared server (HTTP only; `stdio` MCP servers are not reachable from the API); provenance reads `mcp_call` output items and normalizes them to `mcp__<server>__<tool>` (same shape the Claude Code adapter emits). Requires `OPENAI_API_KEY`.
+- `anthropic`: supports `memory` and `inject` contexts and the `web` context mode. `web` wires the server-side `web_search` tool (`web_search_20250305`) on `messages.create`. Requires `ANTHROPIC_API_KEY`.
+- `openai`: supports `memory` and `inject` contexts, the `web` context mode, and the `mcp` context mode. `web` wires the server-side `web_search` tool on `responses.create`; provenance reads `web_search_call` output items and normalizes them to the provider-agnostic `web_search` name. `mcp` wires one hosted-MCP tool entry per declared server (HTTP only; `stdio` MCP servers are not reachable from the API); provenance reads `mcp_call` output items and normalizes them to `mcp__<server>__<tool>` (same shape the Claude Code adapter emits). Requires `OPENAI_API_KEY`.
 
 Both require an explicit `model` field. The loader rejects CLI-only fields (`allowedTools`, `mcpServers`, `permissionMode`, `maxTurns`, etc.) on API targets. Comparable to CLI targets but not identical.
 

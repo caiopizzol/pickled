@@ -1,250 +1,154 @@
 import type {
-  CheckConfig,
-  ResolvedDocSource,
+  Config,
+  Context,
+  ResolvedSource,
   Target,
 } from "@pickled-dev/config";
-import { resolveTarget } from "./targets/index.js";
-import type { ResolvedContext, RunOptions } from "./targets/types.js";
+import type { PromptContext, RunOptions } from "./targets/types.js";
+
+/** Providers whose adapters implement a web tool path. */
+const WEB_PROVIDERS = new Set(["claude-code", "anthropic", "openai"]);
+/** Providers whose adapters implement an MCP tool path. */
+const MCP_PROVIDERS = new Set(["claude-code", "openai"]);
 
 export interface CellRuntime {
-  baseTargetConfig: Target;
-  targetConfig: Target;
-  /** Context passed to the adapter; only `tools: none` cells get one. */
-  cellContext: ResolvedContext | undefined;
-  /** Docs injected into the prompt (empty for no-context / discovery cells). */
-  cellDocs: ResolvedDocSource[];
-  /** Source ids visible in this cell (the citation registry). */
-  surfaceIds: string[];
-  /** Required source ids that apply to this cell (citation contract). */
-  requiredInCell: string[];
-  discoveryHint: { sourceHint: string | null } | undefined;
-  /** Derived from RunOptions so the two cannot drift. */
+  /** Resolved adapter config (tool scoping applied for web/mcp on claude-code). */
+  target: Target;
+  /** The explicit prompt context the adapter builds its system prompt from. */
+  promptContext: PromptContext;
+  /** Provider-agnostic tool intents the adapters consume. */
   runOptions: Pick<
     RunOptions,
     "restrictBuiltinTools" | "webTools" | "mcpTools"
   >;
+  /**
+   * Tool-use provenance: the labels a web/mcp cell expects and a matcher over
+   * the agent's invoked tools. Empty (hasMatchers false) for memory/inject,
+   * which have no tool path to prove.
+   */
   provenance: {
-    /**
-     * Semantic tool labels the cell expects (`web_search` for server-side web,
-     * `WebSearch`/`WebFetch` for Claude web, `mcp__<server>__*` for MCP). Used
-     * in the veto diagnostic. Distinct from the SDK auto-permit list, which is
-     * empty for server-side web targets.
-     */
     expectedLabels: string[];
-    /** Whether any provenance matcher is configured (the veto gate). */
     hasMatchers: boolean;
     match: (toolName: string) => boolean;
   };
-  isInjecting: boolean;
-  isNoContext: boolean;
-  wantsWeb: boolean;
-  wantsMcp: boolean;
+  mode: Context["mode"];
+  sourceId: string | null;
 }
 
 /**
- * Prepare the per-cell runtime shared by the answer and build runners: the
- * effective target config, source-injection decision, discovery hint, run
- * options (tool scoping / web / mcp intents), and the provenance matcher.
- *
- * Prepares only. It does not run the target and does not score - citation,
- * expected checks, and the provenance veto stay in each runner. The provider-
- * gate validation throws here intentionally, so callers invoke it OUTSIDE
- * their per-cell try and a misconfiguration bubbles to the scenario error
- * rather than collapsing into a single NO cell.
+ * Prepare the per-cell runtime shared by the question and build runners: the
+ * effective target config, the prompt context (with injected source for inject
+ * cells or a discovery hint for web/mcp), the tool intents, and the provenance
+ * matcher. Provider gates throw here (outside any per-cell try) so a
+ * misconfiguration surfaces as a clear error rather than collapsing into a
+ * single NO cell. Codex (provider codex-cli) supports only memory/inject, so a
+ * web/mcp cell on it is rejected here.
  */
 export function resolveCellRuntime(args: {
-  interfaceName: string;
-  sourceName: string | null;
-  toolsetName: string;
-  config: CheckConfig;
-  docs: ResolvedDocSource[];
-  requiredSources: string[];
-  contextConfig: ResolvedContext;
+  agent: string;
+  context: Context;
+  config: Config;
+  sources: ResolvedSource[];
+  kind: "question" | "build";
 }): CellRuntime {
-  const {
-    interfaceName,
-    sourceName,
-    toolsetName,
-    config,
-    docs,
-    requiredSources,
-    contextConfig,
-  } = args;
+  const { agent, context, config, sources, kind } = args;
+  const base = config.agents[agent];
+  if (!base) throw new Error(`Unknown agent "${agent}".`);
+  const provider = base.provider;
+  const mode = context.mode;
+  const sourceId = mode === "memory" ? null : (context.source ?? null);
 
-  const toolsetConfig =
-    toolsetName === "none" ? null : (config.toolsets?.[toolsetName] ?? null);
-  const wantsWeb =
-    toolsetName !== "none" &&
-    (toolsetConfig?.webSearch === true || toolsetConfig?.webFetch === true);
-  const mcpServerNames =
-    toolsetName !== "none" && toolsetConfig?.mcpServers
-      ? Object.keys(toolsetConfig.mcpServers)
-      : [];
-  const wantsMcp = mcpServerNames.length > 0;
-
-  const { config: baseTargetConfig } = resolveTarget(
-    interfaceName,
-    config.targets,
-  );
-
-  if (toolsetName !== "none") {
-    if (wantsWeb && wantsMcp) {
-      throw new Error(
-        `Toolset "${toolsetName}" mixes webSearch/webFetch with mcpServers; declare separate toolsets per shape so provenance can be attributed to one tool path.`,
-      );
-    }
-    if (!wantsWeb && !wantsMcp) {
-      throw new Error(
-        `Toolset "${toolsetName}" is declared but defines no runtime shape. Supported today: "none", web (webSearch/webFetch flags), MCP (mcpServers map). Other adapters (Firecrawl, native API search) land per release.`,
-      );
-    }
-    if (
-      wantsMcp &&
-      baseTargetConfig.provider !== "claude-code" &&
-      baseTargetConfig.provider !== "openai"
-    ) {
-      throw new Error(
-        `Toolset "${toolsetName}" (MCP) is implemented on claude-code and openai interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
-      );
-    }
-    if (
-      wantsWeb &&
-      baseTargetConfig.provider !== "claude-code" &&
-      baseTargetConfig.provider !== "anthropic" &&
-      baseTargetConfig.provider !== "openai"
-    ) {
-      throw new Error(
-        `Toolset "${toolsetName}" (web) is implemented on claude-code, anthropic, and openai interfaces today. Interface "${interfaceName}" uses provider "${baseTargetConfig.provider}"; rerun with a supported interface or use toolset "none".`,
-      );
-    }
-    if (
-      wantsWeb &&
-      (baseTargetConfig.provider === "anthropic" ||
-        baseTargetConfig.provider === "openai") &&
-      !toolsetConfig?.webSearch
-    ) {
-      throw new Error(
-        `Toolset "${toolsetName}" on ${baseTargetConfig.provider} provider requires webSearch: true. The ${baseTargetConfig.provider} API exposes a single server-side web tool; declare webSearch to enable it, or split web/fetch behaviour across separate toolsets.`,
-      );
-    }
+  if (mode === "web" && !WEB_PROVIDERS.has(provider)) {
+    throw new Error(
+      `context mode "web" is not supported on provider "${provider}" (agent "${agent}"). Supported: claude-code, anthropic, openai. Use mode memory/inject, or a supported agent.`,
+    );
+  }
+  if (mode === "mcp" && !MCP_PROVIDERS.has(provider)) {
+    throw new Error(
+      `context mode "mcp" is not supported on provider "${provider}" (agent "${agent}"). Supported: claude-code, openai. Use mode memory/inject, or a supported agent.`,
+    );
   }
 
-  // allowedForCell: SDK auto-permit list (Claude-only; empty for server-side
-  // web). expectedLabels: semantic provenance labels (the veto diagnostic).
-  // builtinToolsForCell: SDK built-in availability restriction (Claude-only).
-  const allowedForCell: string[] = [];
-  const builtinToolsForCell: string[] = [];
+  let promptContext: PromptContext;
+  if (mode === "memory") {
+    promptContext = { kind, mode: "memory" };
+  } else if (mode === "inject") {
+    const doc = sources.find((s) => s.id === sourceId);
+    promptContext = { kind, mode: "inject", docs: doc ? [doc] : [] };
+  } else {
+    promptContext = {
+      kind,
+      mode,
+      sourceHint: buildSourceHint(sourceId, sources),
+    };
+  }
+
+  const isServerWeb = provider === "anthropic" || provider === "openai";
   const expectedLabels: string[] = [];
-  const toolMatchers: Array<(t: string) => boolean> = [];
-  const isServerWebTarget =
-    baseTargetConfig.provider === "anthropic" ||
-    baseTargetConfig.provider === "openai";
-  if (wantsWeb) {
-    if (isServerWebTarget) {
+  const matchers: Array<(t: string) => boolean> = [];
+  let restrictBuiltinTools: string[] | undefined;
+  let webTools: RunOptions["webTools"];
+  let mcpTools: RunOptions["mcpTools"];
+  let target: Target = base;
+
+  if (mode === "web") {
+    if (isServerWeb) {
+      webTools = { search: true };
       expectedLabels.push("web_search");
-      toolMatchers.push((t) => t === "web_search");
+      matchers.push((t) => t === "web_search");
     } else {
-      if (toolsetConfig?.webSearch) {
-        allowedForCell.push("WebSearch");
-        builtinToolsForCell.push("WebSearch");
-        expectedLabels.push("WebSearch");
-        toolMatchers.push((t) => t === "WebSearch");
-      }
-      if (toolsetConfig?.webFetch) {
-        allowedForCell.push("WebFetch");
-        builtinToolsForCell.push("WebFetch");
-        expectedLabels.push("WebFetch");
-        toolMatchers.push((t) => t === "WebFetch");
-      }
+      restrictBuiltinTools = ["WebSearch", "WebFetch"];
+      expectedLabels.push("WebSearch", "WebFetch");
+      matchers.push((t) => t === "WebSearch" || t === "WebFetch");
+      target = {
+        ...base,
+        allowedTools: ["WebSearch", "WebFetch"],
+        disallowedTools: [],
+        maxTurns: Math.max(base.maxTurns ?? 0, 15),
+      };
     }
-  }
-  if (wantsMcp) {
-    for (const s of mcpServerNames) {
-      allowedForCell.push(`mcp__${s}__*`);
+  } else if (mode === "mcp") {
+    const servers = context.mode === "mcp" ? context.servers : {};
+    const labels = Object.keys(servers);
+    for (const s of labels) {
       expectedLabels.push(`mcp__${s}__*`);
-      toolMatchers.push((t) => t.startsWith(`mcp__${s}__`));
+      matchers.push((t) => t.startsWith(`mcp__${s}__`));
+    }
+    if (provider === "openai") {
+      mcpTools = { servers };
+    } else {
+      restrictBuiltinTools = labels.map((s) => `mcp__${s}__*`);
+      target = {
+        ...base,
+        allowedTools: labels.map((s) => `mcp__${s}__*`),
+        disallowedTools: [],
+        mcpServers: servers,
+        maxTurns: Math.max(base.maxTurns ?? 0, 15),
+      };
     }
   }
-
-  const targetConfig: Target =
-    toolsetName === "none" || isServerWebTarget
-      ? baseTargetConfig
-      : {
-          ...baseTargetConfig,
-          allowedTools: allowedForCell,
-          disallowedTools: [],
-          mcpServers: wantsMcp ? toolsetConfig?.mcpServers : undefined,
-          maxTurns: Math.max(baseTargetConfig.maxTurns ?? 0, 15),
-        };
-
-  const isInjecting = toolsetName === "none";
-  const isNoContext = sourceName === "none";
-  const cellDocs =
-    isNoContext || !isInjecting
-      ? []
-      : sourceName === null
-        ? docs
-        : docs.filter((d) => d.id === sourceName);
-  const surfaceIds =
-    isNoContext || !isInjecting
-      ? []
-      : sourceName === null
-        ? docs.map((d) => d.id)
-        : [sourceName];
-  const requiredInCell = isInjecting
-    ? requiredSources.filter((id) => surfaceIds.includes(id))
-    : [];
-
-  const discoveryHint = isInjecting
-    ? undefined
-    : { sourceHint: buildDiscoveryHint(sourceName, docs) };
 
   return {
-    baseTargetConfig,
-    targetConfig,
-    cellContext: toolsetName === "none" ? contextConfig : undefined,
-    cellDocs,
-    surfaceIds,
-    requiredInCell,
-    discoveryHint,
-    runOptions: {
-      restrictBuiltinTools:
-        toolsetName === "none" ? undefined : builtinToolsForCell,
-      webTools:
-        wantsWeb && isServerWebTarget
-          ? { search: toolsetConfig?.webSearch === true }
-          : undefined,
-      mcpTools:
-        wantsMcp &&
-        baseTargetConfig.provider === "openai" &&
-        toolsetConfig?.mcpServers
-          ? { servers: toolsetConfig.mcpServers }
-          : undefined,
-    },
+    target,
+    promptContext,
+    runOptions: { restrictBuiltinTools, webTools, mcpTools },
     provenance: {
       expectedLabels,
-      hasMatchers: toolMatchers.length > 0,
-      match: (t: string) => toolMatchers.some((m) => m(t)),
+      hasMatchers: matchers.length > 0,
+      match: (t: string) => matchers.some((m) => m(t)),
     },
-    isInjecting,
-    isNoContext,
-    wantsWeb,
-    wantsMcp,
+    mode,
+    sourceId,
   };
 }
 
-/**
- * Discovery hint from the cell's active source: the URL for URL sources, the
- * human-readable name for file sources, or null when no source is declared.
- * Moved from check.ts; no other caller.
- */
-function buildDiscoveryHint(
-  sourceName: string | null,
-  docs: ResolvedDocSource[],
+/** Discovery hint for a web/mcp cell: the URL for url sources, else the name. */
+function buildSourceHint(
+  sourceId: string | null,
+  sources: ResolvedSource[],
 ): string | null {
-  if (sourceName === null || sourceName === "none") return null;
-  const source = docs.find((d) => d.id === sourceName);
-  if (!source) return null;
-  if (source.type === "url") return source.source;
-  return source.name;
+  if (!sourceId) return null;
+  const s = sources.find((x) => x.id === sourceId);
+  if (!s) return null;
+  return s.type === "url" ? s.source : s.name;
 }

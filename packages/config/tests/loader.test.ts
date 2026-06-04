@@ -19,12 +19,20 @@ function makeDir(yml: string): string {
   return dir;
 }
 
+function first<T>(arr: T[] | undefined): T {
+  const v = arr?.[0];
+  if (v === undefined)
+    throw new Error("test fixture: expected a non-empty array");
+  return v;
+}
+
 const VALID = `
+schemaVersion: 2
 product:
   name: pickled
   description: Agent legibility checker
 sources:
-  docs: https://example.com/llms.txt
+  docs: { url: https://example.com/llms.txt }
 agents:
   quick:
     provider: claude-code
@@ -35,42 +43,41 @@ agents:
     model: gpt-5.2
     temperature: 0
     maxTokens: 4096
-access:
-  prior: { source: none, tools: none }
-  injected: { source: docs, tools: none }
-  web: { source: none, tools: web }
-tasks:
+contexts:
+  memory: { mode: memory }
+  injected: { mode: inject, source: docs }
+  web: { mode: web }
+facts:
+  install:
+    statement: install command
+    match: { allOf: ["bunx pickled"] }
+questions:
   - id: positioning
-    prompt: what does pickled do?
+    question: what does pickled do?
     agents: [quick, api]
-    access: [prior, injected, web]
-    checks:
-      mustMention: [agent]
-      mustNotMention: [AI-powered]
-threshold: 60
+    contexts: [memory, injected, web]
+    expects: [install]
+thresholds:
+  questions: 60
 `;
 
 describe("loadConfig pipeline", () => {
-  test("compiles a valid new-schema config to the internal CheckConfig", async () => {
+  test("loads and resolves a valid v2 config", async () => {
     const dir = makeDir(VALID);
     const config = await loadConfig(dir);
-    expect(config.tool.name).toBe("pickled");
-    expect(config.targets?.quick?.category).toBe("cli");
-    expect(config.targets?.api?.category).toBe("api");
-    expect(config.toolsets?.none).toEqual({});
-    expect(config.toolsets?.web).toEqual({ webSearch: true, webFetch: true });
-    expect(config.docs?.sources?.docs).toBe("https://example.com/llms.txt");
-    expect(config.threshold).toBe(60);
-    const s = config.scenarios[0]!;
-    expect(s.name).toBe("positioning");
-    expect(s.matrix?.interfaces).toEqual(["quick", "api"]);
-    expect(s.matrix?.accessPairs).toContainEqual({
-      access: "prior",
-      source: "none",
-      toolset: "none",
+    expect(config.product.name).toBe("pickled");
+    expect(config.agents.quick?.category).toBe("cli");
+    expect(config.agents.api?.category).toBe("api");
+    expect(config.sources.docs).toEqual({
+      kind: "url",
+      url: "https://example.com/llms.txt",
     });
-    expect(s.expected?.includes).toEqual(["agent"]);
-    expect(s.expected?.excludes).toEqual(["AI-powered"]);
+    expect(config.contexts.memory).toEqual({ mode: "memory" });
+    expect(config.thresholds.questions).toBe(60);
+    const q = first(config.questions);
+    expect(q.id).toBe("positioning");
+    expect(q.expects).toEqual(["install"]);
+    expect(config.facts.install?.match.allOf).toEqual(["bunx pickled"]);
   });
 
   test("throws when pickled.yml is missing", async () => {
@@ -84,78 +91,84 @@ describe("loadConfig pipeline", () => {
     await expect(loadConfig(dir)).rejects.toThrow(/Failed to parse/);
   });
 
-  test("expands ${ENV} in source values and mcp server headers", async () => {
+  test("expands env-var placeholders in mcp server headers", async () => {
     process.env.PICKLED_TEST_TOKEN = "secret-123";
     const dir = makeDir(`
+schemaVersion: 2
 product: { name: t, description: d }
 sources:
-  docs: https://example.com/llms.txt
+  docs: { url: https://example.com/llms.txt }
 agents:
   api: { provider: openai, model: gpt-5.2 }
-access:
-  mcp:
+contexts:
+  m:
+    mode: mcp
     source: docs
-    tools: mcp
     servers:
       remote:
         url: https://mcp.example.com/mcp
         headers:
           AUTH: \${PICKLED_TEST_TOKEN}
-tasks:
+facts:
+  f: { statement: s, match: { allOf: ["x"] } }
+questions:
   - id: q
-    prompt: a
+    question: a
     agents: [api]
-    access: [mcp]
-    checks: { mustMention: [x] }
+    contexts: [m]
+    expects: [f]
 `);
     const config = await loadConfig(dir);
-    expect(config.toolsets?.mcp?.mcpServers?.remote?.headers?.AUTH).toBe(
-      "secret-123",
-    );
+    const ctx = config.contexts.m;
+    expect(ctx?.mode).toBe("mcp");
+    if (ctx?.mode === "mcp") {
+      expect(ctx.servers.remote?.headers?.AUTH).toBe("secret-123");
+    }
     process.env.PICKLED_TEST_TOKEN = undefined;
   });
 
-  test("surfaces a public validation error (answer task with no checks)", async () => {
+  test("surfaces a v2 validation error (question with no expects/rejects)", async () => {
     const dir = makeDir(`
+schemaVersion: 2
 product: { name: t, description: d }
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
-access:
-  prior: { source: none, tools: none }
-tasks:
+contexts:
+  memory: { mode: memory }
+questions:
   - id: q
-    prompt: a
+    question: a
     agents: [quick]
-    access: [prior]
-    checks: {}
+    contexts: [memory]
 `);
     await expect(loadConfig(dir)).rejects.toThrow(
-      /needs at least one of checks/,
+      /at least one of expects \/ rejects/,
     );
   });
 
-  test("surfaces an unknown-agent reference in public vocabulary", async () => {
+  test("surfaces an unknown-agent reference", async () => {
     const dir = makeDir(`
+schemaVersion: 2
 product: { name: t, description: d }
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
-access:
-  prior: { source: none, tools: none }
-tasks:
+contexts:
+  memory: { mode: memory }
+facts:
+  f: { statement: s, match: { allOf: ["x"] } }
+questions:
   - id: q
-    prompt: a
+    question: a
     agents: [ghost]
-    access: [prior]
-    checks: { mustMention: [x] }
+    contexts: [memory]
+    expects: [f]
 `);
     await expect(loadConfig(dir)).rejects.toThrow(/unknown agent "ghost"/);
   });
 
-  test('rejects a source id named "none"', async () => {
+  test("rejects a v1 config with a migration hint", async () => {
     const dir = makeDir(`
 product: { name: t, description: d }
-sources:
-  none: ./x.md
 agents:
   quick: { provider: claude-code, model: claude-haiku-4-5 }
 access:
@@ -167,25 +180,6 @@ tasks:
     access: [prior]
     checks: { mustMention: [x] }
 `);
-    await expect(loadConfig(dir)).rejects.toThrow(
-      /source id "none" is reserved/,
-    );
-  });
-
-  test("rejects a CLI-only field on an API agent (internal backstop)", async () => {
-    const dir = makeDir(`
-product: { name: t, description: d }
-agents:
-  api: { provider: openai, model: gpt-5.2, maxTurns: 5 }
-access:
-  prior: { source: none, tools: none }
-tasks:
-  - id: q
-    prompt: a
-    agents: [api]
-    access: [prior]
-    checks: { mustMention: [x] }
-`);
-    await expect(loadConfig(dir)).rejects.toThrow(/maxTurns/);
+    await expect(loadConfig(dir)).rejects.toThrow(/schemaVersion: 2/);
   });
 });

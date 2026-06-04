@@ -1,4 +1,5 @@
-import type { ResolvedDocSource, ToolInfo } from "@pickled-dev/config";
+import type { ResolvedSource } from "@pickled-dev/config";
+import type { ToolInfo } from "../types.js";
 
 /**
  * Build the build-mode (kind: build) system prompt. The agent edits a
@@ -18,7 +19,7 @@ import type { ResolvedDocSource, ToolInfo } from "@pickled-dev/config";
  */
 export function buildTaskPrompt(
   tool: ToolInfo,
-  docs: ResolvedDocSource[],
+  docs: ResolvedSource[],
   sourceHint: string | null,
 ): string {
   let contextBlock = "";

@@ -12,12 +12,17 @@ const config: Target = {
 const baseOptions: RunOptions = {
   tool: { name: "t", description: "d", path: "/tmp/x" },
   cwd: "/tmp/ws",
-  docs: [],
-  requiredSources: [],
+  promptContext: { kind: "question", mode: "memory" },
+};
+
+/** Build-mode options: the prompt context kind drives the edit profile. */
+const buildOptions: RunOptions = {
+  ...baseOptions,
+  promptContext: { kind: "build", mode: "memory" },
 };
 
 describe("buildAgentOptions", () => {
-  test("answer mode keeps the read-biased defaults and acceptEdits", () => {
+  test("question mode keeps the read-biased defaults and acceptEdits", () => {
     const o = buildAgentOptions(config, baseOptions);
     expect(o.permissionMode).toBe("acceptEdits");
     expect(o.allowedTools).not.toContain("Write");
@@ -26,7 +31,7 @@ describe("buildAgentOptions", () => {
   });
 
   test("build mode enables the workspace edit profile and bypassPermissions", () => {
-    const o = buildAgentOptions(config, { ...baseOptions, editMode: true });
+    const o = buildAgentOptions(config, buildOptions);
     expect(o.permissionMode).toBe("bypassPermissions");
     expect(o.allowedTools).toContain("Edit");
     expect(o.allowedTools).toContain("MultiEdit");
@@ -44,14 +49,13 @@ describe("buildAgentOptions", () => {
   });
 
   test("build mode hard-scopes SDK tools to the workspace edit set", () => {
-    const o = buildAgentOptions(config, { ...baseOptions, editMode: true });
+    const o = buildAgentOptions(config, buildOptions);
     expect([...(o.tools ?? [])].sort()).toEqual([...EDIT_ALLOWED_TOOLS].sort());
   });
 
   test("build mode composes workspace tools with web access tools", () => {
     const o = buildAgentOptions(config, {
-      ...baseOptions,
-      editMode: true,
+      ...buildOptions,
       restrictBuiltinTools: ["WebSearch", "WebFetch"],
     });
     for (const t of ["Edit", "Write", "Bash", "WebSearch", "WebFetch"]) {
@@ -61,8 +65,7 @@ describe("buildAgentOptions", () => {
 
   test("build mode keeps workspace tools when access scope is empty (mcp cells)", () => {
     const o = buildAgentOptions(config, {
-      ...baseOptions,
-      editMode: true,
+      ...buildOptions,
       restrictBuiltinTools: [],
     });
     expect(o.tools).toContain("Edit");

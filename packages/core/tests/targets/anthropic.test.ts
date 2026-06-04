@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Target } from "@pickled-dev/config";
 import { AnthropicApiTarget } from "../../src/targets/api/anthropic.js";
+import type { RunOptions } from "../../src/targets/types.js";
 
 // Cast through unknown to satisfy the AnthropicApiTarget signature with a
 // structural mock. Avoids `any` so biome's noExplicitAny does not fire and
@@ -17,12 +18,20 @@ const baseConfig: Target = {
   model: "claude-haiku-4-5",
 };
 
-const baseRunOptions = {
+const baseRunOptions: RunOptions = {
   tool: { name: "t", description: "d", path: "/tmp/x" },
   cwd: "/tmp/x",
-  docs: [],
-  requiredSources: [],
+  promptContext: { kind: "question", mode: "memory" },
 };
+
+/** Web-mode options: server web_search + discovery prompt with an optional hint. */
+function webOptions(sourceHint: string | null): RunOptions {
+  return {
+    ...baseRunOptions,
+    promptContext: { kind: "question", mode: "web", sourceHint },
+    webTools: { search: true },
+  };
+}
 
 interface CapturedCreateCall {
   model: string;
@@ -103,7 +112,7 @@ describe("AnthropicApiTarget", () => {
     });
   });
 
-  test("passes citation prompt as system, user prompt as message", async () => {
+  test("passes the question prompt as system, user prompt as message (no citation block)", async () => {
     const { client, calls } = makeMockClient("ok");
     const target = new AnthropicApiTarget("anth", baseConfig, () =>
       asAnthropic(client),
@@ -112,8 +121,8 @@ describe("AnthropicApiTarget", () => {
     expect(calls).toHaveLength(1);
     const call = calls[0]!;
     expect(call.model).toBe("claude-haiku-4-5");
-    expect(call.system).toContain("Answer using ONLY information");
-    expect(call.system).toContain("End your response with a");
+    expect(call.system).toContain('about "t"');
+    expect(call.system).not.toContain("## Sources");
     expect(call.messages).toEqual([
       { role: "user", content: "How do I install?" },
     ]);
@@ -194,29 +203,19 @@ describe("AnthropicApiTarget", () => {
     const target = new AnthropicApiTarget("anth", baseConfig, () =>
       asAnthropic(client),
     );
-    await target.run("?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: null },
-    });
+    await target.run("?", webOptions(null));
     expect(calls[0]?.tools).toEqual([
       { type: "web_search_20250305", name: "web_search" },
     ]);
   });
 
-  test("discovery mode swaps citation prompt for discovery prompt", async () => {
+  test("web mode uses the discovery prompt (no citation contract), names the hint", async () => {
     const { client, calls } = makeMockClient("ok");
     const target = new AnthropicApiTarget("anth", baseConfig, () =>
       asAnthropic(client),
     );
-    await target.run("How?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: "https://example.com/docs" },
-    });
-    // Discovery prompt advertises the agent's research mode; citation
-    // prompt's "Answer using ONLY information" phrasing is absent.
-    expect(calls[0]?.system).not.toContain("Answer using ONLY information");
+    await target.run("How?", webOptions("https://example.com/docs"));
+    expect(calls[0]?.system).not.toContain("## Sources");
     expect(calls[0]?.system).toContain("https://example.com/docs");
   });
 
@@ -239,11 +238,7 @@ describe("AnthropicApiTarget", () => {
     const target = new AnthropicApiTarget("anth", baseConfig, () =>
       asAnthropic(client),
     );
-    const result = await target.run("?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: null },
-    });
+    const result = await target.run("?", webOptions(null));
     expect(result.toolsUsed).toEqual(["web_search"]);
     expect(result.response).toContain("Pickled is a CLI");
   });
@@ -266,11 +261,7 @@ describe("AnthropicApiTarget", () => {
     const target = new AnthropicApiTarget("anth", baseConfig, () =>
       asAnthropic(client),
     );
-    const result = await target.run("?", {
-      ...baseRunOptions,
-      webTools: { search: true },
-      discovery: { sourceHint: null },
-    });
+    const result = await target.run("?", webOptions(null));
     // No server_tool_use block in the response means the model answered
     // without searching. The matrix runner's provenance hard-veto reads
     // empty toolsUsed for a web cell and forces NO/0; the adapter itself

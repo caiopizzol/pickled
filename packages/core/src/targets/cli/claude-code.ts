@@ -6,9 +6,7 @@ import {
   DEFAULT_DISALLOWED_TOOLS,
   EDIT_ALLOWED_TOOLS,
 } from "@pickled-dev/config";
-import { buildTaskPrompt } from "../build-prompt.js";
-import { buildCitationPrompt } from "../citation-prompt.js";
-import { buildDiscoveryPrompt } from "../discovery-prompt.js";
+import { buildSystemPrompt } from "../prompt.js";
 import type {
   ResponseEntry,
   RunOptions,
@@ -17,65 +15,42 @@ import type {
 } from "../types.js";
 
 /**
- * Build the Claude Agent SDK options for a run. Extracted from `run` so the
- * tool/permission profile is testable without invoking the SDK. In build mode
- * (`options.editMode`) the agent gets the workspace edit profile plus
- * `bypassPermissions`, so it can edit files and run commands unattended inside
- * the throwaway workspace (the containment boundary); answer mode keeps the
- * read-biased defaults and `acceptEdits`.
+ * Build the Claude Agent SDK options for a run. The system prompt comes from
+ * the explicit prompt context (no citation fallback). Build cells
+ * (`promptContext.kind === "build"`) get the workspace edit profile plus
+ * `bypassPermissions`; question cells keep the read-biased defaults. Web/mcp
+ * tool scoping arrives via the resolved `Target` (allowedTools/mcpServers, set
+ * by cell-runtime) plus `restrictBuiltinTools`.
  */
 export function buildAgentOptions(
   config: Target,
   options: RunOptions,
 ): ClaudeAgentOptions {
-  const {
-    tool,
-    cwd,
-    context,
-    docs,
-    requiredSources,
-    discovery,
-    restrictBuiltinTools,
-    editMode,
-    buildContext,
-    signal,
-  } = options;
-
-  // Build cells use the build prompt (no citation contract); discovery cells
-  // research with tools; otherwise inject sources and demand a Sources block.
-  const systemPrompt = buildContext
-    ? buildTaskPrompt(tool, buildContext.docs, buildContext.sourceHint)
-    : discovery
-      ? buildDiscoveryPrompt(tool, discovery.sourceHint)
-      : buildCitationPrompt(tool, docs, requiredSources);
+  const { tool, cwd, promptContext, restrictBuiltinTools, signal } = options;
+  const editMode = promptContext.kind === "build";
 
   const agentOptions: ClaudeAgentOptions = {
     cwd,
     model: config.model ?? "sonnet",
-    systemPrompt,
+    systemPrompt: buildSystemPrompt(tool, promptContext),
     allowedTools: editMode
       ? EDIT_ALLOWED_TOOLS
-      : (context?.allowedTools ?? config.allowedTools ?? DEFAULT_ALLOWED_TOOLS),
+      : (config.allowedTools ?? DEFAULT_ALLOWED_TOOLS),
     disallowedTools: editMode
       ? []
-      : (context?.disallowedTools ??
-        config.disallowedTools ??
-        DEFAULT_DISALLOWED_TOOLS),
+      : (config.disallowedTools ?? DEFAULT_DISALLOWED_TOOLS),
     permissionMode: editMode
       ? "bypassPermissions"
       : (config.permissionMode ?? "acceptEdits"),
     maxTurns: config.maxTurns ?? 10,
     maxThinkingTokens: config.maxThinkingTokens,
     maxBudgetUsd: config.maxBudgetUsd,
-    mcpServers: (context?.mcpServers ??
-      config.mcpServers) as ClaudeAgentOptions["mcpServers"],
+    mcpServers: config.mcpServers as ClaudeAgentOptions["mcpServers"],
     settingSources: [],
   };
 
   // Wire the run's cancellation signal to the SDK's abortController so a
-  // wall-clock timeout actually stops the query, not just the wait. Bridge
-  // signal -> controller (the SDK takes a controller); handle an already-
-  // aborted signal up front.
+  // wall-clock timeout actually stops the query.
   if (signal) {
     const controller = new AbortController();
     if (signal.aborted) controller.abort();
@@ -83,11 +58,9 @@ export function buildAgentOptions(
     agentOptions.abortController = controller;
   }
 
-  // SDK `tools` is what actually restricts built-in availability; allowedTools
-  // is only the auto-permission list. Build mode MUST keep the workspace tools
-  // available, so compose them with whatever access scope the runner passes
-  // (web/mcp cells) - the access scope must never strip Edit/Write/Bash. Answer
-  // mode keeps the runner's exact scope.
+  // SDK `tools` is what actually restricts built-in availability. Build mode
+  // must keep the workspace tools available, composed with any web/mcp scope;
+  // question mode uses the runner's exact scope.
   if (editMode) {
     agentOptions.tools = [
       ...new Set([...EDIT_ALLOWED_TOOLS, ...(restrictBuiltinTools ?? [])]),

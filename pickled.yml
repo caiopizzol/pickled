@@ -1,18 +1,19 @@
 # 🥒 pickled.yml - public-docs dogfood for pickled itself
 
+schemaVersion: 2
+
 product:
   name: pickled
   description: Agent legibility checker for developer tools
 
 # The public surfaces a real outside agent reads to learn about pickled.
-# URL sources are fetched at check time; path sources are read from disk.
 sources:
-  docs: https://docs.pickled.dev/llms-full.txt
-  getting_started: https://docs.pickled.dev/getting-started
-  llms: ./llms.txt
+  docs: { url: https://docs.pickled.dev/llms-full.txt }
+  getting_started: { url: https://docs.pickled.dev/getting-started }
+  llms: { path: ./llms.txt }
 
-# The agents under test. `quick` is the cheap answer-task default; `builder`
-# gives build tasks enough turns to edit and verify a fixture.
+# The agents under test. `quick` is the cheap question default; `builder`
+# gives builds enough turns to edit and verify a fixture.
 agents:
   quick:
     provider: claude-code
@@ -33,35 +34,76 @@ agents:
     temperature: 0
     maxTokens: 4096
 
-# Named context paths. Each pairs a source with a tool mode. This is the
-# whole point of pickled: run the same task down different paths and
-# see which one gets the agent to the right answer.
-access:
-  memory: { source: none, tools: none } # model memory, no context
-  given_docs: { source: docs, tools: none } # docs content injected
-  given_llms: { source: llms, tools: none } # root llms.txt injected
-  given_getting_started: { source: getting_started, tools: none } # getting-started page injected
-  web_open: { source: none, tools: web } # open web discovery
-  web_docs: { source: docs, tools: web } # docs URL handed over, reached with web
+# Named contexts: how a source reaches the agent. This is the whole point of
+# pickled: run the same task down different paths and see which one gets the
+# agent to the right answer.
+contexts:
+  memory: { mode: memory } # model memory, nothing injected
+  given_docs: { mode: inject, source: docs } # docs content injected
+  given_llms: { mode: inject, source: llms } # root llms.txt injected
+  given_getting_started: { mode: inject, source: getting_started }
+  web_open: { mode: web } # open web discovery, no declared source
+  web_docs: { mode: web, source: docs } # docs URL handed over, reached with web
 
-tasks:
-  # Positioning across the full context gradient, on three agents. The
-  # `memory` cells answer from model memory; `given_docs` reads the docs;
-  # `web_open` and `web_docs` reach the live site through web tools.
-  # "agent" is the load-bearing noun, and a real summary names what the
-  # tool checks (legibility / understanding / context).
+# Reusable product truths a correct answer must cover.
+facts:
+  names_agent:
+    statement: Names the agent as the actor being tested.
+    match:
+      allOf: ["agent"]
+  names_capability:
+    statement: Names what pickled measures (legibility / understanding / context).
+    match:
+      anyOf: ["legible", "legibility", "understand", "comprehend", "context"]
+  install_command:
+    statement: Gives the bunx install/init command.
+    match:
+      allOf: ["bunx @pickled-dev/cli"]
+  config_file:
+    statement: Names the pickled.yml config file.
+    match:
+      allOf: ["pickled.yml"]
+  run_command:
+    statement: Names the check command.
+    match:
+      allOf: ["check ."]
+  tool_modes_all:
+    statement: Names all three context tool modes.
+    match:
+      allOf: ["none", "web", "mcp"]
+  names_claude_code:
+    statement: Names Claude Code as a provider.
+    match:
+      allOf: ["Claude Code"]
+
+# Reusable wrong claims a correct answer must not make.
+misstatements:
+  magic_dashboard:
+    statement: Calls pickled a magic dashboard.
+    match:
+      anyOf: ["magic dashboard"]
+  brand_tracker:
+    statement: Calls pickled a brand-mention tracker.
+    match:
+      anyOf: ["brand tracker"]
+  npm_install:
+    statement: Recommends installing the CLI with npm.
+    match:
+      anyOf: ["npm install @pickled-dev/cli"]
+  firecrawl_mode:
+    statement: Claims a Firecrawl tool mode exists today.
+    match:
+      anyOf: ["Firecrawl"]
+
+questions:
+  # Positioning across the full context gradient, on three agents. "agent" is
+  # the load-bearing noun; the capability fact names what pickled measures.
   - id: positioning
-    prompt: In one or two sentences, what does pickled do?
+    question: In one or two sentences, what does pickled do?
     agents: [quick, anthropic_api, openai_api]
-    access: [memory, given_docs, web_open, web_docs]
-    checks:
-      mustMention: [agent]
-      mustMentionOneOf:
-        - label: names the capability
-          values: [legible, legibility, understand, comprehend, context]
-      mustNotMention: [magic dashboard, brand tracker]
-    # Offline guards for `pickled test`. The pass answer satisfies every check;
-    # the fail answer is the exact drift the checks exist to catch.
+    contexts: [memory, given_docs, web_open, web_docs]
+    expects: [names_agent, names_capability]
+    rejects: [magic_dashboard, brand_tracker]
     examples:
       pass:
         - "Pickled tests whether an agent can understand and build with your product's published context, scored deterministically."
@@ -69,50 +111,58 @@ tasks:
         - "Pickled is a magic dashboard that tracks how your brand appears in AI answers."
 
   # Onboarding: a developer reading the docs should leave with the install
-  # form, a pickled.yml, and the run command. A stale `npm install` form
-  # means the agent drifted off the registered docs.
+  # form, a pickled.yml, and the run command. A stale npm install form means
+  # the agent drifted off the registered docs.
   - id: install
-    prompt: How do I install pickled and run my first check?
+    question: How do I install pickled and run my first check?
     agents: [quick]
-    access: [given_getting_started, given_docs]
-    checks:
-      mustMention: [bunx @pickled-dev/cli, pickled.yml, check .]
-      mustNotMention: [magic dashboard, npm install @pickled-dev/cli]
+    contexts: [given_getting_started, given_docs]
+    expects: [install_command, config_file, run_command]
+    rejects: [magic_dashboard, npm_install]
     examples:
       pass:
         - "Run `bunx @pickled-dev/cli init` to create a pickled.yml, then `bunx @pickled-dev/cli check .` to run your first check."
       fail:
         - "Install with `npm install @pickled-dev/cli`, add a pickled.yml, then run check ."
 
-  # Coverage of the tool modes pickled ships today. Firecrawl is proposed
-  # but not shipped; an agent that claims it is the exact false-support
-  # answer pickled exists to catch.
+  # Coverage of the tool modes pickled ships today. Firecrawl is proposed but
+  # not shipped; an agent that claims it is the exact false-support answer.
   - id: tool_modes
-    prompt: Which tool modes can a pickled agent use today, and which agent or provider does each need?
+    question: Which context tool modes can a pickled agent use today, and which agent or provider does each need?
     agents: [quick]
-    access: [given_docs, given_llms]
-    checks:
-      mustMention: [none, web, mcp, Claude Code]
-      mustNotMention: [magic dashboard, Firecrawl]
+    contexts: [given_docs, given_llms]
+    expects: [tool_modes_all, names_claude_code]
+    rejects: [magic_dashboard, firecrawl_mode]
     examples:
       pass:
-        - "A pickled agent can use none (the injected source), web search, or mcp servers. none/web/mcp run on Claude Code; web also runs on the Anthropic and OpenAI APIs."
+        - "A pickled context uses mode none (memory), inject, web, or mcp. inject/web/mcp run on Claude Code; web also runs on the Anthropic and OpenAI APIs."
       fail:
         - "Today a pickled agent supports web, mcp, and Firecrawl modes on Claude Code."
 
-  # Build dogfood: can an agent use Pickled's own public context to author
-  # and validate a Pickled config for a tiny product fixture? The fixture
-  # workspace contains llms.txt because the generated config must reference it,
-  # so `memory` means "not injected", not "unavailable".
+builds:
+  # Build dogfood: can an agent use Pickled's own public context to author and
+  # validate a v2 Pickled config for a tiny product fixture? The workspace
+  # contains llms.txt because the generated config must reference it, so
+  # `memory` means "not injected", not "unavailable".
   - id: write_pickled_config
-    kind: build
-    prompt: Create a pickled.yml for the BrineKit fixture product. The config should register the local llms.txt source, compare memory against injected llms context, define an answer task that verifies the documented install command while excluding stale npm install guidance, and define a build task named smoke_build that uses ./workspace, runs two trials, and verifies configured.txt exists.
+    goal: >-
+      Create a v2 pickled.yml (schemaVersion 2) for the BrineKit fixture product.
+      Register the local llms.txt as a source. Declare a memory context and an
+      inject context over llms so the run compares model memory against the
+      injected docs. Declare a fact for the documented install command and a
+      misstatement for stale npm install guidance, then a question that expects
+      the fact and rejects the misstatement (with pass and fail examples).
+      Finally declare a build named smoke_build that uses ./workspace, runs two
+      trials, and whose verifier failToPass checks that configured.txt exists.
     agents: [builder]
-    access: [memory, given_llms]
+    contexts: [memory, given_llms]
+    trials: 3
     workspace:
       path: ./fixtures/pickled-config-authoring
-    verify:
-      - ./tests/verify-pickled-config.sh
-    trials: 3
+    verifier:
+      failToPass:
+        - { name: authored config, run: ./tests/verify-pickled-config.sh }
 
-threshold: 60
+thresholds:
+  questions: 60
+  builds: 60

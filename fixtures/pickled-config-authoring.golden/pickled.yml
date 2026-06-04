@@ -1,9 +1,11 @@
+schemaVersion: 2
+
 product:
   name: BrineKit
   description: CLI fixture for Pickled config authoring
 
 sources:
-  llms: ./llms.txt
+  llms: { path: ./llms.txt }
 
 agents:
   quick:
@@ -11,26 +13,41 @@ agents:
     model: claude-haiku-4-5
     maxTurns: 5
 
-access:
-  memory: { source: none, tools: none }
-  given_llms: { source: llms, tools: none }
+contexts:
+  memory: { mode: memory }
+  given_llms: { mode: inject, source: llms }
 
-tasks:
+facts:
+  install_command:
+    statement: BrineKit is installed with bunx brinekit init.
+    match:
+      allOf: ["bunx brinekit init"]
+
+misstatements:
+  npm_install:
+    statement: The answer recommends installing BrineKit with npm.
+    match:
+      anyOf: ["npm install brinekit"]
+
+questions:
   - id: install
-    prompt: How do I install BrineKit?
+    question: How do I install BrineKit?
     agents: [quick]
-    access: [memory, given_llms]
-    checks:
-      mustMention: [bunx brinekit init]
-      mustNotMention: [npm install brinekit]
+    contexts: [memory, given_llms]
+    expects: [install_command]
+    rejects: [npm_install]
+    examples:
+      pass: ["Install BrineKit with bunx brinekit init."]
+      fail: ["Install BrineKit with npm install brinekit."]
 
+builds:
   - id: smoke_build
-    kind: build
-    prompt: Create configured.txt in the BrineKit workspace.
+    goal: Create configured.txt in the BrineKit workspace.
     agents: [quick]
-    access: [given_llms]
+    contexts: [given_llms]
     trials: 2
     workspace:
       path: ./workspace
-    verify:
-      - test -f configured.txt
+    verifier:
+      failToPass:
+        - { run: test -f configured.txt }

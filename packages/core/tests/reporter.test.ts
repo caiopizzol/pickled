@@ -1,401 +1,118 @@
 import { describe, expect, test } from "bun:test";
-import { formatCheckJSON, formatCheckReport } from "../src/reporter.js";
-import type { CheckReport } from "../src/types.js";
+import { formatJSON, formatReport } from "../src/reporter.js";
+import type { RunReport } from "../src/types.js";
 
-function makeReport(): CheckReport {
+function questionReport(over: Partial<RunReport> = {}): RunReport {
   return {
-    tool: { name: "t", description: "d", path: "/tmp/t" },
-    docs: [
+    product: { name: "demo", description: "d" },
+    sources: [
       {
-        id: "readme",
-        source: "./README.md",
-        content: "BIG SECRET CONTENT".repeat(1000),
-        name: "README.md",
-        type: "file",
+        id: "docs",
+        type: "url",
+        source: "https://x/llms.txt",
+        content: "SECRET CONTENT",
+        name: "llms.txt",
       },
     ],
-    scenarios: [
+    facts: { install: { statement: "install", match: { allOf: ["bunx"] } } },
+    misstatements: {},
+    kind: "questions",
+    questions: [
       {
-        scenario: {
-          name: "s",
-          prompt: "p",
-          requiredSources: ["readme"],
-        },
-        answerable: "YES",
-        confidence: 100,
-        response: "Answer.\n\n## Sources\n- [readme]",
-        reason: "All required sources cited: readme",
-        citations: {
-          cited: ["readme"],
-          required: ["readme"],
-          missing: [],
-          unknown: [],
-        },
-        allResponses: [
-          { type: "initial", text: "initial draft" },
-          { type: "final", text: "final answer" },
+        id: "q1",
+        question: "how to install?",
+        cells: [
+          {
+            coord: { agent: "a", context: "mem" },
+            mode: "memory",
+            source: null,
+            verdict: "YES",
+            passedTrials: 1,
+            totalTrials: 1,
+            passRate: 100,
+            meanCoverage: 100,
+            trials: [
+              {
+                status: "scored",
+                verdict: "YES",
+                passed: true,
+                coverage: 100,
+                factsCovered: ["install"],
+                factsMissed: [],
+                misstatementsHit: [],
+                provenanceOk: true,
+                toolsUsed: [],
+                response: "bunx demo",
+                allResponses: [{ type: "final", text: "bunx demo" }],
+              },
+            ],
+            reason: "all expected facts covered",
+          },
+          {
+            coord: { agent: "a", context: "web" },
+            mode: "web",
+            source: "docs",
+            verdict: "PARTIAL",
+            passedTrials: 0,
+            totalTrials: 1,
+            passRate: 0,
+            meanCoverage: 50,
+            trials: [],
+            reason: "missing facts: cmd",
+          },
         ],
       },
     ],
-    summary: { total: 1, answered: 1, unanswered: 0, score: 100 },
+    summary: { total: 2, yes: 1, partial: 1, no: 0, errors: 0, score: 75 },
+    threshold: 80,
+    ...over,
   };
 }
 
-describe("formatCheckJSON", () => {
-  test("omits source content by default", () => {
-    const json = formatCheckJSON(makeReport());
-    expect(json).not.toContain("BIG SECRET CONTENT");
-    const parsed = JSON.parse(json);
-    expect(parsed.docs[0].id).toBe("readme");
-    expect(parsed.docs[0].content).toBe("");
+describe("formatReport (terminal)", () => {
+  test("renders header, per-cell labels, and the run verdict", () => {
+    const out = formatReport(questionReport());
+    expect(out).toContain("pickled check");
+    expect(out).toContain("Product: demo");
+    expect(out).toContain("Task: how to install?");
+    expect(out).toContain("Well grounded 1/1");
+    expect(out).toContain("Partially grounded 0/1");
+    expect(out).toContain("50% facts");
+    expect(out).toContain("Overall: 75 / 100");
+    expect(out).toContain("threshold 80");
+    expect(out).toContain("run fails");
   });
 
-  test("omits allResponses by default", () => {
-    const json = formatCheckJSON(makeReport());
-    const parsed = JSON.parse(json);
-    expect(parsed.scenarios[0].allResponses).toBeUndefined();
+  test("no threshold -> shows Overall and stops (no run pass/fail)", () => {
+    const out = formatReport(questionReport({ threshold: undefined }));
+    expect(out).toContain("Overall: 75 / 100");
+    expect(out).not.toContain("run fails");
+    expect(out).not.toContain("run passes");
   });
 
-  test("verbose includes content and allResponses", () => {
-    const json = formatCheckJSON(makeReport(), { verbose: true });
-    expect(json).toContain("BIG SECRET CONTENT");
-    const parsed = JSON.parse(json);
-    expect(parsed.scenarios[0].allResponses).toHaveLength(2);
-  });
-
-  test("preserves citation details in both modes", () => {
-    for (const verbose of [false, true]) {
-      const json = formatCheckJSON(makeReport(), { verbose });
-      const parsed = JSON.parse(json);
-      expect(parsed.scenarios[0].citations.cited).toEqual(["readme"]);
-    }
-  });
-
-  test("strips verifierSamples content in non-verbose mode", () => {
-    const base = makeReport();
-    const first = base.scenarios[0];
-    if (!first) throw new Error("makeReport should produce a scenario");
-    const reportWithVerifier: CheckReport = {
-      ...base,
-      scenarios: [
-        {
-          ...first,
-          verifierSamples: [
-            {
-              id: "readme",
-              name: "README.md",
-              content: "SECRET CONTENT IN VERIFIER",
-            },
-          ],
-        },
-      ],
-    };
-    const slim = formatCheckJSON(reportWithVerifier);
-    expect(slim).not.toContain("SECRET CONTENT IN VERIFIER");
-    const parsed = JSON.parse(slim);
-    expect(parsed.scenarios[0].verifierSamples[0].content).toBe("");
-    expect(parsed.scenarios[0].verifierSamples[0].id).toBe("readme");
-  });
-
-  test("verbose mode preserves verifierSamples content", () => {
-    const base = makeReport();
-    const first = base.scenarios[0];
-    if (!first) throw new Error("makeReport should produce a scenario");
-    const reportWithVerifier: CheckReport = {
-      ...base,
-      scenarios: [
-        {
-          ...first,
-          verifierSamples: [
-            {
-              id: "readme",
-              name: "README.md",
-              content: "SECRET CONTENT IN VERIFIER",
-            },
-          ],
-        },
-      ],
-    };
-    const verbose = formatCheckJSON(reportWithVerifier, { verbose: true });
-    expect(verbose).toContain("SECRET CONTENT IN VERIFIER");
+  test("errored cells surface in the Overall line and fail a thresholded run", () => {
+    const out = formatReport(
+      questionReport({
+        summary: { total: 2, yes: 1, partial: 0, no: 0, errors: 1, score: 100 },
+      }),
+    );
+    expect(out).toContain("1 errored");
+    expect(out).toContain("run fails");
   });
 });
 
-describe("formatCheckReport", () => {
-  test("uses the shared terminal feedback grammar for passing reports", () => {
-    const text = formatCheckReport(makeReport(), { threshold: 80 });
-    expect(text).toContain("pickled check");
-    expect(text).toContain("Tool: t");
-    expect(text).toContain("Sources: [readme]");
-    expect(text).toContain("Task: s");
-    expect(text).toContain("✓ Well grounded (100%)");
-    expect(text).toContain("cited: [readme]");
-    expect(text).toContain("Overall: 100 / 100 · threshold 80 · run passes");
-    expect(text).not.toContain("🥒");
+describe("formatJSON", () => {
+  test("slim output strips source content and per-trial transcripts", () => {
+    const json = JSON.parse(formatJSON(questionReport()));
+    expect(json.sources[0].content).toBe("");
+    expect(json.questions[0].cells[0].trials[0].allResponses).toBeUndefined();
+    // machine fields stay raw
+    expect(json.questions[0].cells[0].verdict).toBe("YES");
+    expect(json.summary.score).toBe(75);
   });
 
-  test("plan mode reports the planned scenario count, not the scored count", () => {
-    const report: CheckReport = {
-      tool: { name: "t", description: "d", path: "/tmp/t" },
-      docs: [],
-      scenarios: [],
-      summary: { total: 0, answered: 0, unanswered: 0, score: 0 },
-      plan: {
-        expandedCells: 2,
-        selectedCells: 2,
-        cells: [
-          {
-            scenario: "s1",
-            interface: "quick",
-            access: "injected",
-            source: "readme",
-            toolset: "none",
-          },
-          {
-            scenario: "s1",
-            interface: "quick",
-            access: "web",
-            source: "readme",
-            toolset: "web",
-          },
-        ],
-      },
-    };
-    const text = formatCheckReport(report, { threshold: 80 });
-    expect(text).toContain("Tasks: 1");
-    expect(text).not.toContain("Tasks: 0");
-    expect(text).toContain("Cells: 2");
-    expect(text).toContain("[quick · injected]");
-    expect(text).toContain("[quick · web]");
-  });
-
-  test("PARTIAL at high confidence still renders Partially grounded, not Well grounded", () => {
-    const base = makeReport();
-    const baseScenario = base.scenarios[0];
-    if (!baseScenario) throw new Error("makeReport should produce a scenario");
-    const report = {
-      ...base,
-      scenarios: [
-        {
-          ...baseScenario,
-          answerable: "PARTIAL" as const,
-          confidence: 95,
-        },
-      ],
-    };
-    const text = formatCheckReport(report);
-    expect(text).toContain("⚠ Partially grounded (95%)");
-    expect(text).not.toContain("Well grounded (95%)");
-  });
-
-  test("no threshold renders Overall without pass/fail language", () => {
-    const text = formatCheckReport(makeReport());
-    expect(text).toContain("Overall: 100 / 100");
-    expect(text).not.toContain("run passes");
-    expect(text).not.toContain("run fails");
-    expect(text).not.toContain("threshold");
-  });
-});
-
-// AIDEV-NOTE: Golden output fixtures for formatCheckReport. ANSI is stripped
-// before comparison so cosmetic color changes do not break the assertions;
-// structural changes (label, ordering, threshold line presence) do. Update
-// with `bun test -u` when intentional, but eyeball the diff first.
-
-function stripAnsi(text: string): string {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
-}
-
-describe("formatCheckReport golden fixtures", () => {
-  test("well grounded, no threshold (omits run passes/fails)", () => {
-    expect(stripAnsi(formatCheckReport(makeReport()))).toMatchSnapshot();
-  });
-
-  test("threshold pass: well grounded with threshold 80", () => {
-    expect(
-      stripAnsi(formatCheckReport(makeReport(), { threshold: 80 })),
-    ).toMatchSnapshot();
-  });
-
-  test("partially grounded scenario", () => {
-    const base = makeReport();
-    const first = base.scenarios[0];
-    if (!first) throw new Error("makeReport should produce a scenario");
-    const report: CheckReport = {
-      ...base,
-      scenarios: [{ ...first, answerable: "PARTIAL", confidence: 65 }],
-      summary: { ...base.summary, score: 33 },
-    };
-    expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
-  });
-
-  test("ungrounded scenario (NO, missing citation)", () => {
-    const base = makeReport();
-    const first = base.scenarios[0];
-    if (!first) throw new Error("makeReport should produce a scenario");
-    const report: CheckReport = {
-      ...base,
-      scenarios: [
-        {
-          ...first,
-          answerable: "NO",
-          confidence: 0,
-          reason: "No required sources cited",
-          citations: {
-            cited: [],
-            required: ["readme"],
-            missing: ["readme"],
-            unknown: [],
-          },
-        },
-      ],
-      summary: { ...base.summary, score: 0, answered: 0, unanswered: 1 },
-    };
-    expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
-  });
-
-  test("matrix targets: same scenario run against two targets", () => {
-    const base = makeReport();
-    const first = base.scenarios[0];
-    if (!first) throw new Error("makeReport should produce a scenario");
-    const matrixScenario = {
-      ...first,
-      scenario: { ...first.scenario, name: "Installation" },
-    };
-    const report: CheckReport = {
-      ...base,
-      scenarios: [
-        {
-          ...matrixScenario,
-          target: {
-            target: "quick",
-            category: "cli",
-            provider: "claude-code",
-            model: "haiku",
-          },
-        },
-        {
-          ...matrixScenario,
-          target: {
-            target: "thorough",
-            category: "cli",
-            provider: "claude-code",
-            model: "sonnet",
-          },
-        },
-      ],
-      summary: { total: 2, answered: 2, unanswered: 0, score: 100 },
-    };
-    expect(stripAnsi(formatCheckReport(report))).toMatchSnapshot();
-  });
-});
-
-describe("formatCheckReport build cells", () => {
-  function makeBuildReport(): CheckReport {
-    return {
-      tool: { name: "t", description: "d", path: "/tmp/t" },
-      docs: [],
-      scenarios: [
-        {
-          scenario: {
-            name: "build_toolbar",
-            prompt: "Add a toolbar",
-            requiredSources: [],
-          },
-          answerable: null,
-          confidence: null,
-          response: null,
-          reason: null,
-          citations: null,
-          cells: [
-            {
-              cell: {
-                interface: "claude_builder",
-                access: "given_docs",
-                source: "docs",
-                toolset: "none",
-              },
-              answerable: "YES",
-              confidence: 100,
-              response: "",
-              reason: "",
-              citations: null,
-              build: {
-                attempts: [
-                  {
-                    status: "passed",
-                    changedFiles: [{ status: "M", path: "src/app.tsx" }],
-                    diff: "diff --git a/src/app.tsx b/src/app.tsx\n+toolbar",
-                    commands: [
-                      {
-                        name: "tests",
-                        run: "bun test",
-                        exitCode: 0,
-                        passed: true,
-                        stdout: "PASS lots of output",
-                        stderr: "",
-                        timedOut: false,
-                      },
-                    ],
-                  },
-                  { status: "passed" },
-                  { status: "failed", reason: "tests failed" },
-                ],
-                passedAttempts: 2,
-                totalAttempts: 3,
-              },
-            },
-            {
-              cell: {
-                interface: "claude_builder",
-                access: "memory",
-                source: null,
-                toolset: "none",
-              },
-              answerable: "NO",
-              confidence: 0,
-              response: "",
-              reason: "",
-              citations: null,
-              build: {
-                attempts: [{ status: "failed" }, { status: "failed" }],
-                passedAttempts: 0,
-                totalAttempts: 2,
-              },
-            },
-          ],
-        },
-      ],
-      summary: { total: 1, answered: 0, unanswered: 1, score: 0 },
-    };
-  }
-
-  test("renders k/n build language, never the grounded scale", () => {
-    const out = stripAnsi(formatCheckReport(makeBuildReport()));
-    expect(out).toContain("Partially built 2/3");
-    expect(out).toContain("Did not build 0/2");
-    expect(out).not.toContain("Well grounded");
-    expect(out).not.toContain("Ungrounded");
-  });
-
-  test("slim JSON keeps the build summary but strips diffs and command output", () => {
-    const json = formatCheckJSON(makeBuildReport());
-    expect(json).not.toContain("lots of output");
-    expect(json).not.toContain("diff --git");
-    const att = JSON.parse(json).scenarios[0].cells[0].build.attempts[0];
-    expect(att.diff).toBeUndefined();
-    expect(att.changedFiles).toEqual([{ status: "M", path: "src/app.tsx" }]);
-    expect(att.commands[0].name).toBe("tests");
-    expect(att.commands[0].run).toBe("bun test");
-    expect(att.commands[0].exitCode).toBe(0);
-    expect(att.commands[0].stdout).toBeUndefined();
-    expect(att.commands[0].stderr).toBeUndefined();
-  });
-
-  test("verbose JSON keeps diffs and command output", () => {
-    const json = formatCheckJSON(makeBuildReport(), { verbose: true });
-    expect(json).toContain("lots of output");
-    expect(json).toContain("diff --git");
+  test("verbose output keeps content", () => {
+    const json = JSON.parse(formatJSON(questionReport(), { verbose: true }));
+    expect(json.sources[0].content).toBe("SECRET CONTENT");
   });
 });
