@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   rmSync,
   writeFileSync,
@@ -11,9 +12,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dir, "../../..");
-const FIXTURE = join(REPO_ROOT, "fixtures/pickled-config-authoring");
-const GOLDEN = join(REPO_ROOT, "fixtures/pickled-config-authoring.golden");
-const LOCAL_CLI = `bun ${join(REPO_ROOT, "apps/cli/src/index.ts")}`;
+const FIXTURE = join(REPO_ROOT, "fixtures/github-actions");
+const PATCH = join(REPO_ROOT, "fixtures/github-actions.solution.patch");
 
 const created: string[] = [];
 afterEach(() => {
@@ -29,95 +29,103 @@ function copyFixture(): string {
 }
 
 function runVerifier(cwd: string) {
-  return spawnSync("bash", ["./tests/verify-pickled-config.sh"], {
+  return spawnSync("bash", ["./tests/verify-workflow.sh"], {
     cwd,
     encoding: "utf8",
-    env: { ...process.env, PICKLED_CLI: LOCAL_CLI },
   });
 }
 
 describe("build dogfood fixture", () => {
   test("the verifier lives under tests so build-mode harness protection covers it", () => {
-    expect(existsSync(join(FIXTURE, "tests", "verify-pickled-config.sh"))).toBe(
-      true,
-    );
+    expect(existsSync(join(FIXTURE, "tests", "verify-workflow.sh"))).toBe(true);
   });
 
   test("the untouched fixture fails verification", () => {
     const dir = copyFixture();
     const result = runVerifier(dir);
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("missing pickled.yml");
+    expect(result.stderr).toContain("missing .github/workflows/pickled.yml");
   });
 
-  test("the golden config passes verification", () => {
+  test("the reference workflow patch passes verification", () => {
     const dir = copyFixture();
-    cpSync(join(GOLDEN, "pickled.yml"), join(dir, "pickled.yml"));
+    const apply = spawnSync("git", ["apply", PATCH], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(apply.stderr).toBe("");
+    expect(apply.status).toBe(0);
+
     const result = runVerifier(dir);
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
   });
 
-  test("semantic context paths pass even when names differ", () => {
+  test("semantic workflow shape passes even when job names differ", () => {
     const dir = copyFixture();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
     writeFileSync(
-      join(dir, "pickled.yml"),
-      `schemaVersion: 2
+      join(dir, ".github", "workflows", "pickled.yml"),
+      `name: pickled
 
-product:
-  name: BrineKit
-  description: CLI fixture for Pickled config authoring
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * 1"
 
-sources:
-  llms: { path: ./llms.txt }
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bunx @pickled-dev/cli test .
+      - run: bunx @pickled-dev/cli check . --plan
+      - run: bunx @pickled-dev/cli build . --plan
 
-agents:
-  quick:
-    provider: claude-code
-    model: claude-haiku-4-5
-
-contexts:
-  memory_only: { mode: memory }
-  with_llms_context: { mode: inject, source: llms }
-
-facts:
-  install_command:
-    statement: BrineKit installs with bunx brinekit init.
-    match:
-      allOf: ["bunx brinekit init"]
-
-misstatements:
-  npm_install:
-    statement: Recommends npm install for BrineKit.
-    match:
-      anyOf: ["npm install brinekit"]
-
-questions:
-  - id: install
-    question: How do I install BrineKit?
-    agents: [quick]
-    contexts: [memory_only, with_llms_context]
-    expects: [install_command]
-    rejects: [npm_install]
-    examples:
-      pass: ["Install with bunx brinekit init."]
-      fail: ["Install with npm install brinekit."]
-
-builds:
-  - id: smoke_build
-    goal: Create configured.txt in the BrineKit workspace.
-    agents: [quick]
-    contexts: [with_llms_context]
-    trials: 2
-    workspace:
-      path: ./workspace
-    verifier:
-      failToPass:
-        - { run: test -f configured.txt }
+  paid:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bunx @pickled-dev/cli check . --max-cells 20
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+      - run: bunx @pickled-dev/cli build . --max-cells 6
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
 `,
     );
     const result = runVerifier(dir);
     expect(result.stderr).toBe("");
     expect(result.status).toBe(0);
+  });
+
+  test("pull_request_target is rejected", () => {
+    const dir = copyFixture();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(dir, ".github", "workflows", "pickled.yml"),
+      `name: pickled
+
+on:
+  pull_request_target:
+
+jobs:
+  unsafe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bunx @pickled-dev/cli check . --max-cells 20
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+`,
+    );
+    const result = runVerifier(dir);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("pull_request_target is not allowed");
   });
 });

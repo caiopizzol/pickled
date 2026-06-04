@@ -5,7 +5,7 @@ description: Run pickled in CI with offline checks, dry plans, capped answer run
 
 Use CI to keep the public context contract from drifting. Run answer tasks on pull requests; run build tasks on trusted branches or schedules when you want the agent to edit a workspace.
 
-## Minimal workflow
+## Pull-request-safe workflow
 
 ```yaml
 name: pickled
@@ -14,9 +14,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  check:
+  deterministic:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -24,33 +25,39 @@ jobs:
       - run: bun install
       - run: bunx @pickled-dev/cli test .
       - run: bunx @pickled-dev/cli check . --plan
-      - run: bunx @pickled-dev/cli check . --max-cells 20
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - run: bunx @pickled-dev/cli build . --plan
 ```
 
 What each step does:
 
 - `pickled test` scores example answers offline. It catches brittle checks before spending on a model run.
 - `pickled check --plan` prints the answer cells that would run. No model calls.
-- `pickled check --max-cells 20` refuses to run if the selected answer executions exceed the cap.
+- `pickled build --plan` prints build cells and executions. No agent edits.
 
 Set `thresholds.questions` or `thresholds.builds` in `pickled.yml` when you want CI to fail on a low score.
 
-## Build tasks in CI
+## Real agent runs
 
-Build tasks are heavier: each selected cell runs `trials` times, and each trial lets an edit-capable agent work in a fresh workspace. Keep them explicit and capped:
+Real agent runs spend tokens and may edit throwaway workspaces. Keep them off untrusted fork pull requests. Run them on `workflow_dispatch`, on a `schedule`, or on trusted branches:
 
 ```yaml
-  build:
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * 1"
+
+jobs:
+  real-agent-benchmark:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun install
-      - run: bunx @pickled-dev/cli build . --plan
+      - run: bunx @pickled-dev/cli check . --max-cells 20
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       - run: bunx @pickled-dev/cli build . --max-cells 6
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

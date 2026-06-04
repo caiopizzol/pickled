@@ -1,0 +1,41 @@
+diff --git a/.github/workflows/pickled.yml b/.github/workflows/pickled.yml
+new file mode 100644
+index 0000000..d5ab30f
+--- /dev/null
++++ b/.github/workflows/pickled.yml
+@@ -0,0 +1,35 @@
++name: pickled
++
++on:
++  pull_request:
++  push:
++    branches: [main]
++  workflow_dispatch:
++  schedule:
++    - cron: "17 8 * * 1"
++
++jobs:
++  deterministic:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v6
++      - uses: oven-sh/setup-bun@v2
++      - run: bun install
++      - run: bunx @pickled-dev/cli test .
++      - run: bunx @pickled-dev/cli check . --plan
++      - run: bunx @pickled-dev/cli build . --plan
++
++  real-agent-benchmark:
++    runs-on: ubuntu-latest
++    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
++    steps:
++      - uses: actions/checkout@v6
++      - uses: oven-sh/setup-bun@v2
++      - run: bun install
++      - run: bunx @pickled-dev/cli check . --max-cells 20
++        env:
++          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
++          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
++      - run: bunx @pickled-dev/cli build . --max-cells 6
++        env:
++          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
