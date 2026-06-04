@@ -77,7 +77,7 @@ facts:
   names_claude_code:
     statement: Names Claude Code as a provider.
     match:
-      allOf: ["Claude Code"]
+      anyOf: ["Claude Code", "claude-code"]
 
 # Reusable wrong claims a correct answer must not make.
 misstatements:
