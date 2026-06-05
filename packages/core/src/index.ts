@@ -45,7 +45,12 @@ export {
 } from "./report-status.js";
 // Reporter (renderers; pure functions of RunReport)
 export type { FormatJSONOptions, FormatOptions } from "./reporter.js";
-export { formatJSON, formatReport, printReport } from "./reporter.js";
+export {
+  formatJSON,
+  formatMarkdown,
+  formatReport,
+  printReport,
+} from "./reporter.js";
 
 // Scorer
 export {

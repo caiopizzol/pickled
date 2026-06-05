@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatJSON, formatReport } from "../src/reporter.js";
+import { formatJSON, formatMarkdown, formatReport } from "../src/reporter.js";
 import type { RunReport } from "../src/types.js";
 
 function questionReport(over: Partial<RunReport> = {}): RunReport {
@@ -102,17 +102,145 @@ describe("formatReport (terminal)", () => {
 });
 
 describe("formatJSON", () => {
-  test("slim output strips source content and per-trial transcripts", () => {
+  test("slim output strips source content, full answers, and transcripts", () => {
     const json = JSON.parse(formatJSON(questionReport()));
+    const trial = json.questions[0].cells[0].trials[0];
     expect(json.sources[0].content).toBe("");
-    expect(json.questions[0].cells[0].trials[0].allResponses).toBeUndefined();
+    expect(trial.allResponses).toBeUndefined();
+    // An agent answer can reproduce injected docs, so it is CI-unsafe too.
+    expect(trial.response).toBeUndefined();
     // machine fields stay raw
     expect(json.questions[0].cells[0].verdict).toBe("YES");
+    expect(trial.coverage).toBe(100);
     expect(json.summary.score).toBe(75);
   });
 
-  test("verbose output keeps content", () => {
+  test("verbose output keeps content and full answers", () => {
     const json = JSON.parse(formatJSON(questionReport(), { verbose: true }));
     expect(json.sources[0].content).toBe("SECRET CONTENT");
+    expect(json.questions[0].cells[0].trials[0].response).toBe("bunx demo");
+  });
+});
+
+function buildReport(over: Partial<RunReport> = {}): RunReport {
+  return {
+    product: { name: "demo", description: "d" },
+    sources: [],
+    facts: {},
+    misstatements: {},
+    kind: "builds",
+    builds: [
+      {
+        id: "b1",
+        goal: "add the widget",
+        cells: [
+          {
+            coord: { agent: "a", context: "repo" },
+            mode: "memory",
+            source: null,
+            verdict: "NO",
+            passedAttempts: 0,
+            totalAttempts: 1,
+            passRate: 0,
+            verifierProof: "passed",
+            reason: "verifier failed",
+            attempts: [
+              {
+                status: "failed",
+                reason: "a failing verify command",
+                changedFiles: [{ status: "M", path: "src/widget.ts" }],
+                diff: "SECRET DIFF",
+                commands: [
+                  {
+                    group: "failToPass",
+                    name: "test",
+                    run: "bun test",
+                    exitCode: 1,
+                    passed: false,
+                    stdout: "SECRET STDOUT",
+                    stderr: "SECRET STDERR",
+                    timedOut: false,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    summary: { total: 1, yes: 0, partial: 0, no: 1, errors: 0, score: 0 },
+    threshold: 80,
+    ...over,
+  };
+}
+
+describe("formatMarkdown", () => {
+  test("questions: overall, summary table, and resolved diagnostics", () => {
+    const report = questionReport({
+      questions: [
+        {
+          id: "q1",
+          question: "how to install?",
+          cells: [
+            {
+              coord: { agent: "a", context: "web" },
+              mode: "web",
+              source: "docs",
+              verdict: "NO",
+              passedTrials: 0,
+              totalTrials: 1,
+              passRate: 0,
+              meanCoverage: 0,
+              trials: [
+                {
+                  status: "scored",
+                  verdict: "NO",
+                  passed: false,
+                  coverage: 0,
+                  factsCovered: [],
+                  factsMissed: ["install"],
+                  misstatementsHit: [],
+                  provenanceOk: false,
+                  toolsUsed: [],
+                  response: "SECRET ANSWER",
+                  allResponses: [{ type: "final", text: "SECRET ANSWER" }],
+                },
+              ],
+              reason: "tool path not used",
+            },
+          ],
+        },
+      ],
+      summary: { total: 1, yes: 0, partial: 0, no: 1, errors: 0, score: 0 },
+    });
+    const md = formatMarkdown(report);
+    expect(md).toContain("# pickled check");
+    expect(md).toContain("**Overall: 0 / 100**");
+    expect(md).toContain("run fails");
+    expect(md).toContain("| Ungrounded | 1 |");
+    // Fact id resolves to its statement, not the bare id.
+    expect(md).toContain("missing fact: `install` install");
+    expect(md).toContain("provenance:");
+    // Public-safe: the full agent answer never appears.
+    expect(md).not.toContain("SECRET ANSWER");
+  });
+
+  test("builds: per-attempt status, changed files, and command exit codes", () => {
+    const md = formatMarkdown(buildReport());
+    expect(md).toContain("# pickled build");
+    expect(md).toContain("| Did not build | 1 |");
+    expect(md).toContain("attempt 1: failed");
+    expect(md).toContain("test (failToPass, exit 1)");
+    expect(md).toContain("M src/widget.ts");
+    // Public-safe: diffs and command output never appear.
+    expect(md).not.toContain("SECRET DIFF");
+    expect(md).not.toContain("SECRET STDOUT");
+  });
+
+  test("no threshold: shows the score and no run pass/fail", () => {
+    const md = formatMarkdown(questionReport({ threshold: undefined }));
+    expect(md).toContain("**Overall: 75 / 100**");
+    expect(md).not.toContain("run fails");
+    expect(md).not.toContain("run passes");
   });
 });

@@ -1,11 +1,13 @@
 import chalk from "chalk";
 import {
   buildCellStatus,
+  type CellStatus,
   questionCellStatus,
   runPasses,
   type StatusTone,
 } from "./report-status.js";
 import type {
+  BuildAttempt,
   BuildCell,
   PlanSummary,
   QuestionCell,
@@ -201,9 +203,11 @@ export interface FormatJSONOptions {
 
 /**
  * Render the RunReport as JSON. Raw and receipt-first. By default strips heavy
- * evidence (source content, per-trial transcripts, build diffs, command
- * stdout/stderr) so CI artifacts stay small and source text does not leak;
- * `verbose` keeps everything.
+ * evidence (source content, full agent answers, per-trial transcripts, build
+ * diffs, command stdout/stderr) so CI artifacts stay small and source text does
+ * not leak: an agent answer can reproduce injected docs or private context, so
+ * `response` is dropped alongside the transcripts. `verbose` keeps everything
+ * for a forensic artifact.
  */
 export function formatJSON(
   report: RunReport,
@@ -218,8 +222,9 @@ export function formatJSON(
       cells: q.cells.map((cell) => ({
         ...cell,
         trials: cell.trials.map((t) => {
-          const { allResponses, ...rest } = t;
+          const { allResponses, response, ...rest } = t;
           void allResponses;
+          void response;
           return rest;
         }),
       })),
@@ -245,4 +250,172 @@ export function formatJSON(
     })),
   };
   return JSON.stringify(slim, null, 2);
+}
+
+/**
+ * Render the RunReport as a CI-first markdown summary, designed to be piped into
+ * a GitHub job summary (`$GITHUB_STEP_SUMMARY`). Pure function of the receipt:
+ * labels, scores, and the run pass/fail decision all come from report-status.
+ *
+ * More diagnostic than the terminal renderer: it resolves missed facts and
+ * fired misstatements to their statements, flags provenance failures, and lists
+ * every build attempt with changed files and failed-command exit codes (the
+ * terminal view shows only the first failed attempt's command names).
+ *
+ * Public-safe: like a CI artifact this can be read by anyone, so it never prints
+ * full agent answers, transcripts, diffs, or command output. Use `--verbose`
+ * JSON for that forensic detail.
+ */
+export function formatMarkdown(report: RunReport): string {
+  const lines: string[] = [];
+  const kindTitle =
+    report.kind === "questions" ? "pickled check" : "pickled build";
+  lines.push(`# ${kindTitle}\n`);
+  lines.push(`Product: \`${report.product.name}\``);
+  lines.push(
+    report.sources.length > 0
+      ? `Sources: ${report.sources.map((s) => `\`[${s.id}]\``).join(", ")}`
+      : "Sources: none registered",
+  );
+  lines.push("");
+  lines.push(overallMarkdown(report));
+  lines.push("");
+  lines.push(...summaryTable(report));
+
+  if (report.kind === "questions") {
+    for (const q of report.questions ?? []) {
+      lines.push(`## ${q.question}\n`);
+      for (const cell of q.cells)
+        lines.push(...questionCellMarkdown(cell, report));
+    }
+  } else {
+    for (const b of report.builds ?? []) {
+      lines.push(`## ${b.goal}\n`);
+      for (const cell of b.cells) lines.push(...buildCellMarkdown(cell));
+    }
+  }
+  return lines.join("\n");
+}
+
+function overallMarkdown(report: RunReport): string {
+  const { score, errors } = report.summary;
+  const base = `**Overall: ${score} / 100**`;
+  const passes = runPasses(report.summary, report.threshold);
+  if (passes === null) return base;
+  const verdict = passes ? "✅ run passes" : "❌ run fails";
+  const errNote = errors > 0 ? ` · ${errors} errored` : "";
+  return `${base} · threshold ${report.threshold}${errNote} · ${verdict}`;
+}
+
+function summaryTable(report: RunReport): string[] {
+  const s = report.summary;
+  const rows: Array<[string, number]> =
+    report.kind === "questions"
+      ? [
+          ["Well grounded", s.yes],
+          ["Partially grounded", s.partial],
+          ["Ungrounded", s.no],
+          ["Errored", s.errors],
+        ]
+      : [
+          ["Built", s.yes],
+          ["Partially built", s.partial],
+          ["Did not build", s.no],
+          ["Errored", s.errors],
+        ];
+  const out = ["| Result | Cells |", "|---|---|"];
+  for (const [label, n] of rows) out.push(`| ${label} | ${n} |`);
+  out.push("");
+  return out;
+}
+
+function cellHeading(
+  agent: string,
+  context: string,
+  status: CellStatus,
+): string {
+  const detail = status.detail ? `, ${status.detail}` : "";
+  return `### ${agent} · ${context}\n${status.icon} ${status.label} (${status.rate}${detail})`;
+}
+
+/** Resolve a fact/misstatement id to its statement; fall back to the bare id. */
+function statementFor(
+  id: string,
+  registry: Record<string, { statement: string }>,
+): string {
+  const statement = registry[id]?.statement;
+  return statement ? `\`${id}\` ${statement}` : `\`${id}\``;
+}
+
+function questionCellMarkdown(cell: QuestionCell, report: RunReport): string[] {
+  const out = [
+    cellHeading(cell.coord.agent, cell.coord.context, questionCellStatus(cell)),
+  ];
+  if (cell.verdict === "YES") {
+    out.push("");
+    return out;
+  }
+  if (cell.reason) out.push(`- reason: ${cell.reason}`);
+
+  const missing = new Set<string>();
+  const misfired = new Set<string>();
+  const tools = new Set<string>();
+  let provenanceFailed = false;
+  for (const t of cell.trials) {
+    if (t.status !== "scored") continue;
+    for (const f of t.factsMissed) missing.add(f);
+    for (const m of t.misstatementsHit) misfired.add(m);
+    for (const tool of t.toolsUsed) tools.add(tool);
+    if (!t.provenanceOk) provenanceFailed = true;
+  }
+  for (const id of missing) {
+    out.push(`- missing fact: ${statementFor(id, report.facts)}`);
+  }
+  for (const id of misfired) {
+    out.push(`- misstatement: ${statementFor(id, report.misstatements)}`);
+  }
+  if (provenanceFailed) {
+    out.push("- provenance: the configured tool path was not used (forced NO)");
+  }
+  if (tools.size > 0) out.push(`- tools: ${[...tools].join(", ")}`);
+  out.push("");
+  return out;
+}
+
+function buildCellMarkdown(cell: BuildCell): string[] {
+  const out = [
+    cellHeading(cell.coord.agent, cell.coord.context, buildCellStatus(cell)),
+  ];
+  if (cell.verdict === "YES" && cell.verifierProof !== "not_declared") {
+    out.push("");
+    return out;
+  }
+  if (cell.reason) out.push(`- reason: ${cell.reason}`);
+  if (cell.verifierProof === "not_declared") {
+    out.push("- verifier unproven (no reference solution declared)");
+  }
+  cell.attempts.forEach((a, i) => {
+    out.push(`- attempt ${i + 1}: ${a.status}${attemptDetail(a)}`);
+  });
+  out.push("");
+  return out;
+}
+
+function attemptDetail(a: BuildAttempt): string {
+  const parts: string[] = [];
+  if (a.reason) parts.push(a.reason);
+  const failed = (a.commands ?? [])
+    .filter((c) => !c.passed)
+    .map((c) => `${c.name} (${c.group}, exit ${c.exitCode})`);
+  if (failed.length > 0) parts.push(`failed: ${failed.join(", ")}`);
+  const files = a.changedFiles ?? [];
+  if (files.length > 0) {
+    const named = files
+      .slice(0, 10)
+      .map((f) => `${f.status} ${f.path}`)
+      .join(", ");
+    const more = files.length > 10 ? `, +${files.length - 10} more` : "";
+    parts.push(`files: ${named}${more}`);
+  }
+  return parts.length > 0 ? `; ${parts.join("; ")}` : "";
 }

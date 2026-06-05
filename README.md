@@ -95,6 +95,17 @@ builds:
 
 Run builds with `pickled build .`. Each `(agent × context)` cell runs in a fresh workspace for each trial and reports `Built k/n`, `Partially built k/n`, or `Did not build k/n`.
 
+## Receipts
+
+Save a run once, then render it without spending more tokens:
+
+```bash
+bunx @pickled-dev/cli check . --output pickled-report.json
+bunx @pickled-dev/cli report pickled-report.json --format markdown
+```
+
+Default JSON is CI-safe: it keeps verdicts, scores, missing facts, misstatements, provenance, and build attempts, but strips source content, full agent answers, transcripts, diffs, and command output. Use `--verbose` when you need a forensic receipt.
+
 ## Read more
 
 Full docs: [docs.pickled.dev](https://docs.pickled.dev/).

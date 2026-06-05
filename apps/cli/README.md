@@ -21,6 +21,7 @@ bunx @pickled-dev/cli <command>
 - **`pickled check [path]`** runs the questions: asks the agents and scores their answers against the fact contract.
 - **`pickled build [path]`** has edit-capable agents work in a fresh workspace and scores the `verifier`.
 - **`pickled audit [path]`** scans agent-facing files for broken refs and oversized sections. No model calls.
+- **`pickled report <file>`** re-renders a saved receipt as terminal, markdown, or JSON. No model calls.
 
 ## Minimum config
 
@@ -84,6 +85,19 @@ pickled check . --agent quick
 pickled check . --context from_readme
 ```
 
+## In CI
+
+Save the receipt once, then render it. `report` re-renders a saved receipt without rerunning paid agents, so the same run feeds both the artifact and the job summary:
+
+```bash
+pickled check . --output pickled-report.json   # exits non-zero if the run fails its threshold
+pickled report pickled-report.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+```
+
+Upload `pickled-report.json` with `actions/upload-artifact` to keep the receipt.
+
+The default JSON (`--output` / `--json`) is the CI-safe receipt: verdicts, evidence ids, provenance, and build attempts, without full answers, source text, transcripts, diffs, or command output. Pass `--verbose` for a forensic receipt.
+
 ## Current support
 
 | Concept | Works today |
@@ -91,7 +105,7 @@ pickled check . --context from_readme
 | Sources | local files, URLs, codebase globs |
 | Context modes | `memory`, `inject`, `web`, `mcp` |
 | Agents | Claude Code, Codex CLI, Anthropic API, OpenAI API |
-| Output | terminal, JSON, markdown audit reports |
+| Output | terminal and JSON for runs; markdown from saved receipts and audits |
 
 ## Read more
 

@@ -2,7 +2,7 @@
 title: "Your public product context has no CI gate. Give it one."
 description: "Your code fails the build when it breaks. Your docs, README, llms.txt, and MCP surfaces drift silently. Here is how to gate agent understanding in CI."
 date: 2026-06-01
-updated: 2026-06-04
+updated: 2026-06-05
 order: 5
 author: Caio Pizzol
 tags: [ci, agent-evals, github-actions]
@@ -35,12 +35,31 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx @pickled-dev/cli test .
       - run: bunx @pickled-dev/cli check . --plan
-      - run: bunx @pickled-dev/cli check . --max-cells 20
+      - name: Run pickled
+        id: pickled
+        run: |
+          set +e
+          bunx @pickled-dev/cli check . --max-cells 20 --output pickled-report.json
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          exit 0
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - run: |
+          if [ -f pickled-report.json ]; then
+            bunx @pickled-dev/cli report pickled-report.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+          fi
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pickled-report
+          path: pickled-report.json
+      - run: exit "${{ steps.pickled.outputs.exit_code }}"
 ```
 
 `pickled test` runs no model calls. It scores your declared example answers and catches brittle fact or misstatement contracts before you spend a single token. `pickled check --plan` prints the cells that would run. Only then does the capped `check` run your questions against a real agent. Set `thresholds.questions` in `pickled.yml` and the run passes or fails on the overall score.
+
+The `--output` file is the receipt. `pickled report` renders it into the GitHub job summary without rerunning the agent. Default JSON is safe for CI artifacts; use `--verbose` only when you need full forensic detail.
 
 One caveat if your repo is public: GitHub does not pass secrets to workflows triggered from fork pull requests, so a `check` job that needs `ANTHROPIC_API_KEY` will not run on those. Keep the token-free `test` and `plan` steps on every PR, and run the full `check` on push to branches you control or on trusted internal PRs.
 

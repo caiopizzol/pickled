@@ -61,7 +61,7 @@ Generic eval frameworks ask "did the model produce the expected output?" Documen
 - **Facts, misstatements, and verifier commands you control.** A grounded answer can still be wrong. A build that does not pass your commands did not build. You declare the contract, and Pickled scores it deterministically.
 - **Cross-surface by design.** Today's targets: Claude Code and Codex CLI. The same config is built to run unchanged as Antigravity CLI, Amazon Q, Cursor, hosted API targets, and other surfaces land.
 - **Source-agnostic.** Registers anything an agent can read. Public docs, private docs, llms.txt, CLAUDE.md, AGENTS.md, JSDoc, inline comments, internal handbooks, hosted source bundles. URLs or local paths.
-- **The report is the receipt.** Each run produces a structured artifact: task, agent, context, response or build attempt, facts covered, misstatements rejected, tools used, commands run, threshold result. The run fails on the receipt, not on a vibe.
+- **The report is the receipt.** Each run produces a structured artifact: task, agent, context, fact coverage, misstatement result, tool provenance, build attempts, commands run, threshold result. The run fails on the receipt, not on a vibe. Default receipts are CI-safe; forensic receipts are explicit.
 - **CLI-first. CI-native. No dashboard required.**
 - **Open source. MIT.**
 
@@ -230,7 +230,7 @@ pickled
 
 **Facts, misstatements, and verifier commands you control.** A grounded answer can still be wrong. A build that does not pass your commands did not build. You declare the facts an answer must cover, the misstatements it must not make, and the verifier commands a build must pass, and Pickled scores that contract deterministically.
 
-**The report is the receipt.** Each run leaves an artifact: task, agent, context, response or build attempt, facts covered, misstatements rejected, tools used, commands run, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts.
+**The report is the receipt.** Each run leaves an artifact: task, agent, context, fact coverage, misstatement result, tool provenance, build attempts, commands run, threshold result. The receipt is what fails CI. The receipt is what gets diffed against last week's. Inspectors carry receipts. Default receipts are safe for CI artifacts; `--verbose` is the forensic path.
 
 **Internal-team use is first-class.** Pickled is for teams testing how the outside world's agents understand their product, and for teams testing whether their own context steers their own agents correctly inside their own codebase. Comments are prompt surface. Stale prompt surface is product debt, not harmless prose.
 
@@ -337,7 +337,7 @@ Pickled has two verdicts. They are orthogonal. Renderers must not conflate them.
 
 The cell verdict determines the label family. A question cell is `YES` only when the scored response fully satisfied the contract (all expected facts covered, no rejected misstatement, the tool path used); the fully grounded result and fact coverage are rendered as detail (`1/1` or `0/1`, `% facts`) but never upgrade `PARTIAL`, `NO`, or `Error`. Build cells use the build label family and render the pass rate as `k/n`; they never use the grounded scale. The categorical signal wins.
 
-Implementation rule: one shared helper (`report-status.ts`) returns the label, icon, tone, score, and run verdict. Every renderer (terminal, JSON, web) consumes it. None computes the label, the score, or the pass/fail itself.
+Implementation rule: one shared helper (`report-status.ts`) returns the label, icon, tone, score, and run verdict. Every renderer (terminal, markdown, JSON, web) consumes it. None computes the label, the score, or the pass/fail itself.
 
 **Feedback tone.**
 
