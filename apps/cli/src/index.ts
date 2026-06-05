@@ -4,6 +4,7 @@ import pkg from "../package.json";
 import { audit } from "./commands/audit.js";
 import { build } from "./commands/build.js";
 import { check } from "./commands/check.js";
+import { ci } from "./commands/ci.js";
 import { init } from "./commands/init.js";
 import { report } from "./commands/report.js";
 import { test } from "./commands/test.js";
@@ -75,6 +76,30 @@ program
   .option("--seed <value>", "Seed for --sample")
   .option("--keep-on-failure", "Keep failed build workspaces for inspection")
   .action(build);
+
+program
+  .command("ci")
+  .summary("Run questions and builds, write receipts, gate the run")
+  .description(
+    "Run the configured questions and builds in one pass: write a CI-safe " +
+      "receipt per kind, append a markdown summary to the job summary, and " +
+      "exit non-zero if any thresholded run failed.",
+  )
+  .argument("[path]", "Project path", ".")
+  .option("--questions", "Run questions only (default: both configured kinds)")
+  .option("--builds", "Run builds only (default: both configured kinds)")
+  .option("--questions-max-cells <n>", "Cost gate for the questions run")
+  .option("--builds-max-cells <n>", "Cost gate for the builds run")
+  .option(
+    "--report-dir <dir>",
+    "Directory for JSON receipts",
+    "pickled-reports",
+  )
+  .option(
+    "--summary-file <file>",
+    "Append markdown summaries here (defaults to $GITHUB_STEP_SUMMARY)",
+  )
+  .action(ci);
 
 program
   .command("report")
