@@ -13,6 +13,7 @@ name: Agent dogfood
 # Secrets (set in repo settings; missing keys produce error receipts):
 # - ANTHROPIC_API_KEY_DOGFOOD (quick / anthropic_api / build agents)
 # - OPENAI_API_KEY_DOGFOOD     (openai_api cells)
+# - CONTEXT7_API_KEY_DOGFOOD   (context7_docs MCP context)
 on:
   workflow_dispatch:
     inputs:
@@ -65,6 +66,7 @@ jobs:
           PICKLED_MAX_CELLS: ${{ inputs.max_cells }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_DOGFOOD }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_DOGFOOD }}
+          CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY_DOGFOOD }}
         run: |
           set +e
           args=(. --output pickled-report.json --verbose)

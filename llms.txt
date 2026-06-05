@@ -75,6 +75,7 @@ A task runs as one cell per `(agent × context)` pair. A context is a `mode` plu
 
 For `web` and `mcp`, a cell that answers without invoking any of its tools is hard-vetoed to `NO`, because an answer from model memory cannot testify to the tool path the cell is meant to test.
 
+To test public docs or llms.txt, compare `memory` against `inject`; add `web` or `mcp` when discovery or tool provenance matters.
 ## Facts and misstatements
 
 A question scores on two reusable, deterministic registries:

@@ -17,6 +17,7 @@ describe("dogfood pickled.yml (in-repo acceptance fixture)", () => {
       "github_actions",
       "public_docs_eval",
       "provider_context_modes",
+      "mcp_context",
       "build_verifier",
     ]);
     expect(config.sources.github_actions).toBeDefined();
@@ -44,10 +45,20 @@ describe("dogfood pickled.yml (in-repo acceptance fixture)", () => {
       "./fixtures/github-actions.solution.patch",
     );
 
-    // The dogfood contexts span memory, inject, and web (it declares no mcp
-    // context, so mcp is intentionally absent here).
+    const mcpQuestion = config.questions.find((q) => q.id === "mcp_context");
+    expect(mcpQuestion?.contexts).toEqual(["given_docs", "context7_docs"]);
+    const context7 = config.contexts.context7_docs;
+    expect(context7?.mode).toBe("mcp");
+    if (context7?.mode === "mcp") {
+      expect(context7.servers.context7?.url).toBe(
+        "https://mcp.context7.com/mcp",
+      );
+    }
+
+    // The dogfood contexts span all four modes, including the Context7 MCP
+    // path.
     const modes = new Set(Object.values(config.contexts).map((c) => c.mode));
-    expect(modes).toEqual(new Set(["memory", "inject", "web"]));
+    expect(modes).toEqual(new Set(["memory", "inject", "web", "mcp"]));
 
     // Thresholds are per-kind.
     expect(config.thresholds.questions).toBe(60);

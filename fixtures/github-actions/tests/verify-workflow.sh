@@ -15,7 +15,6 @@ workflow=".github/workflows/pickled.yml"
 
 grep -Eq 'pull_request:' "$workflow" || fail "missing pull_request trigger"
 grep -Eq 'workflow_dispatch:' "$workflow" || fail "missing workflow_dispatch trigger"
-grep -Eq 'schedule:' "$workflow" || fail "missing schedule trigger"
 
 grep -Eq 'bunx[[:space:]]+@pickled-dev/cli[[:space:]]+test[[:space:]]+\.' "$workflow" || fail "missing pickled test"
 grep -Eq 'bunx[[:space:]]+@pickled-dev/cli[[:space:]]+check[[:space:]]+\.[[:space:]]+--plan' "$workflow" || fail "missing pickled check --plan"
@@ -27,5 +26,4 @@ grep -Eq 'bunx[[:space:]]+@pickled-dev/cli[[:space:]]+build[[:space:]]+\.[[:spac
 grep -Eq 'ANTHROPIC_API_KEY' "$workflow" || fail "missing ANTHROPIC_API_KEY"
 grep -Eq 'secrets\.ANTHROPIC_API_KEY' "$workflow" || fail "ANTHROPIC_API_KEY must come from GitHub secrets"
 
-grep -Eq "github\.event_name[[:space:]]*==[[:space:]]*'workflow_dispatch'" "$workflow" || fail "real-agent job must allow workflow_dispatch"
-grep -Eq "github\.event_name[[:space:]]*==[[:space:]]*'schedule'" "$workflow" || fail "real-agent job must allow schedule"
+grep -Eq "github\.event_name[[:space:]]*==[[:space:]]*'workflow_dispatch'|github\.event_name[[:space:]]*==[[:space:]]*'schedule'|github\.event_name[[:space:]]*!=[[:space:]]*'pull_request'" "$workflow" || fail "real-agent job must be gated away from pull_request"

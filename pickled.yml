@@ -46,6 +46,14 @@ contexts:
   given_github_actions: { mode: inject, source: github_actions }
   web_open: { mode: web } # open web discovery, no declared source
   web_docs: { mode: web, source: docs } # docs URL handed over, reached with web
+  context7_docs:
+    mode: mcp
+    source: docs
+    servers:
+      context7:
+        url: https://mcp.context7.com/mcp
+        headers:
+          CONTEXT7_API_KEY: ${CONTEXT7_API_KEY}
 
 # Reusable developer-workflow truths a correct answer must cover.
 facts:
@@ -84,16 +92,24 @@ facts:
   public_sources:
     statement: Says public docs or llms.txt should be registered as sources.
     match:
-      allOf: ["sources", "llms.txt"]
+      allOf: ["source"]
+      anyOf: ["docs", "llms.txt"]
   compare_contexts:
-    statement: Says to compare memory, injected, and discovery contexts.
+    statement: Says to compare model memory against an injected source context.
     match:
       allOf: ["memory", "inject"]
-      anyOf: ["web", "mcp"]
   facts_misstatements:
     statement: Says questions use facts and misstatements as the deterministic contract.
     match:
       allOf: ["facts", "misstatements"]
+  mcp_context_shape:
+    statement: Shows the v2 MCP context shape.
+    match:
+      allOf: ["mode: mcp", "servers", "url"]
+  mcp_provenance:
+    statement: Says MCP answers must use tool provenance.
+    match:
+      anyOf: ["provenance", "veto"]
   fail_to_pass:
     statement: Explains failToPass as the behavior-changing verifier.
     match:
@@ -125,6 +141,10 @@ misstatements:
     statement: Claims a Firecrawl tool mode exists today.
     match:
       anyOf: ["Firecrawl"]
+  stale_mcp_schema:
+    statement: Uses the removed v1 MCP schema.
+    match:
+      anyOf: ["mcpServers", "scenarios"]
   unsafe_pull_request_target:
     statement: Recommends pull_request_target for paid Pickled agent runs.
     match:
@@ -164,14 +184,14 @@ questions:
 
   # Developer workflow: evaluate public docs, llms.txt, and discovery paths.
   - id: public_docs_eval
-    question: How do I test whether agents understand my public docs or llms.txt?
+    question: How do I test whether agents understand my public docs or llms.txt, including which sources, memory vs inject contexts, and facts/misstatements contract I should configure?
     agents: [quick]
     contexts: [given_docs, given_llms]
     expects: [public_sources, compare_contexts, facts_misstatements]
     rejects: [magic_dashboard]
     examples:
       pass:
-        - "Register docs and llms.txt as sources, compare memory against inject plus web or mcp contexts, and score answers with facts and misstatements."
+        - "Register docs and llms.txt as sources, compare memory against injected contexts, and score answers with facts and misstatements."
       fail:
         - "Use the magic dashboard and let the model decide whether the docs are probably fine."
 
@@ -187,6 +207,20 @@ questions:
         - "A pickled context can use memory, inject, web, or mcp. Claude Code supports all four; Codex CLI supports memory and inject; Anthropic supports memory, inject, and web; OpenAI supports all four."
       fail:
         - "Today a pickled agent supports web, mcp, and Firecrawl modes on Claude Code."
+
+  # Developer workflow: retrieve docs through an MCP server and reject stale v1
+  # MCP fields.
+  - id: mcp_context
+    question: How do I configure a Pickled MCP context for docs retrieval, and how does the provenance veto work?
+    agents: [quick]
+    contexts: [given_docs, context7_docs]
+    expects: [mcp_context_shape, mcp_provenance]
+    rejects: [stale_mcp_schema, firecrawl_mode]
+    examples:
+      pass:
+        - "Declare a context with mode: mcp, a servers map, and a server url. An mcp cell must invoke the tool path, or provenance vetoes the answer."
+      fail:
+        - "Add mcpServers and wire them into scenarios."
 
   # Developer workflow: write build tasks with trustworthy verification.
   - id: build_verifier
@@ -212,8 +246,9 @@ builds:
       dependencies, run `bunx @pickled-dev/cli test .`, run
       `bunx @pickled-dev/cli check . --plan`, and run
       `bunx @pickled-dev/cli build . --plan`. Put real agent runs behind
-      workflow_dispatch or schedule, pass ANTHROPIC_API_KEY from GitHub secrets
-      there, cap the run with --max-cells, and never use pull_request_target.
+      workflow_dispatch, a schedule, or another trusted non-PR path, pass
+      ANTHROPIC_API_KEY from GitHub secrets there, cap the run with --max-cells,
+      and never use pull_request_target.
     agents: [builder]
     contexts: [memory, given_llms]
     trials: 3

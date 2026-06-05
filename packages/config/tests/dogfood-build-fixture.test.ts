@@ -105,6 +105,80 @@ jobs:
     expect(result.status).toBe(0);
   });
 
+  test("manual-only real agent runs pass verification", () => {
+    const dir = copyFixture();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(dir, ".github", "workflows", "pickled.yml"),
+      `name: pickled
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bunx @pickled-dev/cli test .
+      - run: bunx @pickled-dev/cli check . --plan
+      - run: bunx @pickled-dev/cli build . --plan
+
+  real-agents:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - run: bunx @pickled-dev/cli check . --max-cells 20
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+      - run: bunx @pickled-dev/cli build . --max-cells 6
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+`,
+    );
+    const result = runVerifier(dir);
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+  });
+
+  test("non-pull-request real agent gate passes verification", () => {
+    const dir = copyFixture();
+    mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(dir, ".github", "workflows", "pickled.yml"),
+      `name: pickled
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * 1"
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bunx @pickled-dev/cli test .
+      - run: bunx @pickled-dev/cli check . --plan
+      - run: bunx @pickled-dev/cli build . --plan
+
+  real-agents:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    steps:
+      - run: bunx @pickled-dev/cli check . --max-cells 20
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+      - run: bunx @pickled-dev/cli build . --max-cells 6
+        env:
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+`,
+    );
+    const result = runVerifier(dir);
+    expect(result.stderr).toBe("");
+    expect(result.status).toBe(0);
+  });
+
   test("pull_request_target is rejected", () => {
     const dir = copyFixture();
     mkdirSync(join(dir, ".github", "workflows"), { recursive: true });
