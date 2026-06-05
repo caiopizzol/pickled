@@ -88,6 +88,8 @@ jobs:
 
 `pickled build --plan` reports both selected cells and selected executions. `--max-cells` gates executions (`cells × trials`), so one build cell with `trials: 3` counts as three.
 
+`pickled build --verify-only` proves each build's harness (the untouched fixture fails `failToPass`, passes `passToPass`, and a declared `referenceSolution` applies and clears the verifier) without running an agent. It exits non-zero if any harness is broken, so it is a cheap gate that catches a bad fixture or an unreachable bar before any token is spent.
+
 Use the same pattern for `pickled build`: save `--output pickled-builds.json`, render it with `pickled report pickled-builds.json --format markdown`, upload the artifact, then exit with the original command's code.
 
 Default JSON is CI-safe. It keeps verdicts and evidence ids, but not full answers, source text, transcripts, diffs, or command output. Add `--verbose` only for forensic artifacts.

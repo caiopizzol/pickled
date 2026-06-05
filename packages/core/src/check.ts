@@ -1,5 +1,5 @@
 import type { Config, ResolvedSource, Target } from "@pickled-dev/config";
-import { runBuildCell } from "./implement/build-runner.js";
+import { proveBuild, runBuildCell } from "./implement/build-runner.js";
 import {
   buildPlanReport,
   type CellFilter,
@@ -15,6 +15,7 @@ import { fetchAllSources } from "./sources.js";
 import type { TargetRunner } from "./targets/types.js";
 import type {
   BuildCell,
+  BuildProofResult,
   BuildResult,
   QuestionCell,
   QuestionResult,
@@ -135,6 +136,37 @@ export function runBuild(
   options: CheckOptions = {},
 ): Promise<RunReport> {
   return run("build", tool, config, options);
+}
+
+/**
+ * `pickled build --verify-only`: prove each build's harness (preflight +
+ * reference control) with no agent runs. Per build, not per cell, because the
+ * proof is agent/context-independent. Honors a task filter.
+ */
+export async function proveBuilds(
+  tool: ToolInfo,
+  config: Config,
+  options: { taskFilter?: string[]; onProgress?: (msg: string) => void } = {},
+): Promise<BuildProofResult[]> {
+  const wanted =
+    options.taskFilter && options.taskFilter.length > 0
+      ? new Set(options.taskFilter)
+      : undefined;
+  const builds = wanted
+    ? config.builds.filter((b) => wanted.has(b.id))
+    : config.builds;
+  const results: BuildProofResult[] = [];
+  for (const build of builds) {
+    options.onProgress?.(`proving "${build.goal}"`);
+    const proof = await proveBuild(build, tool.path);
+    results.push({
+      id: build.id,
+      goal: build.goal,
+      status: proof.status,
+      message: proof.message,
+    });
+  }
+  return results;
 }
 
 async function runQuestions(

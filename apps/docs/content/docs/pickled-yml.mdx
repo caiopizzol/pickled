@@ -186,7 +186,7 @@ builds:
 - `verifier.failToPass` commands must fail on the untouched fixture and pass after the agent; `verifier.passToPass` commands (optional) must pass before and after (the regression guard). Each command is `{ run, name? }`; `name` defaults to `run`.
 - `trials` is the number of independent runs per cell (default 1); the result is reported as `k/n`.
 - `requires` links fact ids for diagnostic reporting (which probe failed alongside the build).
-- `referenceSolution.patch` is an optional positive control: a patch that, applied to the baseline, must pass the verifier. Absent, the report marks the verifier unproven.
+- `referenceSolution.patch` is an optional positive control: a patch that, applied to the baseline, must pass the verifier. Absent, the report marks the verifier unproven. Run `pickled build --verify-only` to check the harness (preflight + reference control) without spending tokens on an agent.
 
 ## `thresholds`
 

@@ -75,6 +75,10 @@ program
   .option("--sample <n>", "Sample N cells per task")
   .option("--seed <value>", "Seed for --sample")
   .option("--keep-on-failure", "Keep failed build workspaces for inspection")
+  .option(
+    "--verify-only",
+    "Prove the build harness (preflight + reference) with no agent runs",
+  )
   .action(build);
 
 program

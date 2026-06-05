@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Build, Config } from "@pickled-dev/config";
-import { runBuildCell } from "../../src/implement/build-runner.js";
+import { proveBuild, runBuildCell } from "../../src/implement/build-runner.js";
 import type {
   RunOptions,
   TargetResult,
@@ -418,5 +418,50 @@ describe("runBuildCell", () => {
     expect(cell.passedAttempts).toBe(2);
     expect(cell.totalAttempts).toBe(2);
     expect(cell.attempts).toHaveLength(3); // receipt keeps the error
+  });
+});
+
+describe("proveBuild (harness proof, no agent)", () => {
+  test("no reference solution -> unproven", async () => {
+    const fixture = makeFixture({ "src/placeholder.txt": "x\n" });
+    const proof = await proveBuild(build(fixture), fixture);
+    expect(proof.status).toBe("unproven");
+    expect(proof.verifierProof).toBe("not_declared");
+    expect(proof.message).toBeUndefined();
+  });
+
+  test("a fixture whose failToPass already passes -> broken", async () => {
+    const fixture = makeFixture({ "src/answer.txt": "ok\n" });
+    const proof = await proveBuild(build(fixture), fixture);
+    expect(proof.status).toBe("broken");
+    expect(proof.message).toContain("failToPass already passes");
+  });
+
+  test("a reference patch that does not apply -> broken", async () => {
+    const fixture = makeFixture({ "src/placeholder.txt": "x\n" });
+    const badPatch = join(fixture, "bad.patch");
+    writeFileSync(badPatch, "this is not a valid git patch\n");
+    const proof = await proveBuild(
+      build(fixture, { referenceSolution: { patch: badPatch } }),
+      fixture,
+    );
+    expect(proof.status).toBe("broken");
+    expect(proof.verifierProof).toBe("failed");
+    expect(proof.message).toContain("reference solution");
+  });
+
+  test("a reference patch that clears the verifier -> proven", async () => {
+    const fixture = makeFixture({ "src/answer.txt": "x\n" });
+    const patch = join(fixture, "fix.patch");
+    writeFileSync(
+      patch,
+      "--- a/src/answer.txt\n+++ b/src/answer.txt\n@@ -1 +1 @@\n-x\n+ok\n",
+    );
+    const proof = await proveBuild(
+      build(fixture, { referenceSolution: { patch } }),
+      fixture,
+    );
+    expect(proof.status).toBe("proven");
+    expect(proof.verifierProof).toBe("passed");
   });
 });
