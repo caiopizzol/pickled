@@ -1,0 +1,35 @@
+schemaVersion: 2
+
+product:
+  name: Fixture Docs
+  description: tiny docs fixture for GitHub Actions dogfood
+
+sources:
+  readme: { path: ./README.md }
+
+agents:
+  quick:
+    provider: claude-code
+    model: claude-haiku-4-5
+
+contexts:
+  given_readme: { mode: inject, source: readme }
+
+facts:
+  action_setup:
+    statement: The workflow runs Pickled deterministic checks.
+    match:
+      allOf: ["pickled test", "check . --plan"]
+
+questions:
+  - id: ci
+    question: How should this repo run Pickled in CI?
+    agents: [quick]
+    contexts: [given_readme]
+    expects: [action_setup]
+    examples:
+      pass: ["Run pickled test and check . --plan on pull requests."]
+      fail: ["Only run a full paid agent benchmark on every pull request."]
+
+thresholds:
+  questions: 60

@@ -10,6 +10,7 @@ product:
 sources:
   docs: { url: https://docs.pickled.dev/llms-full.txt }
   getting_started: { url: https://docs.pickled.dev/getting-started }
+  github_actions: { url: https://docs.pickled.dev/github-actions }
   llms: { path: ./llms.txt }
 
 # The agents under test. `quick` is the cheap question default; `builder`
@@ -42,22 +43,12 @@ contexts:
   given_docs: { mode: inject, source: docs } # docs content injected
   given_llms: { mode: inject, source: llms } # root llms.txt injected
   given_getting_started: { mode: inject, source: getting_started }
+  given_github_actions: { mode: inject, source: github_actions }
   web_open: { mode: web } # open web discovery, no declared source
   web_docs: { mode: web, source: docs } # docs URL handed over, reached with web
 
-# Reusable product truths a correct answer must cover.
+# Reusable developer-workflow truths a correct answer must cover.
 facts:
-  # positioning facts must prove understanding the product *description* alone
-  # cannot satisfy ("Agent legibility checker for developer tools" already
-  # contains "agent" and "legibility", so the old facts passed from memory).
-  tests_build:
-    statement: Says pickled tests that agents can build with the product, not just answer.
-    match:
-      allOf: ["build"]
-  deterministic_scoring:
-    statement: Says scoring is deterministic / not decided by an LLM judge.
-    match:
-      anyOf: ["deterministic", "no LLM", "without an LLM", "not judged", "not graded"]
   install_command:
     statement: Gives the bunx install/init command.
     match:
@@ -78,6 +69,43 @@ facts:
     statement: Names Claude Code as a provider.
     match:
       anyOf: ["Claude Code", "claude-code"]
+  ci_pr_deterministic:
+    statement: Says pull-request CI should run deterministic/offline Pickled checks.
+    match:
+      allOf: ["test .", "check . --plan"]
+  ci_trusted_real_runs:
+    statement: Says real agent runs belong on trusted branches, manual dispatch, or schedules.
+    match:
+      anyOf: ["workflow_dispatch", "schedule", "trusted"]
+  ci_secrets:
+    statement: Names the API key secrets used by real agent runs.
+    match:
+      anyOf: ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+  public_sources:
+    statement: Says public docs or llms.txt should be registered as sources.
+    match:
+      allOf: ["sources", "llms.txt"]
+  compare_contexts:
+    statement: Says to compare memory, injected, and discovery contexts.
+    match:
+      allOf: ["memory", "inject"]
+      anyOf: ["web", "mcp"]
+  facts_misstatements:
+    statement: Says questions use facts and misstatements as the deterministic contract.
+    match:
+      allOf: ["facts", "misstatements"]
+  fail_to_pass:
+    statement: Explains failToPass as the behavior-changing verifier.
+    match:
+      allOf: ["failToPass"]
+  pass_to_pass:
+    statement: Explains passToPass as the regression guard.
+    match:
+      allOf: ["passToPass"]
+  reference_solution:
+    statement: Explains referenceSolution.patch as the positive control.
+    match:
+      allOf: ["referenceSolution"]
 
 # Reusable wrong claims a correct answer must not make.
 misstatements:
@@ -97,26 +125,18 @@ misstatements:
     statement: Claims a Firecrawl tool mode exists today.
     match:
       anyOf: ["Firecrawl"]
+  unsafe_pull_request_target:
+    statement: Recommends pull_request_target for paid Pickled agent runs.
+    match:
+      anyOf: ["pull_request_target"]
+  bare_verify:
+    statement: Uses the removed v1 verify key instead of verifier.failToPass.
+    match:
+      anyOf: ["verify:"]
 
 questions:
-  # Positioning across the full context gradient, on three agents. "agent" is
-  # the load-bearing noun; the capability fact names what pickled measures.
-  - id: positioning
-    question: In one or two sentences, what does pickled do?
-    agents: [quick, anthropic_api, openai_api]
-    contexts: [memory, given_docs, web_open, web_docs]
-    expects: [tests_build, deterministic_scoring]
-    rejects: [magic_dashboard, brand_tracker]
-    examples:
-      pass:
-        - "Pickled tests whether an agent can answer and build with your product's published context, scored deterministically. No LLM grades another LLM."
-      fail:
-        - "Pickled is a magic dashboard that tracks how your brand appears in AI answers."
-
-  # Onboarding: a developer reading the docs should leave with the install
-  # form, a pickled.yml, and the run command. A stale npm install form means
-  # the agent drifted off the registered docs.
-  - id: install
+  # Developer workflow: install, create the config, then run the first check.
+  - id: first_check
     question: How do I install pickled and run my first check?
     agents: [quick]
     contexts: [given_getting_started, given_docs]
@@ -128,9 +148,35 @@ questions:
       fail:
         - "Install with `npm install @pickled-dev/cli`, add a pickled.yml, then run check ."
 
-  # Coverage of the context modes pickled ships today. Firecrawl is proposed but
-  # not shipped; an agent that claims it is the exact false-support answer.
-  - id: tool_modes
+  # Developer workflow: wire Pickled into CI without spending tokens on unsafe
+  # pull-request paths.
+  - id: github_actions
+    question: How should I run Pickled safely in GitHub Actions?
+    agents: [quick]
+    contexts: [given_github_actions, given_docs]
+    expects: [ci_pr_deterministic, ci_trusted_real_runs, ci_secrets]
+    rejects: [unsafe_pull_request_target]
+    examples:
+      pass:
+        - "On pull requests, run `bunx @pickled-dev/cli test .` and `bunx @pickled-dev/cli check . --plan`. Put real agent runs behind `workflow_dispatch`, a schedule, or trusted branches, and pass `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` only there."
+      fail:
+        - "Use pull_request_target with ANTHROPIC_API_KEY and run the full paid benchmark on every fork PR."
+
+  # Developer workflow: evaluate public docs, llms.txt, and discovery paths.
+  - id: public_docs_eval
+    question: How do I test whether agents understand my public docs or llms.txt?
+    agents: [quick]
+    contexts: [given_docs, given_llms]
+    expects: [public_sources, compare_contexts, facts_misstatements]
+    rejects: [magic_dashboard]
+    examples:
+      pass:
+        - "Register docs and llms.txt as sources, compare memory against inject plus web or mcp contexts, and score answers with facts and misstatements."
+      fail:
+        - "Use the magic dashboard and let the model decide whether the docs are probably fine."
+
+  # Developer workflow: avoid invalid provider/context combinations.
+  - id: provider_context_modes
     question: Which context modes can a pickled agent use today, and which agent or provider does each need?
     agents: [quick]
     contexts: [given_docs, given_llms]
@@ -142,40 +188,51 @@ questions:
       fail:
         - "Today a pickled agent supports web, mcp, and Firecrawl modes on Claude Code."
 
+  # Developer workflow: write build tasks with trustworthy verification.
+  - id: build_verifier
+    question: What makes a Pickled build task verifier trustworthy?
+    agents: [quick]
+    contexts: [given_docs, given_llms]
+    expects: [fail_to_pass, pass_to_pass, reference_solution]
+    rejects: [bare_verify]
+    examples:
+      pass:
+        - "Use verifier.failToPass for commands that fail on the untouched fixture and pass after the agent, passToPass for regression guards, and referenceSolution.patch as the positive control."
+      fail:
+        - "Put a bare verify: list in the build and trust the agent if any command exits zero."
+
 builds:
-  # Build dogfood: can an agent use Pickled's own public context to author and
-  # validate a v2 Pickled config for a tiny product fixture? The workspace
-  # contains llms.txt because the generated config must reference it, so
-  # `memory` means "not injected", not "unavailable".
-  - id: write_pickled_config
+  # Build dogfood: can an agent use Pickled's docs to wire the CLI into GitHub
+  # Actions safely? The workspace contains a pickled.yml because the workflow
+  # must run it, so `memory` means "not injected", not "unavailable".
+  - id: add_github_actions_workflow
     goal: >-
-      Create a v2 pickled.yml (schemaVersion 2) for the BrineKit fixture product.
-      Register the local llms.txt as a source. Declare a memory context and an
-      inject context over llms so the run compares model memory against the
-      injected docs. Declare a fact for the documented install command and a
-      misstatement for stale npm install guidance, then a question that expects
-      the fact and rejects the misstatement (with pass and fail examples).
-      Finally declare a build named smoke_build that uses ./workspace, runs two
-      trials, and whose verifier failToPass checks that configured.txt exists.
+      Add .github/workflows/pickled.yml for this repository fixture. The workflow
+      should run deterministic Pickled checks on pull requests: install
+      dependencies, run `bunx @pickled-dev/cli test .`, run
+      `bunx @pickled-dev/cli check . --plan`, and run
+      `bunx @pickled-dev/cli build . --plan`. Put real agent runs behind
+      workflow_dispatch or schedule, pass ANTHROPIC_API_KEY from GitHub secrets
+      there, cap the run with --max-cells, and never use pull_request_target.
     agents: [builder]
     contexts: [memory, given_llms]
     trials: 3
     workspace:
-      path: ./fixtures/pickled-config-authoring
+      path: ./fixtures/github-actions
     verifier:
       failToPass:
-        - { name: authored config, run: ./tests/verify-pickled-config.sh }
+        - { name: safe workflow, run: ./tests/verify-workflow.sh }
       passToPass:
-        # Regression guard: the authored config must register the local
-        # llms.txt, so the agent must not delete it. Green on the untouched
-        # fixture (llms.txt ships with it) and must stay green after.
-        - { name: keeps llms source, run: test -f llms.txt }
-    # Positive control: the golden config, applied to the baseline, must pass
-    # the verifier. Proves the bar is reachable (verifierProof: passed) rather
-    # than leaving it unproven. Lives outside the fixture so the agent never
-    # sees it.
+        # Regression guard: the workflow exists to run this config, so the
+        # agent must not delete it. Green on the untouched fixture and must
+        # stay green after.
+        - { name: keeps pickled config, run: test -f pickled.yml }
+    # Positive control: the reference workflow, applied to the baseline, must
+    # pass the verifier. Proves the bar is reachable (verifierProof: passed)
+    # rather than leaving it unproven. Lives outside the fixture so the agent
+    # never sees it.
     referenceSolution:
-      patch: ./fixtures/pickled-config-authoring.solution.patch
+      patch: ./fixtures/github-actions.solution.patch
 
 thresholds:
   questions: 60

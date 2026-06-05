@@ -4,11 +4,7 @@ Test what agents actually understand about your product.
 
 Pickled is an open-source CLI that tests whether real agents can answer and build with your product (Claude Code, Codex CLI, Anthropic API, OpenAI API), across declared context paths (a source injected, or reached through `web` / `mcp` tools), using deterministic evidence: fact coverage, misstatement rejection, tool-use provenance, and build verification. No LLM grades another LLM.
 
-## Install
-
-```bash
-bun add -g @pickled-dev/cli
-```
+Install: `bun add -g @pickled-dev/cli`
 
 ## Commands
 
@@ -115,12 +111,9 @@ For paid agents, a run grows expensive as you add agents and contexts. These fla
 - `--seed VALUE`: seed for `--sample`. Defaults to the literal string `default` so reruns without `--seed` are reproducible.
 - `--task ID`, `--agent NAME`, `--context NAME`: narrow a run by names from `pickled.yml`.
 
-## Read more
+## GitHub Actions
 
-- Project README: https://github.com/caiopizzol/pickled
-- CLI usage: https://github.com/caiopizzol/pickled/blob/main/apps/cli/README.md
-- pickled.yml reference: https://docs.pickled.dev/pickled-yml
+- PRs: run `bunx @pickled-dev/cli test .`, `bunx @pickled-dev/cli check . --plan`, and `bunx @pickled-dev/cli build . --plan`.
+- Real agent runs: use `workflow_dispatch`, `schedule`, or trusted branches; pass `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` through secrets; cap with `--max-cells`; do not use `pull_request_target` for paid runs on untrusted fork PRs.
 
-## License
-
-MIT.
+Read more: https://github.com/caiopizzol/pickled · https://docs.pickled.dev/pickled-yml
