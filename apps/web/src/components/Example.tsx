@@ -53,6 +53,10 @@ builds:
     verifier:
       failToPass:
         - { run: bun test }
+      passToPass:
+        - { run: bun run typecheck }
+    referenceSolution:
+      patch: ./fixtures/solutions/add-validation.patch
 
 thresholds:
   questions: 80
@@ -121,7 +125,7 @@ export function Example() {
               </TerminalLine>
               <TerminalLine>
                 &nbsp;&nbsp;<T.Muted>[quick · injected]</T.Muted>{" "}
-                <T.Warning>⚠ Partially built 2/3</T.Warning>
+                <T.Warning>⚠ Partially built 2/3 (verifier proven)</T.Warning>
               </TerminalLine>
               <TerminalLine>
                 <T.Dim>{"    failed: bun test (failToPass)"}</T.Dim>

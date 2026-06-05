@@ -77,7 +77,7 @@ pickled build . --plan                           # preview build cells and execu
 pickled build . --verify-only                    # prove the harness; no agent runs
 ```
 
-`pickled build --verify-only` runs each build's preflight and reference control (the untouched fixture must fail `failToPass` and pass `passToPass`; a declared `referenceSolution` must apply and clear the verifier) and prints one line per build: `proven`, `unproven` (no reference declared), or `broken`. No agent runs, so it is the cheap way to check a fixture before spending tokens, and it exits non-zero if any harness is broken. `--output file.json` writes the per-build proof results as JSON (or `--json` to print them to stdout). It accepts only `--task`, `--json`, `--output`, and `--verbose`; the agent, sampling, and threshold flags are rejected rather than silently ignored.
+`pickled build --verify-only` checks each build fixture before token spend: the untouched fixture must fail `failToPass`, pass `passToPass`, and any `referenceSolution` must clear the verifier. It prints `proven`, `unproven`, or `broken` per build, exits non-zero on broken harnesses, and writes proof JSON with `--output file.json`. It accepts only `--task`, `--json`, `--output`, and `--verbose`.
 
 The receipt records `expandedCells`, `selectedCells`, and `seed` so a reviewer can see what ran and rerun the same sample. Builds also report `selectedExecutions` (cells x trials), which is what `--max-cells` gates.
 

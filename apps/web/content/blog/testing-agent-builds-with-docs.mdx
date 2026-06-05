@@ -45,11 +45,12 @@ Run build tasks deliberately. A practical CI shape is: `pickled test` and `pickl
 When you run builds in CI, save the receipt and render it:
 
 ```bash
+pickled build . --verify-only
 pickled build . --max-cells 6 --output pickled-builds.json
 pickled report pickled-builds.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 ```
 
-The markdown summary shows the build verdict, changed files, failed verifier commands, and reference-solution proof without printing diffs or command output. Upload the JSON receipt as the artifact; add `--verbose` only for forensic detail.
+`--verify-only` proves the fixture and reference patch before the paid run. The markdown summary shows the build verdict, changed files, failed verifier commands, and reference-solution proof without printing diffs or command output. Upload the JSON receipt as the artifact; add `--verbose` only for forensic detail.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)
