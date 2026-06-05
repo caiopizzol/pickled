@@ -5,6 +5,7 @@ import { audit } from "./commands/audit.js";
 import { build } from "./commands/build.js";
 import { check } from "./commands/check.js";
 import { init } from "./commands/init.js";
+import { report } from "./commands/report.js";
 import { test } from "./commands/test.js";
 
 program
@@ -74,6 +75,23 @@ program
   .option("--seed <value>", "Seed for --sample")
   .option("--keep-on-failure", "Keep failed build workspaces for inspection")
   .action(build);
+
+program
+  .command("report")
+  .summary("Re-render a saved receipt")
+  .description(
+    "Re-render a receipt saved by `check`/`build --output`. No model calls.",
+  )
+  .argument("<file>", "Path to a saved report JSON")
+  .addOption(
+    new Option("--format <name>", "Output format")
+      .choices(["terminal", "markdown", "json"])
+      .default("terminal"),
+  )
+  .option("--json", "Shorthand for --format json")
+  .option("-o, --output <file>", "Write the rendered report to a file")
+  .option("-v, --verbose", "Keep full evidence in JSON output (answers, diffs)")
+  .action(report);
 
 program
   .command("test")
