@@ -2,7 +2,7 @@
 title: "Use build tasks when answers are not enough"
 description: "A build task lets an agent edit a workspace and proves success with your verifier commands."
 date: 2026-06-02
-updated: 2026-06-04
+updated: 2026-06-05
 order: 7
 author: Caio Pizzol
 tags: [agent-evals, build-tasks, documentation, ci]
@@ -41,6 +41,15 @@ Keep build fixtures small:
 One caveat matters when you compare contexts. In build mode, the workspace may contain files the agent can read. If the task needs a local `llms.txt`, then `memory` means "not injected into the prompt," not "unavailable."
 
 Run build tasks deliberately. A practical CI shape is: `pickled test` and `pickled check --plan` on every PR, capped `pickled check` on trusted PRs, and capped `pickled build` on a schedule or release branch.
+
+When you run builds in CI, save the receipt and render it:
+
+```bash
+pickled build . --max-cells 6 --output pickled-builds.json
+pickled report pickled-builds.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+```
+
+The markdown summary shows the build verdict, changed files, failed verifier commands, and reference-solution proof without printing diffs or command output. Upload the JSON receipt as the artifact; add `--verbose` only for forensic detail.
 
 - [Getting started](https://docs.pickled.dev/getting-started)
 - [`pickled.yml` reference](https://docs.pickled.dev/pickled-yml)

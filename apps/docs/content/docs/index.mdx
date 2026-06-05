@@ -29,6 +29,7 @@ A task runs as one cell per `(agent × context)` pair. Each cell scores independ
 - **Facts and misstatements.** A question's `expects` lists facts the answer must cover; `rejects` lists misstatements it must not make (a hard veto). Matching is deterministic substring (normalized). The cell verdict is `YES` (all expected facts covered, no misstatement, tool path used), `PARTIAL` (some facts), or `NO`.
 - **Tool-use provenance.** When a context uses `web` or `mcp`, the agent must invoke at least one of its tools, or the cell is vetoed to `NO`. Model memory does not count as evidence for a tool path.
 - **Build verification.** A build instead has the agent edit a workspace; the cell passes when the `verifier` does (a `failToPass` / `passToPass` command split), reported as `Built` k-of-n over trials.
+- **Receipts.** Save a run with `--output`, then re-render it with `pickled report` as terminal, markdown, or JSON. Markdown is built for CI job summaries; default JSON strips source text, full answers, transcripts, diffs, and command output.
 
 ## Getting started
 

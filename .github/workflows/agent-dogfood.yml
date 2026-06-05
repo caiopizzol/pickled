@@ -69,7 +69,7 @@ jobs:
           CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY_DOGFOOD }}
         run: |
           set +e
-          args=(. --output pickled-report.json --verbose)
+          args=(. --output pickled-report.json)
           [[ -n "$PICKLED_TASK" ]] && args+=(--task "$PICKLED_TASK")
           [[ -n "$PICKLED_AGENT" ]] && args+=(--agent "$PICKLED_AGENT")
           [[ -n "$PICKLED_CONTEXT" ]] && args+=(--context "$PICKLED_CONTEXT")
@@ -88,6 +88,15 @@ jobs:
           # producing one (auth/config/runtime). A low-score receipt still
           # uploads cleanly; that is signal, not infra failure.
           if-no-files-found: error
+
+      - name: Add receipt summary
+        if: always()
+        run: |
+          if [ -f pickled-report.json ]; then
+            ./apps/cli/dist/index.js report pickled-report.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No Pickled receipt was produced." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Reflect Pickled verdict
         env:

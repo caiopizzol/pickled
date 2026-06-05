@@ -78,6 +78,17 @@ Overall: 100 / 100 · threshold 80 · run passes
 Every question met its checks.
 ```
 
+## Save the receipt
+
+Use `--output` when you want a durable receipt, then render it without rerunning the agent:
+
+```bash
+bunx @pickled-dev/cli check . --output pickled-report.json
+bunx @pickled-dev/cli report pickled-report.json --format markdown
+```
+
+Default JSON is CI-safe. It keeps the verdicts and evidence ids, but strips source text, full agent answers, transcripts, diffs, and command output. Use `--verbose` for a forensic receipt.
+
 ## Compare context paths
 
 The point of pickled is the comparison. Add a memory context and run the same question down both:

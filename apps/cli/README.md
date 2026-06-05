@@ -96,7 +96,7 @@ pickled report pickled-report.json --format markdown >> "$GITHUB_STEP_SUMMARY"
 
 Upload `pickled-report.json` with `actions/upload-artifact` to keep the receipt.
 
-The default JSON (`--output` / `--json`) is the CI-safe receipt: it carries verdicts, scores, missed facts, fired misstatements, tool provenance, and build attempts, but never source text, full agent answers, transcripts, diffs, or command output. The markdown summary is public-safe the same way. Pass `--verbose` for a forensic receipt that keeps the full answers, diffs, and command output. `pickled report old-verbose.json --format json` re-slims a forensic receipt back to the safe shape.
+The default JSON (`--output` / `--json`) is the CI-safe receipt: verdicts, evidence ids, provenance, and build attempts, without full answers, source text, transcripts, diffs, or command output. Pass `--verbose` for a forensic receipt.
 
 ## Current support
 
@@ -105,7 +105,7 @@ The default JSON (`--output` / `--json`) is the CI-safe receipt: it carries verd
 | Sources | local files, URLs, codebase globs |
 | Context modes | `memory`, `inject`, `web`, `mcp` |
 | Agents | Claude Code, Codex CLI, Anthropic API, OpenAI API |
-| Output | terminal, JSON, markdown (check, build, audit) |
+| Output | terminal and JSON for runs; markdown from saved receipts and audits |
 
 ## Read more
 

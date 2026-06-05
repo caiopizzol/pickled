@@ -13,6 +13,7 @@ Install: `bun add -g @pickled-dev/cli`
 - `pickled check [path]` - run the questions against the configured agents. `--plan` previews the cells without calling any model.
 - `pickled build [path]` - run the builds: the agent edits a workspace and your `verifier` must pass. `--plan` previews cells and executions.
 - `pickled test [path]` - score a question's declared example answers against its fact contract, offline. No model calls.
+- `pickled report <file>` - re-render a saved receipt from `check --output` or `build --output` as terminal, markdown, or JSON. No model calls.
 
 ## Minimum config
 
@@ -99,8 +100,7 @@ A build measures whether an agent can BUILD with your context, not just answer. 
 Stubbed and not yet implemented: `amazon-q`, Google API target. Do not list these as supported in present tense.
 
 ## JSON contract
-
-JSON output stays raw. It carries machine fields (`verdict`, `passRate`, `meanCoverage`, `verifierProof`). Human labels like `Well grounded` are derived by the shared report-status helpers each renderer consumes, not present in the JSON.
+JSON output stays raw. It carries machine fields (`verdict`, `passRate`, `meanCoverage`, `verifierProof`). Human labels are derived by the shared report-status helpers, not present in JSON. Default JSON is CI-safe: verdicts, evidence ids, provenance, and build attempts, without full answers, source content, transcripts, diffs, or command output. Use `--verbose` for a forensic receipt. `pickled report file.json --format markdown` is meant for CI job summaries.
 
 ## Cost and dry-run controls
 
@@ -115,6 +115,6 @@ For paid agents, a run grows expensive as you add agents and contexts. These fla
 ## GitHub Actions
 
 - PRs: run `bunx @pickled-dev/cli test .`, `bunx @pickled-dev/cli check . --plan`, and `bunx @pickled-dev/cli build . --plan`.
-- Real agent runs: use `workflow_dispatch`, `schedule`, or trusted branches; pass `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` through secrets; cap with `--max-cells`; do not use `pull_request_target` for paid runs on untrusted fork PRs.
+- Real agent runs: use `workflow_dispatch`, `schedule`, or trusted branches; pass API keys through secrets; cap with `--max-cells`; save `--output pickled-report.json`; render `pickled report pickled-report.json --format markdown >> "$GITHUB_STEP_SUMMARY"`; upload the JSON receipt as an artifact; do not use `pull_request_target` for paid runs on untrusted fork PRs.
 
 Read more: https://github.com/caiopizzol/pickled · https://docs.pickled.dev/pickled-yml
