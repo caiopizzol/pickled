@@ -22,7 +22,7 @@ export {
 
 // Run
 export type { CheckOptions } from "./check.js";
-export { run, runBuild, runCheck } from "./check.js";
+export { proveBuilds, run, runBuild, runCheck } from "./check.js";
 
 // Examples (pickled test)
 export type {
@@ -46,6 +46,7 @@ export {
 // Reporter (renderers; pure functions of RunReport)
 export type { FormatJSONOptions, FormatOptions } from "./reporter.js";
 export {
+  formatBuildProof,
   formatJSON,
   formatMarkdown,
   formatReport,
@@ -79,6 +80,8 @@ export {
 export type {
   BuildAttempt,
   BuildCell,
+  BuildProofResult,
+  BuildProofStatus,
   BuildResult,
   CellCoord,
   CommandReceipt,

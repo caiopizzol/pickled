@@ -171,6 +171,24 @@ export interface BuildResult {
   cells: BuildCell[];
 }
 
+/** Task-level harness proof status for a build (agent/context-independent). */
+export type BuildProofStatus = "proven" | "unproven" | "broken";
+
+/**
+ * One build's harness proof, produced by `pickled build --verify-only`. The
+ * proof runs the preflight (untouched fixture must fail failToPass and pass
+ * passToPass) plus the optional reference control (the referenceSolution patch
+ * must apply and clear the full verifier). It never runs an agent, so it does
+ * not depend on agent or context. `broken` carries a message naming the fault;
+ * `unproven` means no reference solution was declared.
+ */
+export interface BuildProofResult {
+  id: string;
+  goal: string;
+  status: BuildProofStatus;
+  message?: string;
+}
+
 // ---- The run report (the receipt the renderers consume) ----
 
 export interface PlanSummary {

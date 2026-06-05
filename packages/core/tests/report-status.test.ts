@@ -96,6 +96,11 @@ describe("buildCellStatus", () => {
       buildCellStatus(bCell({ verifierProof: "not_declared" })).detail,
     ).toBe("verifier unproven");
   });
+  test("passed verifier surfaces 'verifier proven'", () => {
+    expect(buildCellStatus(bCell({ verifierProof: "passed" })).detail).toBe(
+      "verifier proven",
+    );
+  });
   test("a failed reference solution surfaces a broken-verifier detail", () => {
     const s = buildCellStatus(
       bCell({ error: "x", verifierProof: "failed", verdict: "NO" }),

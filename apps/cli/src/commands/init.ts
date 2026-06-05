@@ -51,6 +51,8 @@ questions:
     # rejects: [deprecated_path]   # if set, examples.pass + examples.fail are required
 
 # Builds prove the agent can implement with your product (optional).
+# A reference patch proves the verifier before any agent runs;
+# pickled build --verify-only checks the harness without spending tokens.
 # builds:
 #   - id: smoke
 #     goal: Add a basic usage of the product to the fixture.
@@ -58,7 +60,9 @@ questions:
 #     contexts: [from_readme]
 #     workspace: { path: ./fixtures/app, setup: [npm install] }
 #     verifier:
-#       failToPass: [{ run: npm test }]
+#       failToPass: [{ run: npm test }]       # must fail before, pass after
+#       passToPass: [{ run: npm run build }]  # must stay green (regression guard)
+#     referenceSolution: { patch: ./fixtures/smoke.patch } # positive control
 
 # Optional per-kind gates: fail CI if the score falls below these (1-100).
 # thresholds:

@@ -12,6 +12,7 @@ import type { TargetRunner } from "../targets/types.js";
 import type {
   BuildAttempt,
   BuildCell,
+  BuildProofStatus,
   CellCoord,
   CommandReceipt,
   ToolInfo,
@@ -96,40 +97,21 @@ export async function runBuildCell(args: {
     return errorCell(coord, mode, source, errMsg(e));
   }
 
-  const task: BuildTask = {
-    goal: build.goal,
-    workspacePath: build.workspace.path,
-    setup: build.workspace.setup,
-    failToPass: build.verifier.failToPass.map((c) => ({
-      name: c.name,
-      run: c.run,
-    })),
-    passToPass: build.verifier.passToPass.map((c) => ({
-      name: c.name,
-      run: c.run,
-    })),
-    trials: build.trials,
-    referenceSolutionPatch: build.referenceSolution?.patch,
-  };
+  const task = toBuildTask(build);
 
-  const preflight = await runPreflight(task);
-  if (preflight.kind === "setup-error") {
-    return errorCell(coord, mode, source, `setup failed: ${preflight.message}`);
-  }
-  if (preflight.kind === "invalid-fixture") {
-    return errorCell(coord, mode, source, preflight.message);
-  }
-
-  const verifierProof = await runReferenceControl(task, options.tool.path);
-  if (verifierProof === "failed") {
+  // Task-level harness proof, before any agent spend. A broken fixture or a
+  // failed reference patch errors the cell (never scored as the agent failing).
+  const proof = await proveBuildTask(task, options.tool.path);
+  if (proof.status === "broken") {
     return errorCell(
       coord,
       mode,
       source,
-      "reference solution did not pass the verifier: the bar is unreachable or the verifier is broken; not scoring the agent",
-      "failed",
+      proof.message ?? "invalid fixture",
+      proof.verifierProof,
     );
   }
+  const verifierProof = proof.verifierProof;
 
   const attempts: BuildAttempt[] = [];
   for (let i = 0; i < task.trials; i++) {
@@ -175,6 +157,83 @@ export async function runBuildCell(args: {
     reason: `Built ${passedAttempts}/${totalAttempts}`,
     verifierProof,
   };
+}
+
+/** Build a BuildTask from a Build config (agent/context-independent). */
+function toBuildTask(build: Build): BuildTask {
+  return {
+    goal: build.goal,
+    workspacePath: build.workspace.path,
+    setup: build.workspace.setup,
+    failToPass: build.verifier.failToPass.map((c) => ({
+      name: c.name,
+      run: c.run,
+    })),
+    passToPass: build.verifier.passToPass.map((c) => ({
+      name: c.name,
+      run: c.run,
+    })),
+    trials: build.trials,
+    referenceSolutionPatch: build.referenceSolution?.patch,
+  };
+}
+
+/** A task-level proof outcome plus the verifierProof to stamp on a build cell. */
+export interface BuildProof {
+  status: BuildProofStatus;
+  verifierProof: VerifierProof;
+  /** Set when status is "broken": which control failed and why. */
+  message?: string;
+}
+
+/**
+ * Prove a build's harness without running an agent: the preflight (untouched
+ * fixture must fail failToPass and pass passToPass) plus the optional reference
+ * control (the referenceSolution patch must apply and clear the full verifier).
+ * Shared by `runBuildCell` (run once before any trial) and `pickled build
+ * --verify-only`. Depends only on workspace/setup/verifier/reference, never on
+ * the agent or context.
+ */
+async function proveBuildTask(
+  task: BuildTask,
+  projectPath: string,
+): Promise<BuildProof> {
+  const preflight = await runPreflight(task);
+  if (preflight.kind === "setup-error") {
+    return {
+      status: "broken",
+      verifierProof: "not_declared",
+      message: `setup failed: ${preflight.message}`,
+    };
+  }
+  if (preflight.kind === "invalid-fixture") {
+    return {
+      status: "broken",
+      verifierProof: "not_declared",
+      message: preflight.message,
+    };
+  }
+  const verifierProof = await runReferenceControl(task, projectPath);
+  if (verifierProof === "failed") {
+    return {
+      status: "broken",
+      verifierProof: "failed",
+      message:
+        "reference solution did not pass the verifier: the bar is unreachable or the verifier is broken; not scoring the agent",
+    };
+  }
+  return {
+    status: verifierProof === "passed" ? "proven" : "unproven",
+    verifierProof,
+  };
+}
+
+/** Prove one build's harness (per-build, no agent). Powers `--verify-only`. */
+export function proveBuild(
+  build: Build,
+  projectPath: string,
+): Promise<BuildProof> {
+  return proveBuildTask(toBuildTask(build), projectPath);
 }
 
 type PreflightResult =

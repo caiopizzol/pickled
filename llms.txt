@@ -11,7 +11,7 @@ Install: `bun add -g @pickled-dev/cli`
 - `pickled init [path]` - scaffold a pickled.yml config in your repo.
 - `pickled audit [path]` - static scan of agent-context files (CLAUDE.md, AGENTS.md, llms.txt). No LLM calls.
 - `pickled check [path]` - run the questions against the configured agents. `--plan` previews the cells without calling any model.
-- `pickled build [path]` - run the builds: the agent edits a workspace and your `verifier` must pass. `--plan` previews cells and executions.
+- `pickled build [path]` - run the builds: the agent edits a workspace and your `verifier` must pass. `--plan` previews cells and executions; `--verify-only` proves each build's harness (preflight + reference control) with no agent runs, reporting `proven` / `unproven` / `broken` per build.
 - `pickled test [path]` - score a question's declared example answers against its fact contract, offline. No model calls.
 - `pickled report <file>` - re-render a saved receipt from `check --output` or `build --output` as terminal, markdown, or JSON. No model calls.
 

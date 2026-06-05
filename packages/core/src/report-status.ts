@@ -74,7 +74,11 @@ export function buildCellStatus(cell: BuildCell): CellStatus {
     };
   }
   const detail =
-    cell.verifierProof === "not_declared" ? "verifier unproven" : undefined;
+    cell.verifierProof === "passed"
+      ? "verifier proven"
+      : cell.verifierProof === "not_declared"
+        ? "verifier unproven"
+        : undefined;
   switch (cell.verdict) {
     case "YES":
       return {

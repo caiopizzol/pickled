@@ -9,6 +9,8 @@ import {
 import type {
   BuildAttempt,
   BuildCell,
+  BuildProofResult,
+  BuildProofStatus,
   PlanSummary,
   QuestionCell,
   RunReport,
@@ -195,6 +197,50 @@ export function printReport(
 ): void {
   console.log(formatReport(report, options));
   console.log();
+}
+
+const PROOF_MARK: Record<BuildProofStatus, string> = {
+  proven: chalk.green("✓ proven"),
+  unproven: chalk.dim("- unproven"),
+  broken: chalk.red("✗ broken"),
+};
+
+/**
+ * Render `pickled build --verify-only`: one line per build, since the harness
+ * proof (preflight + reference control) is agent/context-independent. No
+ * scores, no run verdict; just whether each build's verifier is proven,
+ * unproven (no reference solution declared), or broken (with the fault).
+ */
+export function formatBuildProof(
+  productName: string,
+  results: BuildProofResult[],
+): string {
+  const lines: string[] = [];
+  lines.push(chalk.bold("pickled build --verify-only"));
+  lines.push(LINE);
+  lines.push(`Product: ${chalk.cyan(productName)}`);
+  lines.push(`Build verifier proof: ${chalk.dim(String(results.length))}`);
+  lines.push("");
+  const width = results.reduce((w, r) => Math.max(w, r.id.length), 0);
+  for (const r of results) {
+    const note =
+      r.status === "broken"
+        ? `  ${chalk.dim(r.message ?? "")}`
+        : r.status === "unproven"
+          ? `  ${chalk.dim("no reference solution declared")}`
+          : "";
+    lines.push(`  ${r.id.padEnd(width)}  ${PROOF_MARK[r.status]}${note}`);
+  }
+  lines.push("");
+  lines.push(LINE);
+  const count = (s: BuildProofStatus) =>
+    results.filter((r) => r.status === s).length;
+  lines.push(
+    chalk.dim(
+      `${results.length} builds · ${count("proven")} proven · ${count("unproven")} unproven · ${count("broken")} broken`,
+    ),
+  );
+  return lines.join("\n");
 }
 
 export interface FormatJSONOptions {

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { formatJSON, formatMarkdown, formatReport } from "../src/reporter.js";
+import {
+  formatBuildProof,
+  formatJSON,
+  formatMarkdown,
+  formatReport,
+} from "../src/reporter.js";
 import type { RunReport } from "../src/types.js";
 
 function questionReport(over: Partial<RunReport> = {}): RunReport {
@@ -242,5 +247,31 @@ describe("formatMarkdown", () => {
     expect(md).toContain("**Overall: 75 / 100**");
     expect(md).not.toContain("run fails");
     expect(md).not.toContain("run passes");
+  });
+});
+
+describe("formatBuildProof (--verify-only)", () => {
+  test("one line per build with proof status; no scores or run verdict", () => {
+    const out = formatBuildProof("demo", [
+      { id: "react_embed", goal: "g1", status: "proven" },
+      { id: "cli_mutation", goal: "g2", status: "unproven" },
+      {
+        id: "broken_fix",
+        goal: "g3",
+        status: "broken",
+        message: "failToPass already passes on the untouched workspace",
+      },
+    ]);
+    expect(out).toContain("pickled build --verify-only");
+    expect(out).toContain("Product: demo");
+    expect(out).toContain("Build verifier proof: 3");
+    expect(out).toContain("react_embed");
+    expect(out).toContain("proven");
+    expect(out).toContain("unproven");
+    expect(out).toContain("broken");
+    expect(out).toContain("failToPass already passes");
+    expect(out).toContain("1 proven · 1 unproven · 1 broken");
+    // The proof view never carries k/n scores or a run verdict.
+    expect(out).not.toContain("Overall");
   });
 });

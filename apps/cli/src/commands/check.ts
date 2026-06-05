@@ -32,6 +32,8 @@ export interface CheckOptions {
   seed?: string;
   /** Build only: keep failed workspaces for inspection. */
   keepOnFailure?: boolean;
+  /** Build only: prove the harness (preflight + reference), no agent runs. */
+  verifyOnly?: boolean;
 }
 
 export async function check(
