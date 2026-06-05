@@ -1,6 +1,6 @@
 {
   "name": "@pickled-dev/cli",
-  "version": "0.37.0",
+  "version": "0.38.0",
   "description": "Test what agents actually understand about your product",
   "license": "MIT",
   "homepage": "https://pickled.dev",
