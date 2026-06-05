@@ -144,9 +144,13 @@ builds:
     verifier:
       failToPass:
         - { run: bun test }
+      passToPass:
+        - { run: bun run typecheck }
+    referenceSolution:
+      patch: ./fixtures/solutions/add-endpoint.patch
 ```
 
-Each `(agent × context)` cell runs `trials` times in a fresh workspace; the result is `k/n`. Builds run on edit-capable CLI agents (`claude-code`, `codex-cli`). The `failToPass` commands must fail on the untouched fixture and pass after the agent. See the [pickled.yml reference](/pickled-yml) for the full build contract.
+Each `(agent × context)` cell runs `trials` times in a fresh workspace; the result is `k/n`. Builds run on edit-capable CLI agents (`claude-code`, `codex-cli`). Use `pickled build --verify-only` to prove the fixture and reference patch before running an agent. See the [pickled.yml reference](/pickled-yml) for the full build contract.
 
 ## Next steps
 

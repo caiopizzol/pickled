@@ -91,9 +91,15 @@ builds:
     verifier:
       failToPass:
         - { run: bun test }
+      passToPass:
+        - { run: bun run typecheck }
+    referenceSolution:
+      patch: ./fixtures/solutions/add-toolbar.patch
 ```
 
 Run builds with `pickled build .`. Each `(agent × context)` cell runs in a fresh workspace for each trial and reports `Built k/n`, `Partially built k/n`, or `Did not build k/n`.
+
+Before spending tokens, run `pickled build . --verify-only` to prove the starter fixture fails, the regression guard passes, and the reference patch clears the verifier.
 
 ## Receipts
 

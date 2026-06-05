@@ -88,7 +88,7 @@ The cell verdict is `YES` (all expected facts covered, no misstatement, tool pat
 
 ## Builds
 
-A build measures whether an agent can BUILD with your context, not just answer. The agent edits a throwaway `workspace` and the cell passes when the `verifier` does. The verifier is SWE-bench-style: `failToPass` commands must fail on the untouched fixture and pass after the agent; optional `passToPass` commands must pass before and after (the regression guard). Each `(agent × context)` cell runs `trials` times in a fresh workspace and reports the pass rate (k of n) as `Built`, `Partially built`, or `Did not build`. An optional `referenceSolution` patch is a positive control: if it does not pass the verifier on the baseline, the cell errors as an unproven/broken verifier rather than scoring the agent. Builds run on edit-capable CLI agents (`claude-code`, `codex-cli`) only.
+A build measures whether an agent can BUILD with your context, not just answer. The agent edits a throwaway `workspace` and the cell passes when the `verifier` does. The verifier is SWE-bench-style: `failToPass` commands must fail on the untouched fixture and pass after the agent; optional `passToPass` commands must pass before and after (the regression guard). Each `(agent × context)` cell runs `trials` times in a fresh workspace and reports the pass rate (k of n) as `Built`, `Partially built`, or `Did not build`. An optional `referenceSolution` patch is a positive control: if it is absent, the verifier is marked unproven; if it does not pass on the baseline, the cell errors as broken rather than scoring the agent. Builds run on edit-capable CLI agents (`claude-code`, `codex-cli`) only.
 
 ## Agents today
 

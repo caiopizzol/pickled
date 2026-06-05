@@ -26,6 +26,7 @@ jobs:
       - run: bunx @pickled-dev/cli test .
       - run: bunx @pickled-dev/cli check . --plan
       - run: bunx @pickled-dev/cli build . --plan
+      - run: bunx @pickled-dev/cli build . --verify-only
 ```
 
 What each step does:
@@ -33,6 +34,7 @@ What each step does:
 - `pickled test` scores example answers offline. It catches brittle checks before spending on a model run.
 - `pickled check --plan` prints the answer cells that would run. No model calls.
 - `pickled build --plan` prints build cells and executions. No agent edits.
+- `pickled build --verify-only` proves build fixtures and reference patches. No agent edits.
 
 Set `thresholds.questions` or `thresholds.builds` in `pickled.yml` when you want CI to fail on a low score.
 

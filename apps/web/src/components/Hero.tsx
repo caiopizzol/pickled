@@ -17,7 +17,7 @@ export function Hero() {
             </span>{" "}
             An open-source CLI that tests whether agents can answer and build
             with your product across context paths, scored by deterministic
-            checks. No LLM grades another LLM.
+            evidence. No LLM grades another LLM.
           </p>
           <div className="hero-actions">
             <Button as="a" href="#start" variant="primary" size="lg">
