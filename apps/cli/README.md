@@ -20,6 +20,7 @@ bunx @pickled-dev/cli <command>
 - **`pickled test [path]`** scores a question's `examples.pass` / `examples.fail` offline. No model calls.
 - **`pickled check [path]`** runs the questions: asks the agents and scores their answers against the fact contract.
 - **`pickled build [path]`** has edit-capable agents work in a fresh workspace and scores the `verifier`.
+- **`pickled ci [path]`** runs the configured questions and builds in one pass, writes a receipt per kind, and gates the run. For CI.
 - **`pickled audit [path]`** scans agent-facing files for broken refs and oversized sections. No model calls.
 - **`pickled report <file>`** re-renders a saved receipt as terminal, markdown, or JSON. No model calls.
 
@@ -87,16 +88,24 @@ pickled check . --context from_readme
 
 ## In CI
 
-Save the receipt once, then render it. `report` re-renders a saved receipt without rerunning paid agents, so the same run feeds both the artifact and the job summary:
+`pickled ci` runs the configured questions and builds in one pass, writes a CI-safe JSON receipt per kind, appends a markdown summary to the job summary, and exits non-zero if any thresholded run fails:
 
-```bash
-pickled check . --output pickled-report.json   # exits non-zero if the run fails its threshold
-pickled report pickled-report.json --format markdown >> "$GITHUB_STEP_SUMMARY"
+```yaml
+- run: |
+    pickled ci . \
+      --questions-max-cells 20 \
+      --builds-max-cells 4 \
+      --report-dir pickled-reports
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: pickled-reports
+    path: pickled-reports/*.json
 ```
 
-Upload `pickled-report.json` with `actions/upload-artifact` to keep the receipt.
+It appends markdown to `$GITHUB_STEP_SUMMARY` automatically when that variable is set (override with `--summary-file`). It runs both kinds to completion even if one fails its threshold, so the job always uploads every receipt. With no `--questions`/`--builds` flag it runs both kinds the config declares.
 
-The default JSON (`--output` / `--json`) is the CI-safe receipt: verdicts, evidence ids, provenance, and build attempts, without full answers, source text, transcripts, diffs, or command output. Pass `--verbose` for a forensic receipt.
+The receipts are CI-safe by default: verdicts, evidence ids, provenance, and build attempts, without full answers, source text, transcripts, diffs, or command output. To re-render a saved receipt later (for example a different format from an uploaded artifact) without rerunning paid agents, use `pickled report <file> --format markdown|terminal|json`; pass `--verbose` there for a forensic receipt.
 
 ## Current support
 
